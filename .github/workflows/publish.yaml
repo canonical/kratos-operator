@@ -1,0 +1,73 @@
+# reusable workflow for publishing all charms in this repo
+name: Publish
+
+on:
+  workflow_call:
+    inputs:
+      source_branch:
+        description: Github branch from this repo to publish.  If blank, will use the default branch
+        default: ''
+        required: false
+        type: string
+    secrets:
+      CHARMCRAFT_CREDENTIALS:
+        required: true
+
+  workflow_dispatch:
+    inputs:
+      destination_channel:
+        description: CharmHub channel to publish to
+        required: false
+        default: 'latest/edge'
+        type: string
+      source_branch:
+        description: Github branch from this repo to publish.  If blank, will use the default branch
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  publish-charm:
+    name: Publish Charm
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.source_branch }}
+
+      - name: Select charmhub channel
+        uses: canonical/charming-actions/channel@2.0.0-rc
+        id: select-channel
+        if: ${{ inputs.destination_channel == '' }}
+
+      # Combine inputs from different sources to a single canonical value so later steps don't
+      # need logic for picking the right one
+      - name: Parse and combine inputs
+        id: parse-inputs
+        run: |
+          # destination_channel
+          destination_channel="${{ inputs.destination_channel || steps.select-channel.outputs.name }}"
+          echo "setting output of destination_channel=$destination_channel"
+          echo "::set-output name=destination_channel::$destination_channel"
+          # tag_prefix
+          # if charm_path = ./ --> tag_prefix = '' (null)
+          # if charm_path != ./some-charm (eg: a charm in a ./charms dir) --> tag_prefix = 'some-charm'
+          if [ ${{ matrix.charm-path }} == './' ]; then
+            tag_prefix=''
+          else
+            tag_prefix=$(basename ${{ matrix.charm-path }} )
+          fi
+          echo "setting output of tag_prefix=$tag_prefix"
+          echo "::set-output name=tag_prefix::$tag_prefix"
+
+      - name: Upload charm to charmhub
+        uses: canonical/charming-actions/upload-charm@2.0.0-rc
+        with:
+          credentials: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          charm-path: ${{ matrix.charm-path }}
+          channel: ${{ steps.parse-inputs.outputs.destination_channel }}
+          tag-prefix: ${{ steps.parse-inputs.outputs.tag_prefix }}

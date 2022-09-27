@@ -1,0 +1,26 @@
+# reusable workflow triggered manually
+name: Release charm to other tracks and channels
+
+on:
+  workflow_dispatch:
+    inputs:
+      destination-channel:
+        description: 'Destination Channel'
+        required: true
+      origin-channel:
+        description: 'Origin Channel'
+        required: true
+
+jobs:
+  promote-charm:
+    name: Promote charm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Release charm to channel
+        uses: canonical/charming-actions/release-charm@2.0.0-rc
+        with:
+          credentials: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          destination-channel: ${{ github.event.inputs.destination-channel }}
+          origin-channel: ${{ github.event.inputs.origin-channel }}
