@@ -5,9 +5,9 @@
 This document explains the processes and practices recommended for contributing enhancements to
 this operator.
 
-- Generally, before developing enhancements to this charm, you should consider [opening an issue
+- Generally, before developing bugs or enhancements to this charm, you should [open an issue
   ](https://github.com/canonical/ory-kratos/issues) explaining your use case.
-- If you would like to chat with us about your use-cases or proposed implementation, you can reach
+- If you would like to chat with us about charm development, you can reach
   us at [Canonical Mattermost public channel](https://chat.charmhub.io/charmhub/channels/charm-dev)
   or [Discourse](https://discourse.charmhub.io/).
 - Familiarising yourself with the [Charmed Operator Framework](https://juju.is/docs/sdk) library
