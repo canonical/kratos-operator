@@ -55,7 +55,7 @@ juju add-model dev
 # Enable DEBUG logging
 juju model-config logging-config="<root>=INFO;unit=DEBUG"
 # Deploy the charm
-juju deploy ./ory-kratos_ubuntu-20.04-amd64.charm
+juju deploy ./ory-kratos_ubuntu-*-amd64.charm
 ```
 
 ## Canonical Contributor Agreement

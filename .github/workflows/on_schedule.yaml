@@ -1,0 +1,18 @@
+on:
+  schedule:
+    - cron: '0 8 * * MON'
+
+jobs:
+  update-charm-libs:
+    name: Update Charm Libraries
+    uses: ./.github/workflows/update_libs.yaml
+
+  update-deps:
+    name: Update Dependencies
+    uses: ./.github/workflows/renovate.yaml
+
+  tests:
+    name: Run Tests
+    uses: ./.github/workflows/tests.yaml
+    secrets:
+      charmcraft-credentials: ${{ secrets.CHARMCRAFT_CREDENTIALS }}

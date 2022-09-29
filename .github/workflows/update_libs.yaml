@@ -1,0 +1,53 @@
+# reusable workflow for checking library versions and opening PRs to bump
+name: Update Charm Libraries
+
+on:
+  workflow_call:
+    inputs:
+      charmcraft_channel:
+        description: Channel from which to install charmcraft
+        default: 'latest/candidate'
+        required: false
+        type: string
+    secrets:
+      CHARMCRAFT_CREDENTIALS:
+        required: true
+  workflow_dispatch:
+    inputs:
+      charmcraft_channel:
+        description: Channel from which to install charmcraft
+        default: 'latest/candidate'
+        required: false
+        type: string
+
+jobs:
+  update-libs:
+    name: Update charm libraries
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - run: sudo snap install charmcraft --channel ${{ inputs.charmcraft_channel }} --classic
+
+      - name: update charm libs
+        env:
+          CHARMCRAFT_AUTH: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
+
+      - name: Create Pull Request
+        id: create-pull-request
+        uses: peter-evans/create-pull-request@v4
+        with:
+          title: '(Automated) Update Charm Libs'
+          body: 'Update charm libs'
+          commit-message: 'Update charm libs'
+          signoff: false
+          delete-branch: true
+          branch: 'automated-update-charm-libs'
+
+      - name: Print Created Pull Request
+        if: ${{ steps.create-pull-request.outputs.pull-request-number }}
+        run: |
+          echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
+          echo "Pull Request URL - ${{ steps.cpr.outputs.pull-request-url }}"
