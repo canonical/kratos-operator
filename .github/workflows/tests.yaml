@@ -36,5 +36,5 @@ jobs:
       #   uses: canonical/charm-logdump-action@main
       #   if: failure()
       #   with:
-      #     app: ory-kratos
+      #     app: kratos
       #     model: testing

@@ -6,7 +6,7 @@ This document explains the processes and practices recommended for contributing 
 this operator.
 
 - Generally, before developing bugs or enhancements to this charm, you should [open an issue
-  ](https://github.com/canonical/ory-kratos/issues) explaining your use case.
+  ](https://github.com/canonical/kratos-operator/issues) explaining your use case.
 - If you would like to chat with us about charm development, you can reach
   us at [Canonical Mattermost public channel](https://chat.charmhub.io/charmhub/channels/charm-dev)
   or [Discourse](https://discourse.charmhub.io/).
@@ -55,7 +55,7 @@ juju add-model dev
 # Enable DEBUG logging
 juju model-config logging-config="<root>=INFO;unit=DEBUG"
 # Deploy the charm
-juju deploy ./ory-kratos_ubuntu-*-amd64.charm
+juju deploy ./kratos_ubuntu-*-amd64.charm
 ```
 
 ## Canonical Contributor Agreement

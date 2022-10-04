@@ -1,7 +1,7 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-name: ory-kratos
+name: kratos
 description: |
   Charmed Ory Kratos
 summary: |

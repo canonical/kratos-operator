@@ -6,5 +6,5 @@ module.exports = {
   onboarding: true,
   platform: 'github',
   includeForks: true,
-  repositories: ['canonical/ory-kratos'],
+  repositories: ['canonical/kratos-operator'],
 }
