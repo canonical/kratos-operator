@@ -24,6 +24,8 @@ jobs:
 
   tests:
     name: Run Tests
+    needs:
+      - lint
     uses: ./.github/workflows/tests.yaml
     secrets:
       charmcraft-credentials: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
