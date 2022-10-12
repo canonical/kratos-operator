@@ -1,0 +1,46 @@
+---
+# Source: https://github.com/ory/k8s/k8s/helm/charts/kratos/templates/service-admin.yaml
+# helm charm v0.25.3
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ app_name }}-admin
+  labels:
+    app.kubernetes.io/component: {{ app_name }}-admin
+    app.kubernetes.io/name: {{ app_name }}
+    app.kubernetes.io/managed-by: juju
+    app.juju.is/created-by: {{ app_name }}
+    operator.juju.is/name: {{ app_name }}
+    operator.juju.is/target: application
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: http-admin
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: {{ app_name }}
+---
+# Source: https://github.com/ory/k8s/k8s/helm/charts/kratos/templates/service-public.yaml
+# helm charm v0.25.3
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ app_name }}-public
+  labels:
+    app.kubernetes.io/component: {{ app_name }}-public
+    app.kubernetes.io/name: {{ app_name }}
+    app.kubernetes.io/managed-by: juju
+    app.juju.is/created-by: {{ app_name }}
+    operator.juju.is/name: {{ app_name }}
+    operator.juju.is/target: application
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: http-public
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: {{ app_name }}

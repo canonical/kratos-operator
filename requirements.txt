@@ -1,1 +1,3 @@
 ops ==1.5.3
+charmed-kubeflow-chisme
+lightkube
