@@ -46,7 +46,7 @@ class KratosCharm(CharmBase):
     @property
     def _template_files(self):
         src_dir = Path("src/manifests")
-        manifests = [file for file in glob.glob(f"{src_dir}/*.yaml")]
+        manifests = list(glob.glob(f"{src_dir}/*.yaml"))
         return manifests
 
     @property
