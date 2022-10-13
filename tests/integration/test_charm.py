@@ -3,7 +3,6 @@
 # See LICENSE file for licensing details.
 
 import logging
-import urllib.request
 from pathlib import Path
 
 import pytest
@@ -19,6 +18,7 @@ APP_NAME = METADATA["name"]
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy(ops_test: OpsTest):
     """Build the charm-under-test and deploy it.
+
     Assert on the unit status before any relations/configurations take place.
     """
     charm = await ops_test.build_charm(".")
