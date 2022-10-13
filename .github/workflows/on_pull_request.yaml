@@ -27,8 +27,6 @@ jobs:
     needs:
       - lint
     uses: ./.github/workflows/tests.yaml
-    secrets:
-      charmcraft-credentials: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
 
   # publish runs in parallel with tests, as we always publish in this situation
   publish-charm:
