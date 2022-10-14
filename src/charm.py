@@ -109,9 +109,6 @@ class KratosCharm(CharmBase):
         """
         self.unit.status = MaintenanceStatus("Configuring/deploying resources")
 
-        if self.container.can_connect():
-            self._update_kratos_config()
-
         try:
             self.resource_handler.apply()
 
