@@ -30,6 +30,7 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: microk8s
+          juju-channel: 3.0/beta
 
       - name: Run integration tests
         # set a predictable model name so it can be consumed by charm-logdump-action
