@@ -29,9 +29,14 @@ jobs:
       - name: Setup operator environment
         uses: charmed-kubernetes/actions-operator@main
         with:
-          provider: microk8s
-          channel: 1.25-strict/stable
+          provider: lxd
           juju-channel: 3.0/beta
+
+      - name: Setup strict microk8s
+        run: |
+          sudo snap install microk8s --classic --channel=1.25-strict/stable
+          sudo usermod -a -G snap_microk8s $USER
+          juju add-model testing
 
       - name: Run integration tests
         # set a predictable model name so it can be consumed by charm-logdump-action
