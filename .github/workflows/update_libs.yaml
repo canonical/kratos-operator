@@ -32,6 +32,7 @@ jobs:
       - run: sudo snap install charmcraft --channel ${{ inputs.charmcraft_channel }} --classic
 
       - name: update charm libs
+        run: charmcraft fetch-lib
         env:
           CHARMCRAFT_AUTH: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
 
