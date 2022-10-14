@@ -12,6 +12,6 @@ containers:
 resources:
   oci-image:
     type: oci-image
-    description: Kratos OCI oci-image
+    description: Kratos oci-image
     auto-fetch: true
     upstream-source: oryd/kratos:v0.10.1
