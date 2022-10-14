@@ -1,45 +1,85 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-import unittest
+from unittest.mock import MagicMock
 
-from ops.model import ActiveStatus
-from ops.testing import Harness
+import pytest
+from charmed_kubeflow_chisme.exceptions import ErrorWithStatus
+from charmed_kubeflow_chisme.lightkube.mocking import FakeApiError
+from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
 
-from charm import KratosCharm
+CONTAINER_NAME = "kratos"
 
 
-class TestCharm(unittest.TestCase):
-    def setUp(self):
-        self.harness = Harness(KratosCharm)
-        self.addCleanup(self.harness.cleanup)
-        self.harness.begin()
+def test_on_install_sucess(harness, mocked_resource_handler, mocked_lightkube_client) -> None:
+    harness.set_can_connect(CONTAINER_NAME, True)
+    assert isinstance(harness.charm.unit.status, MaintenanceStatus)
+    harness.charm.on.install.emit()
 
-    def test_kratos_pebble_ready(self):
-        kratos_container_name = "kratos"
-        self.harness.set_can_connect(kratos_container_name, True)
-        initial_plan = self.harness.get_container_pebble_plan(kratos_container_name)
-        self.assertEqual(initial_plan.to_yaml(), "{}\n")
+    mocked_resource_handler.apply.called_once()
+    mocked_lightkube_client.patch.called_once()
 
-        expected_plan = {
-            "services": {
-                kratos_container_name: {
-                    "override": "replace",
-                    "summary": "Kratos Operator layer",
-                    "startup": "enabled",
-                    "command": "kratos serve all --config /etc/config/kratos.yaml",
-                    "environment": {
-                        "DSN": "postgres://username:password@10.152.183.152:5432/postgres",
-                        "COURIER_SMTP_CONNECTION_URI": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true",
-                    },
-                }
+    assert isinstance(harness.charm.unit.status, ActiveStatus)
+
+
+@pytest.mark.parametrize(
+    "apply_error, raised_exception",
+    (
+        (FakeApiError(400), pytest.raises(FakeApiError)),
+        (
+            FakeApiError(403),
+            pytest.raises(FakeApiError),
+        ),
+        (ErrorWithStatus("Something failed", BlockedStatus), pytest.raises(ErrorWithStatus)),
+    ),
+)
+def test_on_install_error(
+    harness,
+    apply_error,
+    raised_exception,
+) -> None:
+    harness.charm.resource_handler.apply = MagicMock()
+    harness.charm.resource_handler.apply.side_effect = apply_error
+
+    harness.charm.on.install.emit()
+    with raised_exception:
+        harness.charm.resource_handler.apply()
+    assert isinstance(harness.model.unit.status, BlockedStatus)
+
+
+def test_pebble_ready(harness) -> None:
+    harness.set_can_connect(CONTAINER_NAME, True)
+    initial_plan = harness.get_container_pebble_plan(CONTAINER_NAME)
+    assert initial_plan.to_yaml() == "{}\n"
+
+    expected_plan = {
+        "services": {
+            CONTAINER_NAME: {
+                "override": "replace",
+                "summary": "Kratos Operator layer",
+                "startup": "enabled",
+                "command": "kratos serve all --config /etc/config/kratos.yaml",
+                "environment": {
+                    "DSN": "postgres://username:password@10.152.183.152:5432/postgres",
+                    "COURIER_SMTP_CONNECTION_URI": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true",
+                },
             }
         }
-        container = self.harness.model.unit.get_container(kratos_container_name)
-        self.harness.charm.on.kratos_pebble_ready.emit(container)
-        updated_plan = self.harness.get_container_pebble_plan(kratos_container_name).to_dict()
-        self.assertEqual(expected_plan, updated_plan)
+    }
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+    updated_plan = harness.get_container_pebble_plan(CONTAINER_NAME).to_dict()
+    assert expected_plan == updated_plan
 
-        service = self.harness.model.unit.get_container("kratos").get_service("kratos")
-        self.assertTrue(service.is_running())
-        self.assertEqual(self.harness.model.unit.status, ActiveStatus())
+    service = harness.model.unit.get_container("kratos").get_service("kratos")
+    assert service.is_running()
+    assert harness.model.unit.status == ActiveStatus()
+
+
+def test_pebble_ready_cannot_connect_container(harness) -> None:
+    harness.set_can_connect(CONTAINER_NAME, False)
+
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    assert isinstance(harness.charm.unit.status, WaitingStatus)
