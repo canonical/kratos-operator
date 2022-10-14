@@ -22,7 +22,7 @@ spec:
   selector:
     app.kubernetes.io/name: {{ app_name }}
 ---
-# Source: https://github.com/ory/k8s/k8s/helm/charts/kratos/templates/service-public.yaml
+# Source: https://github.com/ory/k8s/blob/master/helm/charts/kratos/templates/service-public.yaml
 # helm charm v0.25.3
 apiVersion: v1
 kind: Service
