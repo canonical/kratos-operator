@@ -12,6 +12,7 @@ from pathlib import Path
 
 from charmed_kubeflow_chisme.exceptions import ErrorWithStatus
 from charmed_kubeflow_chisme.kubernetes import KubernetesResourceHandler
+from charmed_kubeflow_chisme.lightkube.batch import delete_many
 from charmed_kubeflow_chisme.pebble import update_layer
 from lightkube import Client
 from lightkube.core.exceptions import ApiError
@@ -41,6 +42,7 @@ class KratosCharm(CharmBase):
 
         self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
+        self.framework.observe(self.on.remove, self._on_remove)
 
     @property
     def _template_files(self):
@@ -179,6 +181,17 @@ class KratosCharm(CharmBase):
             event.defer()
             logger.info("Cannot connect to Kratos container. Deferring pebble ready event.")
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
+
+    def _on_remove(self, _) -> None:
+        """Event Handler for pebble ready event.
+
+        Remove additional kubernetes resources
+        """
+        manifests = self.resource_handler.render_manifests(force_recompute=False)
+        try:
+            delete_many(self.lightkube_client, manifests)
+        except ApiError as e:
+            logger.warning(str(e))
 
 
 if __name__ == "__main__":
