@@ -10,22 +10,25 @@ from charm import KratosCharm
 
 
 @pytest.fixture()
-def harness(mocked_resource_handler, mocked_lightkube_client) -> None:
+def harness() -> None:
     harness = Harness(KratosCharm)
     harness.set_leader(True)
-    harness.begin()
+    # harness.begin()
     return harness
 
 
 @pytest.fixture()
 def mocked_lightkube_client(mocker):
-    mocked_client = mocker.patch("charm.Client")
-    mocked_client.return_value = MagicMock()
+    mocked_client = MagicMock()
+    mocked_client_factory = mocker.patch("charm.Client")
+    mocked_client_factory.return_value = mocked_client
     yield mocked_client
 
 
 @pytest.fixture()
 def mocked_resource_handler(mocker):
-    mocked_resource_handler = mocker.patch("charm.KubernetesResourceHandler")
-    mocked_resource_handler.return_value = MagicMock()
+    """Yields a mocked lightkube Client."""
+    mocked_resource_handler = MagicMock()
+    mocked_resource_handler_factory = mocker.patch("charm.KubernetesResourceHandler")
+    mocked_resource_handler_factory.return_value = mocked_resource_handler
     yield mocked_resource_handler

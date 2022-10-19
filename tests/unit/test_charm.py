@@ -12,12 +12,14 @@ CONTAINER_NAME = "kratos"
 
 
 def test_on_install_sucess(harness, mocked_resource_handler, mocked_lightkube_client) -> None:
+    harness.begin()
+
     harness.set_can_connect(CONTAINER_NAME, True)
     assert isinstance(harness.charm.unit.status, MaintenanceStatus)
     harness.charm.on.install.emit()
 
-    mocked_resource_handler.apply.called_once()
-    mocked_lightkube_client.patch.called_once()
+    mocked_resource_handler.apply.assert_called_once()
+    mocked_lightkube_client.patch.assert_called_once()
 
     assert isinstance(harness.charm.unit.status, ActiveStatus)
 
@@ -38,6 +40,8 @@ def test_on_install_error(
     apply_error,
     raised_exception,
 ) -> None:
+    harness.begin()
+
     harness.charm.resource_handler.apply = MagicMock()
     harness.charm.resource_handler.apply.side_effect = apply_error
 
@@ -47,7 +51,8 @@ def test_on_install_error(
     assert isinstance(harness.model.unit.status, BlockedStatus)
 
 
-def test_pebble_ready(harness) -> None:
+def test_pebble_ready_success(harness) -> None:
+    harness.begin()
     harness.set_can_connect(CONTAINER_NAME, True)
     initial_plan = harness.get_container_pebble_plan(CONTAINER_NAME)
     assert initial_plan.to_yaml() == "{}\n"
@@ -77,9 +82,43 @@ def test_pebble_ready(harness) -> None:
 
 
 def test_pebble_ready_cannot_connect_container(harness) -> None:
+    harness.begin()
     harness.set_can_connect(CONTAINER_NAME, False)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     assert isinstance(harness.charm.unit.status, WaitingStatus)
+
+
+def test_on_remove_success(harness, mocked_resource_handler) -> None:
+    harness.begin()
+    harness.set_can_connect(CONTAINER_NAME, True)
+    harness.charm.on.remove.emit()
+
+    mocked_resource_handler.render_manifests.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "apply_error, raised_exception",
+    (
+        (FakeApiError(400), pytest.raises(FakeApiError)),
+        (
+            FakeApiError(403),
+            pytest.raises(FakeApiError),
+        ),
+    ),
+)
+def test_on_remove_error(
+    harness,
+    apply_error,
+    raised_exception,
+) -> None:
+    harness.begin()
+
+    harness.charm.resource_handler.apply = MagicMock()
+    harness.charm.resource_handler.apply.side_effect = apply_error
+
+    harness.charm.on.remove.emit()
+    with raised_exception:
+        harness.charm.resource_handler.apply()
