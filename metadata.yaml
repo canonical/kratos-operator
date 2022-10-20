@@ -15,3 +15,7 @@ resources:
     description: Kratos oci-image
     auto-fetch: true
     upstream-source: oryd/kratos:v0.10.1
+requires:
+  pg-database:
+    interface: postgresql_client
+    optional: false

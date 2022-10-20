@@ -11,3 +11,4 @@ selfservice:
     registration:
       enabled: true
       ui_url: http://127.0.0.1:9999/registration
+dsn: {{ dsn }}
