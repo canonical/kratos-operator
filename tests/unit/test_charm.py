@@ -35,11 +35,7 @@ def test_on_install_sucess(harness, mocked_resource_handler, mocked_lightkube_cl
         (ErrorWithStatus("Something failed", BlockedStatus), pytest.raises(ErrorWithStatus)),
     ),
 )
-def test_on_install_error(
-    harness,
-    apply_error,
-    raised_exception,
-) -> None:
+def test_on_install_error(harness, apply_error, raised_exception, mocked_lightkube_client) -> None:
     harness.begin()
 
     harness.charm.resource_handler.apply = MagicMock()
@@ -51,7 +47,7 @@ def test_on_install_error(
     assert isinstance(harness.model.unit.status, BlockedStatus)
 
 
-def test_pebble_ready_success(harness) -> None:
+def test_pebble_ready_success(harness, mocked_resource_handler, mocked_lightkube_client) -> None:
     harness.begin()
     harness.set_can_connect(CONTAINER_NAME, True)
     initial_plan = harness.get_container_pebble_plan(CONTAINER_NAME)
@@ -81,7 +77,9 @@ def test_pebble_ready_success(harness) -> None:
     assert harness.model.unit.status == ActiveStatus()
 
 
-def test_pebble_ready_cannot_connect_container(harness) -> None:
+def test_pebble_ready_cannot_connect_container(
+    harness, mocked_resource_handler, mocked_lightkube_client
+) -> None:
     harness.begin()
     harness.set_can_connect(CONTAINER_NAME, False)
 
@@ -91,7 +89,7 @@ def test_pebble_ready_cannot_connect_container(harness) -> None:
     assert isinstance(harness.charm.unit.status, WaitingStatus)
 
 
-def test_on_remove_success(harness, mocked_resource_handler) -> None:
+def test_on_remove_success(harness, mocked_resource_handler, mocked_lightkube_client) -> None:
     harness.begin()
     harness.set_can_connect(CONTAINER_NAME, True)
     harness.charm.on.remove.emit()
@@ -109,11 +107,7 @@ def test_on_remove_success(harness, mocked_resource_handler) -> None:
         ),
     ),
 )
-def test_on_remove_error(
-    harness,
-    apply_error,
-    raised_exception,
-) -> None:
+def test_on_remove_error(harness, apply_error, raised_exception, mocked_lightkube_client) -> None:
     harness.begin()
 
     harness.charm.resource_handler.apply = MagicMock()
