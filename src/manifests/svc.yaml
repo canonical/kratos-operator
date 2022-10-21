@@ -16,7 +16,7 @@ spec:
   type: ClusterIP
   ports:
     - port: 80
-      targetPort: http-admin
+      targetPort: 4434
       protocol: TCP
       name: http
   selector:
@@ -39,7 +39,7 @@ spec:
   type: ClusterIP
   ports:
     - port: 80
-      targetPort: http-public
+      targetPort: 4433
       protocol: TCP
       name: http
   selector:

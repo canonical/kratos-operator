@@ -16,7 +16,6 @@ from charmed_kubeflow_chisme.lightkube.batch import delete_many
 from charmed_kubeflow_chisme.pebble import update_layer
 from lightkube import Client
 from lightkube.core.exceptions import ApiError
-from lightkube.resources.apps_v1 import StatefulSet
 from ops.charm import CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
@@ -115,35 +114,6 @@ class KratosCharm(CharmBase):
 
         try:
             self.resource_handler.apply()
-            self.lightkube_client.patch(
-                StatefulSet,
-                self.model.app.name,
-                {
-                    "spec": {
-                        "template": {
-                            "spec": {
-                                "containers": [
-                                    {
-                                        "name": "kratos",
-                                        "ports": [
-                                            {
-                                                "name": "http-admin",
-                                                "containerPort": 4434,
-                                                "protocol": "TCP",
-                                            },
-                                            {
-                                                "name": "http-public",
-                                                "containerPort": 4433,
-                                                "protocol": "TCP",
-                                            },
-                                        ],
-                                    }
-                                ]
-                            }
-                        }
-                    }
-                },
-            )
 
         except (ApiError, ErrorWithStatus) as e:
             if isinstance(e, ApiError):
