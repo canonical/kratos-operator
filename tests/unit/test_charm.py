@@ -19,7 +19,6 @@ def test_on_install_sucess(harness, mocked_resource_handler, mocked_lightkube_cl
     harness.charm.on.install.emit()
 
     mocked_resource_handler.apply.assert_called_once()
-    mocked_lightkube_client.patch.assert_called_once()
 
     assert isinstance(harness.charm.unit.status, ActiveStatus)
 

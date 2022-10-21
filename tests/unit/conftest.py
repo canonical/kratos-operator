@@ -13,7 +13,6 @@ from charm import KratosCharm
 def harness() -> None:
     harness = Harness(KratosCharm)
     harness.set_leader(True)
-    # harness.begin()
     return harness
 
 
