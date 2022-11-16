@@ -55,7 +55,7 @@ juju add-model dev
 # Enable DEBUG logging
 juju model-config logging-config="<root>=INFO;unit=DEBUG"
 # Deploy the charm
-juju deploy ./kratos_ubuntu-*-amd64.charm --trust --resource oci-image=oryd/kratos:v0.10.1
+juju deploy ./kratos_ubuntu-*-amd64.charm --trust --resource oci-image=$(yq eval '.resources.oci-image.upstream-source' metadata.yaml)
 ```
 
 ## Canonical Contributor Agreement

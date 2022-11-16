@@ -412,6 +412,21 @@ class DatabaseRequires(Object):
             }
         return data
 
+    def is_database_created(self) -> bool:
+        """Check if a database created.
+        This function can be used to check if the Provider answered with data
+        in the charm code when outside an event callback.
+        Returns:
+            True or False
+        """
+        for relation in self.relations:
+            if (
+                "username" in relation.data[relation.app]
+                and "password" in relation.data[relation.app]
+            ):
+                return True
+        return False
+
     def _update_relation_data(self, relation_id: int, data: dict) -> None:
         """Updates a set of key-value pairs in the relation.
 
