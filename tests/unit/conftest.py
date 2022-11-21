@@ -2,7 +2,6 @@
 # See LICENSE file for licensing details.
 
 import pytest
-
 from ops.testing import Harness
 
 from charm import KratosCharm

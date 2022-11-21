@@ -98,7 +98,7 @@ def test_update_container_correct_pebble_layer(
     assert harness.model.unit.status == ActiveStatus()
 
 
-def test_cannot_connect_container(harness, mocked_kubernetes_service_patcher) -> None:
+def test_no_leadership(harness, mocked_kubernetes_service_patcher) -> None:
     harness.set_leader(False)
     harness.begin()
 
