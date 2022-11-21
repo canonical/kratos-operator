@@ -39,7 +39,8 @@ class KratosCharm(CharmBase):
         )
 
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
-        self.framework.observe(self.database.on.database_created, self._on_database_created)
+        self.framework.observe(self.database.on.database_created, self._on_database_changed)
+        self.framework.observe(self.database.on.endpoints_changed, self._on_database_changed)
 
     @property
     def _pebble_layer(self) -> Layer:
@@ -105,22 +106,17 @@ class KratosCharm(CharmBase):
 
         if current_layer.services != new_layer.services:
             self.unit.status = MaintenanceStatus("Applying new pebble layer")
+            self._container.push(self._config_file_path, self._config, make_dirs=True)
             self._container.add_layer(self._container_name, new_layer, combine=True)
             logger.info("Pebble plan updated with new configuration, replanning")
             self._container.replan()
 
         # Compare changes in kratos config
-        try:
-            current_config = self._container.pull(self._config_file_path).read()
-        except (PathError, FileNotFoundError):
+        current_config = self._container.pull(self._config_file_path).read()
+        if current_config != self._config:
             self._container.push(self._config_file_path, self._config, make_dirs=True)
             logger.info("Updated kratos config")
-        else:
-            if current_config != self._config:
-                self._container.push(self._config_file_path, self._config, make_dirs=True)
-                logger.info("Updated kratos config")
-
-        self._container.restart(self._container_name)
+            self._container.replan()
 
     def _get_database_relation_info(self) -> dict:
         """Get database info from relation data bag."""
@@ -146,9 +142,15 @@ class KratosCharm(CharmBase):
 
     def _update_container(self, event) -> None:
         """Update configs, pebble layer and run database migration."""
+        if not self.unit.is_leader():
+            event.defer()
+            logger.info("Does not have leadership. Deferring event.")
+            self.unit.status = WaitingStatus("Waiting for leadership")
+            return
+
         if not self._container.can_connect():
             event.defer()
-            logger.info("Cannot connect to Kratos container. Deferring pebble ready event.")
+            logger.info("Cannot connect to Kratos container. Deferring event.")
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
 
@@ -160,7 +162,7 @@ class KratosCharm(CharmBase):
 
         if not self.database.is_database_created():
             event.defer()
-            logger.info("Missing database details. Deferring pebble ready event.")
+            logger.info("Missing database details. Deferring event.")
             self.unit.status = WaitingStatus("Waiting for database creation")
             return
 
@@ -195,7 +197,7 @@ class KratosCharm(CharmBase):
         self.unit.status = MaintenanceStatus("Configuring/deploying resources")
         self._update_container(event)
 
-    def _on_database_created(self, event: DatabaseCreatedEvent) -> None:
+    def _on_database_changed(self, event: DatabaseCreatedEvent) -> None:
         """Event Handler for database created event."""
         self.unit.status = MaintenanceStatus("Retrieving database details")
         self._update_container(event)

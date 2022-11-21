@@ -99,6 +99,16 @@ def test_update_container_correct_pebble_layer(
 
 
 def test_cannot_connect_container(harness, mocked_kubernetes_service_patcher) -> None:
+    harness.set_leader(False)
+    harness.begin()
+
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    assert isinstance(harness.charm.unit.status, WaitingStatus)
+
+
+def test_cannot_connect_container(harness, mocked_kubernetes_service_patcher) -> None:
     harness.begin()
     harness.set_can_connect(CONTAINER_NAME, False)
 
