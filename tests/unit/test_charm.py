@@ -1,57 +1,21 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-from unittest.mock import MagicMock
-
-import pytest
-from charmed_kubeflow_chisme.exceptions import ErrorWithStatus
-from charmed_kubeflow_chisme.lightkube.mocking import FakeApiError
-from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
+import yaml
+from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 
 CONTAINER_NAME = "kratos"
+DB_USERNAME = "fake_relation_id_1"
+DB_PASSWORD = "fake-password"
+DB_ENDPOINTS = "postgresql-k8s-primary.namespace.svc.cluster.local:5432"
 
 
-def test_on_install_sucess(harness, mocked_resource_handler, mocked_lightkube_client) -> None:
+def test_update_container_correct_config(
+    harness, mocked_kubernetes_service_patcher, mocked_sql_migration
+) -> None:
     harness.begin()
-
     harness.set_can_connect(CONTAINER_NAME, True)
-    assert isinstance(harness.charm.unit.status, MaintenanceStatus)
-    harness.charm.on.install.emit()
 
-    mocked_resource_handler.apply.assert_called_once()
-
-    assert isinstance(harness.charm.unit.status, ActiveStatus)
-
-
-@pytest.mark.parametrize(
-    "apply_error, raised_exception",
-    (
-        (FakeApiError(400), pytest.raises(FakeApiError)),
-        (
-            FakeApiError(403),
-            pytest.raises(FakeApiError),
-        ),
-        (ErrorWithStatus("Something failed", BlockedStatus), pytest.raises(ErrorWithStatus)),
-    ),
-)
-def test_on_install_error(harness, apply_error, raised_exception, mocked_lightkube_client) -> None:
-    harness.begin()
-
-    harness.charm.resource_handler.apply = MagicMock()
-    harness.charm.resource_handler.apply.side_effect = apply_error
-
-    harness.charm.on.install.emit()
-    with raised_exception:
-        harness.charm.resource_handler.apply()
-    assert isinstance(harness.model.unit.status, BlockedStatus)
-
-
-def test_pebble_ready_success(harness, mocked_resource_handler, mocked_lightkube_client) -> None:
-    db_username = "fake_relation_id_1"
-    db_password = "fake-password"
-
-    harness.set_can_connect(CONTAINER_NAME, True)
-    harness.set_leader(True)
     db_relation_id = harness.add_relation("pg-database", "postgresql-k8s")
     harness.add_relation_unit(db_relation_id, "postgresql-k8s/0")
     harness.update_relation_data(
@@ -59,9 +23,55 @@ def test_pebble_ready_success(harness, mocked_resource_handler, mocked_lightkube
         "postgresql-k8s",
         {
             "data": '{"database": "database", "extra-user-roles": "SUPERUSER"}',
-            "endpoints": "postgresql-k8s-primary.namespace.svc.cluster.local:5432",
-            "password": db_password,
-            "username": db_username,
+            "endpoints": DB_ENDPOINTS,
+            "password": DB_PASSWORD,
+            "username": DB_USERNAME,
+        },
+    )
+
+    expected_config = {
+        "log": {"level": "trace"},
+        "identity": {
+            "default_schema_id": "default",
+            "schemas": [
+                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
+            ],
+        },
+        "selfservice": {
+            "default_browser_return_url": "http://127.0.0.1:9999/",
+            "flows": {
+                "registration": {
+                    "enabled": True,
+                    "ui_url": "http://127.0.0.1:9999/registration",
+                }
+            },
+        },
+        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/postgres",
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+    }
+    mocked_sql_migration.assert_called_once()
+
+    assert harness.charm._config == yaml.dump(expected_config)
+
+
+def test_update_container_correct_pebble_layer(
+    harness, mocked_kubernetes_service_patcher, mocked_sql_migration
+) -> None:
+
+    harness.set_can_connect(CONTAINER_NAME, True)
+
+    db_relation_id = harness.add_relation("pg-database", "postgresql-k8s")
+    harness.add_relation_unit(db_relation_id, "postgresql-k8s/0")
+    harness.update_relation_data(
+        db_relation_id,
+        "postgresql-k8s",
+        {
+            "data": '{"database": "database", "extra-user-roles": "SUPERUSER"}',
+            "endpoints": DB_ENDPOINTS,
+            "password": DB_PASSWORD,
+            "username": DB_USERNAME,
         },
     )
 
@@ -88,9 +98,7 @@ def test_pebble_ready_success(harness, mocked_resource_handler, mocked_lightkube
     assert harness.model.unit.status == ActiveStatus()
 
 
-def test_pebble_ready_cannot_connect_container(
-    harness, mocked_resource_handler, mocked_lightkube_client
-) -> None:
+def test_cannot_connect_container(harness, mocked_kubernetes_service_patcher) -> None:
     harness.begin()
     harness.set_can_connect(CONTAINER_NAME, False)
 
@@ -100,9 +108,7 @@ def test_pebble_ready_cannot_connect_container(
     assert isinstance(harness.charm.unit.status, WaitingStatus)
 
 
-def test_pebble_ready_without_database_connection(
-    harness, mocked_resource_handler, mocked_lightkube_client
-) -> None:
+def test_missing_database_relation(harness, mocked_kubernetes_service_patcher) -> None:
     harness.begin()
     harness.set_can_connect(CONTAINER_NAME, True)
 
@@ -112,15 +118,26 @@ def test_pebble_ready_without_database_connection(
     assert isinstance(harness.charm.unit.status, BlockedStatus)
 
 
-def test_on_database_created(harness, mocked_resource_handler, mocked_lightkube_client) -> None:
-    db_username = "fake_relation_id_1"
-    db_password = "fake-password"
-
+def test_database_not_created(harness, mocked_kubernetes_service_patcher) -> None:
     harness.begin()
-    harness.charm._on_pebble_ready = MagicMock()
     harness.set_can_connect(CONTAINER_NAME, True)
 
-    harness.set_leader(True)
+    db_relation_id = harness.add_relation("pg-database", "postgresql-k8s")
+    harness.add_relation_unit(db_relation_id, "postgresql-k8s/0")
+
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    assert isinstance(harness.charm.unit.status, WaitingStatus)
+
+
+def test_on_pebble_ready(
+    harness, mocked_kubernetes_service_patcher, mocked_update_container
+) -> None:
+
+    harness.begin()
+    harness.set_can_connect(CONTAINER_NAME, True)
+
     db_relation_id = harness.add_relation("pg-database", "postgresql-k8s")
     harness.add_relation_unit(db_relation_id, "postgresql-k8s/0")
     harness.update_relation_data(
@@ -128,41 +145,30 @@ def test_on_database_created(harness, mocked_resource_handler, mocked_lightkube_
         "postgresql-k8s",
         {
             "data": '{"database": "database", "extra-user-roles": "SUPERUSER"}',
-            "endpoints": "postgresql-k8s-primary.namespace.svc.cluster.local:5432",
-            "password": db_password,
-            "username": db_username,
+            "endpoints": DB_ENDPOINTS,
+            "password": DB_PASSWORD,
+            "username": DB_USERNAME,
         },
     )
-
-    assert harness.charm._stored.db_username == db_username
-    assert harness.charm._stored.db_password == db_password
-    harness.charm._on_pebble_ready.assert_called_once()
+    mocked_update_container.assert_called_once()
 
 
-def test_on_remove_success(harness, mocked_resource_handler, mocked_lightkube_client) -> None:
+def test_on_database_created(
+    harness, mocked_kubernetes_service_patcher, mocked_update_container
+) -> None:
     harness.begin()
     harness.set_can_connect(CONTAINER_NAME, True)
-    harness.charm.on.remove.emit()
 
-    mocked_resource_handler.render_manifests.assert_called_once()
-
-
-@pytest.mark.parametrize(
-    "apply_error, raised_exception",
-    (
-        (FakeApiError(400), pytest.raises(FakeApiError)),
-        (
-            FakeApiError(403),
-            pytest.raises(FakeApiError),
-        ),
-    ),
-)
-def test_on_remove_error(harness, apply_error, raised_exception, mocked_lightkube_client) -> None:
-    harness.begin()
-
-    harness.charm.resource_handler.apply = MagicMock()
-    harness.charm.resource_handler.apply.side_effect = apply_error
-
-    harness.charm.on.remove.emit()
-    with raised_exception:
-        harness.charm.resource_handler.apply()
+    db_relation_id = harness.add_relation("pg-database", "postgresql-k8s")
+    harness.add_relation_unit(db_relation_id, "postgresql-k8s/0")
+    harness.update_relation_data(
+        db_relation_id,
+        "postgresql-k8s",
+        {
+            "data": '{"database": "database", "extra-user-roles": "SUPERUSER"}',
+            "endpoints": DB_ENDPOINTS,
+            "password": DB_PASSWORD,
+            "username": DB_USERNAME,
+        },
+    )
+    mocked_update_container.assert_called_once()

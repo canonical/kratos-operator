@@ -112,7 +112,7 @@ class KratosCharm(CharmBase):
         # Compare changes in kratos config
         try:
             current_config = self._container.pull(self._config_file_path).read()
-        except PathError:
+        except (PathError, FileNotFoundError):
             self._container.push(self._config_file_path, self._config, make_dirs=True)
             logger.info("Updated kratos config")
         else:
@@ -161,7 +161,7 @@ class KratosCharm(CharmBase):
         if not self.database.is_database_created():
             event.defer()
             logger.info("Missing database details. Deferring pebble ready event.")
-            self.unit.status = BlockedStatus("Waiting for database creation")
+            self.unit.status = WaitingStatus("Waiting for database creation")
             return
 
         self._set_default_identity_schema()

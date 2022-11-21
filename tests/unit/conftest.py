@@ -1,9 +1,8 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-from unittest.mock import MagicMock
-
 import pytest
+
 from ops.testing import Harness
 
 from charm import KratosCharm
@@ -17,17 +16,19 @@ def harness() -> None:
 
 
 @pytest.fixture()
-def mocked_lightkube_client(mocker):
-    mocked_client = MagicMock()
-    mocked_client_factory = mocker.patch("charm.Client")
-    mocked_client_factory.return_value = mocked_client
-    yield mocked_client
+def mocked_kubernetes_service_patcher(mocker):
+    mocked_service_patcher = mocker.patch("charm.KubernetesServicePatch")
+    mocked_service_patcher.return_value = lambda x, y: None
+    yield mocked_service_patcher
 
 
 @pytest.fixture()
-def mocked_resource_handler(mocker):
-    """Yields a mocked lightkube Client."""
-    mocked_resource_handler = MagicMock()
-    mocked_resource_handler_factory = mocker.patch("charm.KubernetesResourceHandler")
-    mocked_resource_handler_factory.return_value = mocked_resource_handler
-    yield mocked_resource_handler
+def mocked_sql_migration(mocker):
+    mocked_sql_migration = mocker.patch("charm.KratosCharm._run_sql_migration")
+    yield mocked_sql_migration
+
+
+@pytest.fixture()
+def mocked_update_container(mocker):
+    mocked_update_container = mocker.patch("charm.KratosCharm._update_container")
+    yield mocked_update_container
