@@ -52,7 +52,7 @@ class KratosCharm(CharmBase):
                     "override": "replace",
                     "summary": "Kratos Operator layer",
                     "startup": "enabled",
-                    "command": "kratos serve all --config /etc/config/kratos.yaml",
+                    "command": f"kratos serve all --config {self._config_file_path}",
                 }
             },
             "checks": {
