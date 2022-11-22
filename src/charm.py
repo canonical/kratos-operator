@@ -187,7 +187,7 @@ class KratosCharm(CharmBase):
         )
         try:
             stdout, _ = process.wait_output()
-            logger.info(f"Executing automigration: {stdout}")
+            logger.info(f"Successfully executed automigration: {stdout}")
         except ExecError as err:
             logger.error(f"Exited with code {err.exit_code}. Stderr: {err.stderr}")
             self.unit.status = BlockedStatus("Database migration job failed")
