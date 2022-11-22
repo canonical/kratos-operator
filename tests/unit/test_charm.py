@@ -10,12 +10,7 @@ DB_PASSWORD = "fake-password"
 DB_ENDPOINTS = "postgresql-k8s-primary.namespace.svc.cluster.local:5432"
 
 
-def test_update_container_correct_config(
-    harness, mocked_kubernetes_service_patcher, mocked_sql_migration
-) -> None:
-    harness.begin()
-    harness.set_can_connect(CONTAINER_NAME, True)
-
+def setup_postgres_relation(harness):
     db_relation_id = harness.add_relation("pg-database", "postgresql-k8s")
     harness.add_relation_unit(db_relation_id, "postgresql-k8s/0")
     harness.update_relation_data(
@@ -28,6 +23,14 @@ def test_update_container_correct_config(
             "username": DB_USERNAME,
         },
     )
+
+
+def test_update_container_correct_config(
+    harness, mocked_kubernetes_service_patcher, mocked_sql_migration
+) -> None:
+    harness.begin()
+    harness.set_can_connect(CONTAINER_NAME, True)
+    setup_postgres_relation(harness)
 
     expected_config = {
         "log": {"level": "trace"},
@@ -61,19 +64,7 @@ def test_update_container_correct_pebble_layer(
 ) -> None:
 
     harness.set_can_connect(CONTAINER_NAME, True)
-
-    db_relation_id = harness.add_relation("pg-database", "postgresql-k8s")
-    harness.add_relation_unit(db_relation_id, "postgresql-k8s/0")
-    harness.update_relation_data(
-        db_relation_id,
-        "postgresql-k8s",
-        {
-            "data": '{"database": "database", "extra-user-roles": "SUPERUSER"}',
-            "endpoints": DB_ENDPOINTS,
-            "password": DB_PASSWORD,
-            "username": DB_USERNAME,
-        },
-    )
+    setup_postgres_relation(harness)
 
     initial_plan = harness.get_container_pebble_plan(CONTAINER_NAME)
     assert initial_plan.to_yaml() == "{}\n"
@@ -96,16 +87,6 @@ def test_update_container_correct_pebble_layer(
     service = harness.model.unit.get_container("kratos").get_service("kratos")
     assert service.is_running()
     assert harness.model.unit.status == ActiveStatus()
-
-
-def test_no_leadership(harness, mocked_kubernetes_service_patcher) -> None:
-    harness.set_leader(False)
-    harness.begin()
-
-    container = harness.model.unit.get_container(CONTAINER_NAME)
-    harness.charm.on.kratos_pebble_ready.emit(container)
-
-    assert isinstance(harness.charm.unit.status, WaitingStatus)
 
 
 def test_cannot_connect_container(harness, mocked_kubernetes_service_patcher) -> None:
@@ -147,19 +128,8 @@ def test_on_pebble_ready(
 
     harness.begin()
     harness.set_can_connect(CONTAINER_NAME, True)
+    setup_postgres_relation(harness)
 
-    db_relation_id = harness.add_relation("pg-database", "postgresql-k8s")
-    harness.add_relation_unit(db_relation_id, "postgresql-k8s/0")
-    harness.update_relation_data(
-        db_relation_id,
-        "postgresql-k8s",
-        {
-            "data": '{"database": "database", "extra-user-roles": "SUPERUSER"}',
-            "endpoints": DB_ENDPOINTS,
-            "password": DB_PASSWORD,
-            "username": DB_USERNAME,
-        },
-    )
     mocked_update_container.assert_called_once()
 
 
@@ -168,17 +138,6 @@ def test_on_database_created(
 ) -> None:
     harness.begin()
     harness.set_can_connect(CONTAINER_NAME, True)
+    setup_postgres_relation(harness)
 
-    db_relation_id = harness.add_relation("pg-database", "postgresql-k8s")
-    harness.add_relation_unit(db_relation_id, "postgresql-k8s/0")
-    harness.update_relation_data(
-        db_relation_id,
-        "postgresql-k8s",
-        {
-            "data": '{"database": "database", "extra-user-roles": "SUPERUSER"}',
-            "endpoints": DB_ENDPOINTS,
-            "password": DB_PASSWORD,
-            "username": DB_USERNAME,
-        },
-    )
     mocked_update_container.assert_called_once()

@@ -142,12 +142,6 @@ class KratosCharm(CharmBase):
 
     def _update_container(self, event) -> None:
         """Update configs, pebble layer and run database migration."""
-        if not self.unit.is_leader():
-            event.defer()
-            logger.info("Does not have leadership. Deferring event.")
-            self.unit.status = WaitingStatus("Waiting for leadership")
-            return
-
         if not self._container.can_connect():
             event.defer()
             logger.info("Cannot connect to Kratos container. Deferring event.")
@@ -173,6 +167,12 @@ class KratosCharm(CharmBase):
         except ChangeError as err:
             logger.error(str(err))
             self.unit.status = BlockedStatus("Failed to replan")
+            return
+
+        if not self.unit.is_leader():
+            event.defer()
+            logger.info("Does not have leadership. Deferring event.")
+            self.unit.status = WaitingStatus("Waiting for leadership")
             return
 
         self._run_sql_migration()
