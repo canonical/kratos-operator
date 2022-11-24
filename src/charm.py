@@ -14,7 +14,7 @@ from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServ
 from ops.charm import CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
-from ops.pebble import ChangeError, ExecError, Layer, PathError, ProtocolError
+from ops.pebble import ChangeError, ExecError, Layer
 
 logger = logging.getLogger(__name__)
 
@@ -99,24 +99,23 @@ class KratosCharm(CharmBase):
 
     def _update_layer(self) -> None:
         """Updates the Pebble configuration layer and kratos config if changed."""
-        # Get current layer
-        current_layer = self._container.get_plan()
-        # Create a new config layer
-        new_layer = self._pebble_layer
-
-        if current_layer.services != new_layer.services:
+        if not self._container.get_plan().to_dict():
             self.unit.status = MaintenanceStatus("Applying new pebble layer")
             self._container.push(self._config_file_path, self._config, make_dirs=True)
-            self._container.add_layer(self._container_name, new_layer, combine=True)
+            with open("src/identity.default.schema.json", encoding="utf-8") as schema_file:
+                schema = schema_file.read()
+                self._container.push(self._identity_schema_file_path, schema, make_dirs=True)
+            self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
             logger.info("Pebble plan updated with new configuration, replanning")
             self._container.replan()
-
-        # Compare changes in kratos config
-        current_config = self._container.pull(self._config_file_path).read()
-        if current_config != self._config:
-            self._container.push(self._config_file_path, self._config, make_dirs=True)
-            logger.info("Updated kratos config")
-            self._container.replan()
+        else:
+            # Compare changes in kratos config
+            current_config = self._container.pull(self._config_file_path).read()
+            if current_config != self._config:
+                self.unit.status = MaintenanceStatus("Updating Kratos Config")
+                self._container.push(self._config_file_path, self._config, make_dirs=True)
+                logger.info("Updated kratos config")
+                self._container.restart()
 
     def _get_database_relation_info(self) -> dict:
         """Get database info from relation data bag."""
@@ -128,17 +127,6 @@ class KratosCharm(CharmBase):
             "password": relation_data["password"],
             "endpoints": relation_data["endpoints"],
         }
-
-    def _set_default_identity_schema(self) -> None:
-        """Push identity schema into kratos container."""
-        try:
-            with open("src/identity.default.schema.json", encoding="utf-8") as schema_file:
-                schema = schema_file.read()
-                self._container.push(self._identity_schema_file_path, schema, make_dirs=True)
-            logger.info("Pushed configs to kratos container")
-        except (ProtocolError, PathError) as e:
-            logger.error(str(e))
-            self.unit.status = BlockedStatus(str(e))
 
     def _update_container(self, event) -> None:
         """Update configs, pebble layer and run database migration."""
@@ -159,8 +147,6 @@ class KratosCharm(CharmBase):
             logger.info("Missing database details. Deferring event.")
             self.unit.status = WaitingStatus("Waiting for database creation")
             return
-
-        self._set_default_identity_schema()
 
         try:
             self._update_layer()
