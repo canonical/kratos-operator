@@ -156,9 +156,6 @@ class KratosCharm(CharmBase):
             return
 
         if not self.unit.is_leader():
-            event.defer()
-            logger.info("Does not have leadership. Deferring event.")
-            self.unit.status = WaitingStatus("Waiting for leadership")
             return
 
         self._run_sql_migration()

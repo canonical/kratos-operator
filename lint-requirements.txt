@@ -1,5 +1,5 @@
 black
-flake8
+flake8==5.0.4
 flake8-docstrings
 flake8-copyright
 flake8-builtins
