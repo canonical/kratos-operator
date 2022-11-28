@@ -137,7 +137,6 @@ class KratosCharm(CharmBase):
             return
 
         if not self.model.relations["pg-database"]:
-            event.defer()
             logger.error("Missing required relation with postgresql")
             self.model.unit.status = BlockedStatus("Missing required relation with postgresql")
             return
