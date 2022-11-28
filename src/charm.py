@@ -56,11 +56,11 @@ class KratosCharm(CharmBase):
                 }
             },
             "checks": {
-                "ready": {
+                "kratos-ready": {
                     "override": "replace",
                     "http": {"url": "http://localhost:4434/admin/health/ready"},
                 },
-                "alive": {
+                "kratos-alive": {
                     "override": "replace",
                     "http": {"url": "http://localhost:4434/admin/health/alive"},
                 },
