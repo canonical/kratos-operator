@@ -115,7 +115,7 @@ class KratosCharm(CharmBase):
                 self.unit.status = MaintenanceStatus("Updating Kratos Config")
                 self._container.push(self._config_file_path, self._config, make_dirs=True)
                 logger.info("Updated kratos config")
-                self._container.restart()
+                self._container.restart(self._container_name)
 
     def _get_database_relation_info(self) -> dict:
         """Get database info from relation data bag."""
