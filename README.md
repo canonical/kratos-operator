@@ -8,6 +8,11 @@ For more details, visit https://www.ory.sh/docs/kratos/ory-kratos-intro
 ## Usage
 
 TODO: Provide high-level usage, such as required config or relations
+```bash
+juju deploy postgresql-k8s --channel edge --trust
+juju deploy kratos --trust
+juju relate kratos postgresql-k8s
+```
 
 ## Relations
 
