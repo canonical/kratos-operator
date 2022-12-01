@@ -13,8 +13,8 @@ from charms.data_platform_libs.v0.database_requires import DatabaseCreatedEvent,
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from ops.charm import CharmBase
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
-from ops.pebble import ChangeError, ExecError, Layer
+from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
+from ops.pebble import ExecError, Layer
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class KratosCharm(CharmBase):
         )
 
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
-        self.framework.observe(self.database.on.database_created, self._on_database_changed)
+        self.framework.observe(self.database.on.database_created, self._on_database_created)
         self.framework.observe(self.database.on.endpoints_changed, self._on_database_changed)
 
     @property
@@ -51,7 +51,7 @@ class KratosCharm(CharmBase):
                 self._container_name: {
                     "override": "replace",
                     "summary": "Kratos Operator layer",
-                    "startup": "enabled",
+                    "startup": "disabled",
                     "command": f"kratos serve all --config {self._config_file_path}",
                 }
             },
@@ -86,7 +86,7 @@ class KratosCharm(CharmBase):
                     }
                 },
             },
-            "dsn": f"postgres://{db_info['username']}:{db_info['password']}@{db_info['endpoints']}/postgres",
+            "dsn": f"postgres://{db_info.get('username')}:{db_info.get('password')}@{db_info.get('endpoints')}/postgres",
             "courier": {
                 "smtp": {
                     # TODO: dynamic connection uri through charm config
@@ -97,75 +97,21 @@ class KratosCharm(CharmBase):
 
         return yaml.dump(config)
 
-    def _update_layer(self) -> None:
-        """Updates the Pebble configuration layer and kratos config if changed."""
-        if not self._container.get_plan().to_dict():
-            self.unit.status = MaintenanceStatus("Applying new pebble layer")
-            self._container.push(self._config_file_path, self._config, make_dirs=True)
-            with open("src/identity.default.schema.json", encoding="utf-8") as schema_file:
-                schema = schema_file.read()
-                self._container.push(self._identity_schema_file_path, schema, make_dirs=True)
-            self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
-            logger.info("Pebble plan updated with new configuration, replanning")
-            self._container.replan()
-        else:
-            # Compare changes in kratos config
-            current_config = self._container.pull(self._config_file_path).read()
-            if current_config != self._config:
-                self.unit.status = MaintenanceStatus("Updating Kratos Config")
-                self._container.push(self._config_file_path, self._config, make_dirs=True)
-                logger.info("Updated kratos config")
-                self._container.restart(self._container_name)
-
     def _get_database_relation_info(self) -> dict:
         """Get database info from relation data bag."""
         relation_id = self.database.relations[0].id
         relation_data = self.database.fetch_relation_data()[relation_id]
 
         return {
-            "username": relation_data["username"],
-            "password": relation_data["password"],
-            "endpoints": relation_data["endpoints"],
+            "username": relation_data.get("username"),
+            "password": relation_data.get("password"),
+            "endpoints": relation_data.get("endpoints"),
         }
-
-    def _update_container(self, event) -> None:
-        """Update configs, pebble layer and run database migration."""
-        if not self._container.can_connect():
-            event.defer()
-            logger.info("Cannot connect to Kratos container. Deferring event.")
-            self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
-            return
-
-        if not self.model.relations["pg-database"]:
-            logger.error("Missing required relation with postgresql")
-            self.model.unit.status = BlockedStatus("Missing required relation with postgresql")
-            return
-
-        if not self.database.is_database_created():
-            event.defer()
-            logger.info("Missing database details. Deferring event.")
-            self.unit.status = WaitingStatus("Waiting for database creation")
-            return
-
-        try:
-            self._update_layer()
-        except ChangeError as err:
-            logger.error(str(err))
-            self.unit.status = BlockedStatus("Failed to replan")
-            return
-
-        if not self.unit.is_leader():
-            return
-
-        self._run_sql_migration()
-
-        self.unit.status = ActiveStatus()
 
     def _run_sql_migration(self) -> None:
         """Runs database migration."""
         process = self._container.exec(
             ["kratos", "migrate", "sql", "-e", "--config", self._config_file_path, "--yes"],
-            timeout=20.0,
         )
         try:
             stdout, _ = process.wait_output()
@@ -176,13 +122,67 @@ class KratosCharm(CharmBase):
 
     def _on_pebble_ready(self, event) -> None:
         """Event Handler for pebble ready event."""
+        if not self._container.can_connect():
+            event.defer()
+            logger.info("Cannot connect to Kratos container. Deferring event.")
+            self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
+            return
+
         self.unit.status = MaintenanceStatus("Configuring/deploying resources")
-        self._update_container(event)
+        with open("src/identity.default.schema.json", encoding="utf-8") as schema_file:
+            schema = schema_file.read()
+            self._container.push(self._identity_schema_file_path, schema, make_dirs=True)
+        self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
+        logger.info("Pebble plan updated with new configuration, replanning")
+        self._container.replan()
+        self.unit.status = ActiveStatus()
+
+    def _on_database_created(self, event) -> None:
+        """Event Handler for database created event."""
+        if not self.unit.is_leader():
+            return
+
+        if not self._container.can_connect():
+            event.defer()
+            logger.info("Cannot connect to Kratos container. Deferring event.")
+            self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
+            return
+
+        self.unit.status = MaintenanceStatus(
+            "Configuring container and resources for database connection"
+        )
+
+        try:
+            self._container.get_service(self._container_name)
+            logger.info("Updating Kratos config and restarting service")
+            self._container.push(self._config_file_path, self._config, make_dirs=True)
+            self._run_sql_migration()
+            self._container.start(self._container_name)
+            self.unit.status = ActiveStatus()
+        except (ModelError, RuntimeError):
+            event.defer()
+            self.unit.status = WaitingStatus("Waiting for Kratos service")
+            logger.info("Kratos service is absent. Deferring database created event.")
 
     def _on_database_changed(self, event: DatabaseCreatedEvent) -> None:
-        """Event Handler for database created event."""
-        self.unit.status = MaintenanceStatus("Retrieving database details")
-        self._update_container(event)
+        """Event Handler for database changed event."""
+        if not self._container.can_connect():
+            event.defer()
+            logger.info("Cannot connect to Kratos container. Deferring event.")
+            self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
+            return
+
+        self.unit.status = MaintenanceStatus("Updating database details")
+
+        try:
+            self._container.get_service(self._container_name)
+            self._container.push(self._config_file_path, self._config, make_dirs=True)
+            self._container.restart(self._container_name)
+            self.unit.status = ActiveStatus()
+        except (ModelError, RuntimeError):
+            event.defer()
+            self.unit.status = WaitingStatus("Waiting for Kratos service")
+            logger.info("Kratos service is absent. Deferring database created event.")
 
 
 if __name__ == "__main__":
