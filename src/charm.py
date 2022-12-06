@@ -8,7 +8,6 @@
 
 import logging
 
-import yaml
 from charms.data_platform_libs.v0.database_requires import DatabaseCreatedEvent, DatabaseRequires
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from jinja2 import Template
