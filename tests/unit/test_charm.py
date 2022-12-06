@@ -56,7 +56,7 @@ def test_update_container_correct_config(
     }
     mocked_sql_migration.assert_called_once()
 
-    assert harness.charm._config == yaml.dump(expected_config)
+    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
 
 
 def test_update_container_correct_pebble_layer(
