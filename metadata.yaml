@@ -22,3 +22,5 @@ requires:
     interface: ingress
   admin-ingress:
     interface: ingress
+  kratos-external-idp:
+    interface: external_provider
