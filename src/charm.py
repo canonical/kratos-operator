@@ -12,6 +12,8 @@ from charms.data_platform_libs.v0.database_requires import (
     DatabaseEndpointsChangedEvent,
     DatabaseRequires,
 )
+from charms.data_platform_libs.v0.database_requires import DatabaseCreatedEvent, DatabaseRequires
+from charms.kratos_external_idp_integrator.v0.kratos_external_provider import ExternalIdpRequirer
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.traefik_k8s.v1.ingress import (
     IngressPerAppReadyEvent,
@@ -67,6 +69,8 @@ class KratosCharm(CharmBase):
             extra_user_roles="SUPERUSER",
         )
 
+        self.external_provider = ExternalIdpRequirer(self, relation_name="kratos-external-idp")
+
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.database.on.database_created, self._on_database_created)
@@ -75,6 +79,10 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.admin_ingress.on.revoked, self._on_ingress_revoked)
         self.framework.observe(self.public_ingress.on.ready, self._on_public_ingress_ready)
         self.framework.observe(self.public_ingress.on.revoked, self._on_ingress_revoked)
+
+        self.framework.observe(
+            self.external_provider.on.client_config_changed, self._on_client_config_changed
+        )
 
     @property
     def _pebble_layer(self) -> Layer:
@@ -109,14 +117,68 @@ class KratosCharm(CharmBase):
             template = Template(file.read())
 
         rendered = template.render(
+            config_dir_path=self._config_dir_path,
             identity_schema_file_path=self._identity_schema_file_path,
             default_browser_return_url="http://127.0.0.1:9999/",
             login_ui_url="http://localhost:4455/login",
+            oidc_providers=self.external_provider.get_providers(),
             registration_ui_url="http://127.0.0.1:9999/registration",
             db_info=self._get_database_relation_info(),
             smtp_connection_uri=self.config.get("smtp_connection_uri"),
         )
         return rendered
+
+    @property
+    def _oidc_providers_config(self):
+        scope = ["profile", "email", "address", "phone"]
+        providers = []
+        for provider in self.external_provider.get_providers():
+            providers.append(
+                {
+                    "id": provider.provider_id,
+                    "provider": provider.provider,
+                    "client_id": provider.client_id,
+                    "client_secret": provider.client_secret,
+                    "microsoft_tenant": provider.tenant_id,
+                    "mapper_url": f"file://{self._config_dir_path}/{provider.provider}_schema.jsonnet",
+                    "scope": scope,
+                }
+            )
+
+        ret = {}
+        if providers:
+            ret = {
+                "methods": {
+                    "oidc": {
+                        "config": {
+                            "providers": providers,
+                        },
+                        "enabled": True,
+                    },
+                },
+            }
+        return ret
+
+    def _update_layer(self) -> None:
+        """Updates the Pebble configuration layer and kratos config if changed."""
+        config = self._render_conf_file()
+        if not self._container.get_plan().to_dict():
+            self.unit.status = MaintenanceStatus("Applying new pebble layer")
+            self._container.push(self._config_file_path, config, make_dirs=True)
+            with open("src/identity.default.schema.json", encoding="utf-8") as schema_file:
+                schema = schema_file.read()
+                self._container.push(self._identity_schema_file_path, schema, make_dirs=True)
+            self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
+            logger.info("Pebble plan updated with new configuration, replanning")
+            self._container.replan()
+        else:
+            # Compare changes in kratos config
+            current_config = self._container.pull(self._config_file_path).read()
+            if current_config != config:
+                self.unit.status = MaintenanceStatus("Updating Kratos Config")
+                self._container.push(self._config_file_path, config, make_dirs=True)
+                logger.info("Updated kratos config")
+                self._container.restart(self._container_name)
 
     def _get_database_relation_info(self) -> dict:
         """Get database info from relation data bag."""
@@ -275,6 +337,13 @@ class KratosCharm(CharmBase):
     def _on_ingress_revoked(self, event: IngressPerAppRevokedEvent) -> None:
         if self.unit.is_leader():
             logger.info("This app no longer has ingress")
+
+    def _on_client_config_changed(self, event):
+        self._update_container(event)
+
+        self.external_provider.set_relation_registered_provider(
+            "redirect_uri", event.provider_id, event.relation_id
+        )
 
 
 if __name__ == "__main__":

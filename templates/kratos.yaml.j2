@@ -9,9 +9,32 @@ selfservice:
     default_browser_return_url:
         {{ default_browser_return_url | d("http://127.0.0.1:9999/") }}
     flows:
+        login:
+            enabled: True
+            ui_url: {{ login_ui_url }}
         registration:
             enabled: True
             ui_url: {{ registration_ui_url }}
+            {%- if oidc_providers %}
+            after:
+                oidc:
+                    hooks:
+                    - hook: session
+            {%- endif %}
+    {%- if oidc_providers %}
+    methods:
+        oidc:
+            config:
+                providers:
+                {%- for provider in oidc_providers %}
+                - {% for key, value in provider.config().items() -%}
+                  {{ key }}: "{{ value }}"
+                  {% endfor -%}
+                  mapper_url: "file://{{ config_dir_path }}/{{ provider.provider }}_schema.jsonnet"
+                  scope: ["profile", "email", "address", "phone"]
+                {% endfor -%}
+            enabled: True
+    {%- endif %}
 dsn: postgres://{{ db_info.get('username') }}:{{ db_info.get('password') }}@{{ db_info.get('endpoints') }}/{{ db_info.get('database_name') }}
 courier:
     smtp:

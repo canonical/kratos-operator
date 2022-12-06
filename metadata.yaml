@@ -25,3 +25,5 @@ requires:
 peers:
   kratos-peers:
     interface: kratos-peers
+  kratos-external-idp:
+    interface: external_provider

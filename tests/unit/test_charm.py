@@ -2,6 +2,9 @@
 # See LICENSE file for licensing details.
 
 import pytest
+import hashlib
+import json
+
 import yaml
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 
@@ -58,6 +61,28 @@ def trigger_database_changed(harness) -> None:
         {
             "data": '{"database": "database", "extra-user-roles": "SUPERUSER"}',
             "endpoints": DB_ENDPOINTS,
+        },
+    )
+
+
+def setup_external_provider_relation(harness):
+    relation_id = harness.add_relation("kratos-external-idp", "kratos-external-idp-integrator")
+    harness.add_relation_unit(relation_id, "kratos-external-idp-integrator/0")
+    harness.update_relation_data(
+        relation_id,
+        "kratos-external-idp-integrator",
+        {
+            "providers": json.dumps(
+                [
+                    {
+                        "client_id": "client_id",
+                        "provider": "generic",
+                        "secret_backend": "relation",
+                        "client_secret": "client_secret",
+                        "issuer_url": "https://example.com/oidc",
+                    },
+                ],
+            ),
         },
     )
 
@@ -126,10 +151,14 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness) ->
         "selfservice": {
             "default_browser_return_url": "http://127.0.0.1:9999/",
             "flows": {
+                "login": {
+                    "enabled": True,
+                    "ui_url": "http://localhost:4455/login",
+                },
                 "registration": {
                     "enabled": True,
                     "ui_url": "http://127.0.0.1:9999/registration",
-                }
+                },
             },
         },
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
@@ -340,3 +369,58 @@ def test_ingress_relation_created(harness, mocked_fqdn, api_type, port) -> None:
         "port": port,
         "strip-prefix": "true",
     }
+
+
+def test_oidc_provider_relation(harness, mocked_kubernetes_service_patcher, mocked_sql_migration):
+    harness.begin_with_initial_hooks()
+    harness.set_can_connect(CONTAINER_NAME, True)
+    setup_postgres_relation(harness)
+    setup_external_provider_relation(harness)
+
+    expected_config = {
+        "log": {"level": "trace"},
+        "identity": {
+            "default_schema_id": "default",
+            "schemas": [
+                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
+            ],
+        },
+        "selfservice": {
+            "default_browser_return_url": "http://127.0.0.1:9999/",
+            "flows": {
+                "login": {
+                    "enabled": True,
+                    "ui_url": "http://localhost:4455/login",
+                },
+                "registration": {
+                    "after": {"oidc": {"hooks": [{"hook": "session"}]}},
+                    "enabled": True,
+                    "ui_url": "http://127.0.0.1:9999/registration",
+                },
+            },
+            "methods": {
+                "oidc": {
+                    "config": {
+                        "providers": [
+                            {
+                                "id": "generic_9d07bcc95549089d7f16120e8bed5396469a5426",
+                                "client_id": "client_id",
+                                "client_secret": "client_secret",
+                                "issuer_url": "https://example.com/oidc",
+                                "mapper_url": "file:///etc/config/generic_schema.jsonnet",
+                                "provider": "generic",
+                                "scope": ["profile", "email", "address", "phone"],
+                            },
+                        ],
+                        "enabled": True,
+                    },
+                }
+            },
+        },
+        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/postgres",
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+    }
+
+    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
