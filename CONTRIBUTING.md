@@ -35,7 +35,7 @@ tox -e fmt           # update your code according to linting rules
 tox -e lint          # code style
 tox -e unit          # unit tests
 tox -e integration   # integration tests
-tox                  # runs 'lint' and 'unit' environments
+tox                  # runs 'fmt', 'lint', and 'unit' environments
 ```
 
 ## Build charm
@@ -55,7 +55,7 @@ juju add-model dev
 # Enable DEBUG logging
 juju model-config logging-config="<root>=INFO;unit=DEBUG"
 # Deploy the charm
-juju deploy ./kratos_ubuntu-*-amd64.charm --trust --resource oci-image=$(yq eval '.resources.oci-image.upstream-source' metadata.yaml)
+juju deploy ./kratos_ubuntu-*-amd64.charm --resource oci-image=$(yq eval '.resources.oci-image.upstream-source' metadata.yaml)
 ```
 
 ## Canonical Contributor Agreement

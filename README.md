@@ -11,9 +11,31 @@ The Kratos Operator may be deployed using the Juju command line as follows:
 
 ```bash
 juju deploy postgresql-k8s --channel edge --trust
-juju deploy kratos --trust
+juju deploy kratos
 juju relate kratos postgresql-k8s
 ```
+
+### Interacting with Kratos API
+
+Below are two examples of the API. Visit [Ory](https://www.ory.sh/docs/kratos/reference/api) to see full API specification.
+
+#### Create Identity
+```bash
+curl <kratos-service-ip>:4434/identities \
+--request POST -sL \
+--header "Content-Type: application/json" \
+--data '{
+  "schema_id": "default",
+  "traits": {
+    "email": "test@example.org"
+  }
+}'
+```
+#### Get Identities
+```bash
+curl <kratos-service-ip>:4434/admin/identities
+```
+You should be able to see the identity created earlier.
 
 ## Relations
 
