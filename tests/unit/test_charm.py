@@ -69,7 +69,9 @@ def test_correct_config(harness, mocked_kubernetes_service_patcher, mocked_sql_m
     assert yaml.safe_load(harness.charm._config) == expected_config
 
 
-def test_on_pebble_layer(harness, mocked_kubernetes_service_patcher, mocked_sql_migration) -> None:
+def test_on_pebble_layer_without_database_connection(
+    harness, mocked_kubernetes_service_patcher, mocked_sql_migration
+) -> None:
 
     harness.set_can_connect(CONTAINER_NAME, True)
 
@@ -96,6 +98,43 @@ def test_on_pebble_layer(harness, mocked_kubernetes_service_patcher, mocked_sql_
 
     service = harness.model.unit.get_container("kratos").get_service("kratos")
     assert not service.is_running()
+    assert harness.model.unit.status == ActiveStatus()
+
+
+def test_on_pebble_layer_with_database_connection(
+    harness, mocked_kubernetes_service_patcher, mocked_sql_migration
+) -> None:
+
+    harness.set_can_connect(CONTAINER_NAME, True)
+
+    initial_plan = harness.get_container_pebble_plan(CONTAINER_NAME)
+    assert initial_plan.to_yaml() == "{}\n"
+
+    setup_postgres_relation(harness)
+    harness.begin()
+
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    expected_plan = {
+        "services": {
+            CONTAINER_NAME: {
+                "override": "replace",
+                "summary": "Kratos Operator layer",
+                "startup": "disabled",
+                "command": "kratos serve all --config /etc/config/kratos.yaml",
+            }
+        }
+    }
+    updated_plan = harness.get_container_pebble_plan(CONTAINER_NAME).to_dict()
+    assert expected_plan == updated_plan
+    updated_config = yaml.safe_load(harness.charm._config)
+    assert DB_ENDPOINTS in updated_config["dsn"]
+    assert DB_PASSWORD in updated_config["dsn"]
+    assert DB_USERNAME in updated_config["dsn"]
+
+    service = harness.model.unit.get_container("kratos").get_service("kratos")
+    assert service.is_running()
     assert harness.model.unit.status == ActiveStatus()
 
 

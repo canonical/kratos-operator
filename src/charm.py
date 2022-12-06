@@ -129,12 +129,16 @@ class KratosCharm(CharmBase):
             return
 
         self.unit.status = MaintenanceStatus("Configuring/deploying resources")
+
         with open("src/identity.default.schema.json", encoding="utf-8") as schema_file:
             schema = schema_file.read()
             self._container.push(self._identity_schema_file_path, schema, make_dirs=True)
         self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
         logger.info("Pebble plan updated with new configuration, replanning")
         self._container.replan()
+        if self.database.is_database_created():
+            self._container.push(self._config_file_path, self._config, make_dirs=True)
+            self._container.start(self._container_name)
         self.unit.status = ActiveStatus()
 
     def _on_database_created(self, event) -> None:
