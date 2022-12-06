@@ -33,4 +33,4 @@ Please see the [Juju SDK docs](https://juju.is/docs/sdk) for guidelines on enhan
 
 ## License
 
-The Charmed Hydra Operator is free software, distributed under the Apache Software License, version 2.0. See [LICENSE](https://github.com/canonical/kratos-operator/blob/main/LICENSE) for more information.
+The Charmed Kratos Operator is free software, distributed under the Apache Software License, version 2.0. See [LICENSE](https://github.com/canonical/kratos-operator/blob/main/LICENSE) for more information.
