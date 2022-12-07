@@ -10,6 +10,7 @@ from charm import KratosCharm
 @pytest.fixture()
 def harness() -> None:
     harness = Harness(KratosCharm)
+    harness.set_model_name("kratos-model")
     harness.set_leader(True)
     return harness
 

@@ -11,7 +11,7 @@ selfservice:
         registration:
             enabled: True
             ui_url: {{ registration_ui_url }}
-dsn: postgres://{{ db_info['username'] }}:{{ db_info['password'] }}@{{ db_info['endpoints'] }}/postgres
+dsn: postgres://{{ db_info['username'] }}:{{ db_info['password'] }}@{{ db_info['endpoints'] }}/{{ db_info['database_name'] }}
 courier:
     smtp:
         connection_uri: {{ smtp_connection_uri }}

@@ -29,13 +29,14 @@ class KratosCharm(CharmBase):
         self._config_dir_path = "/etc/config"
         self._config_file_path = f"{self._config_dir_path}/kratos.yaml"
         self._identity_schema_file_path = f"{self._config_dir_path}/identity.default.schema.json"
+        self._db_name = f"{self.model.name}_{self.app.name}"
 
         self.service_patcher = KubernetesServicePatch(self, [("admin", 4434), ("public", 4433)])
 
         self.database = DatabaseRequires(
             self,
             relation_name="pg-database",
-            database_name="database",
+            database_name=self._db_name,
             extra_user_roles="SUPERUSER",
         )
 
@@ -115,6 +116,7 @@ class KratosCharm(CharmBase):
             "username": relation_data["username"],
             "password": relation_data["password"],
             "endpoints": relation_data["endpoints"],
+            "database_name": self._db_name,
         }
 
     def _update_container(self, event) -> None:
