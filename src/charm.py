@@ -128,37 +128,6 @@ class KratosCharm(CharmBase):
         )
         return rendered
 
-    @property
-    def _oidc_providers_config(self):
-        scope = ["profile", "email", "address", "phone"]
-        providers = []
-        for provider in self.external_provider.get_providers():
-            providers.append(
-                {
-                    "id": provider.provider_id,
-                    "provider": provider.provider,
-                    "client_id": provider.client_id,
-                    "client_secret": provider.client_secret,
-                    "microsoft_tenant": provider.tenant_id,
-                    "mapper_url": f"file://{self._config_dir_path}/{provider.provider}_schema.jsonnet",
-                    "scope": scope,
-                }
-            )
-
-        ret = {}
-        if providers:
-            ret = {
-                "methods": {
-                    "oidc": {
-                        "config": {
-                            "providers": providers,
-                        },
-                        "enabled": True,
-                    },
-                },
-            }
-        return ret
-
     def _update_layer(self) -> None:
         """Updates the Pebble configuration layer and kratos config if changed."""
         config = self._render_conf_file()
@@ -341,6 +310,7 @@ class KratosCharm(CharmBase):
     def _on_client_config_changed(self, event):
         self._update_container(event)
 
+        # TODO: This `redirect_uri` is a place holder, until we have ingress integration
         self.external_provider.set_relation_registered_provider(
             "redirect_uri", event.provider_id, event.relation_id
         )
