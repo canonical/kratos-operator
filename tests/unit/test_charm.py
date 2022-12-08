@@ -1,10 +1,10 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-import pytest
 import hashlib
 import json
 
+import pytest
 import yaml
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 
