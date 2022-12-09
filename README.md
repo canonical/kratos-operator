@@ -15,6 +15,12 @@ juju deploy kratos
 juju relate kratos postgresql-k8s
 ```
 
+To set the smtp connection uri, do:
+
+```bash
+juju config kratos smtp_connection_uri={smtp_connection_uri}
+```
+
 ### Interacting with Kratos API
 
 Below are two examples of the API. Visit [Ory](https://www.ory.sh/docs/kratos/reference/api) to see full API specification.

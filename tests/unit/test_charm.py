@@ -218,3 +218,41 @@ def test_on_database_changed_after_pebble_ready(
     updated_config = yaml.safe_load(harness.charm._config)
     assert DB_ENDPOINTS in updated_config["dsn"]
     assert isinstance(harness.charm.unit.status, ActiveStatus)
+
+
+def test_on_config_changed_cannot_connect_container(
+    harness, mocked_kubernetes_service_patcher
+) -> None:
+    harness.begin()
+    harness.set_can_connect(CONTAINER_NAME, False)
+
+    harness.charm.on.config_changed.emit()
+
+    assert isinstance(harness.charm.unit.status, WaitingStatus)
+
+
+def test_on_config_changed_before_pebble_ready(harness, mocked_kubernetes_service_patcher) -> None:
+    harness.begin()
+    harness.set_can_connect(CONTAINER_NAME, True)
+
+    harness.charm.on.config_changed.emit()
+
+    assert isinstance(harness.charm.unit.status, WaitingStatus)
+
+
+def test_on_config_changed(
+    harness, mocked_kubernetes_service_patcher, mocked_sql_migration
+) -> None:
+    harness.begin()
+    harness.set_can_connect(CONTAINER_NAME, True)
+
+    setup_postgres_relation(harness)
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    new_smtp_uri = "update-smtp-uri-value"
+    harness.update_config({"smtp_connection_uri": new_smtp_uri})
+
+    updated_config = yaml.safe_load(harness.charm._config)
+    assert new_smtp_uri == updated_config["courier"]["smtp"]["connection_uri"]
+    assert isinstance(harness.charm.unit.status, ActiveStatus)
