@@ -7,6 +7,7 @@
 """A Juju charm for Ory Kratos."""
 
 import logging
+from pathlib import Path
 
 from charms.data_platform_libs.v0.database_requires import (
     DatabaseEndpointsChangedEvent,
@@ -41,9 +42,10 @@ class KratosCharm(CharmBase):
         super().__init__(*args)
         self._container_name = "kratos"
         self._container = self.unit.get_container(self._container_name)
-        self._config_dir_path = "/etc/config"
-        self._config_file_path = f"{self._config_dir_path}/kratos.yaml"
-        self._identity_schema_file_path = f"{self._config_dir_path}/identity.default.schema.json"
+        self._config_dir_path = Path("/etc/config")
+        self._config_file_path = self._config_dir_path / "kratos.yaml"
+        self._identity_schema_file_path = self._config_dir_path / "identity.default.schema.json"
+        self._mappers_dir_path = self._config_dir_path / "claim_mappers"
         self._db_name = f"{self.model.name}_{self.app.name}"
 
         self.service_patcher = KubernetesServicePatch(
@@ -110,6 +112,12 @@ class KratosCharm(CharmBase):
         }
         return Layer(pebble_layer)
 
+    def _get_available_mappers(self):
+        return [
+            schema_file.name[: -len("_schema.jsonnet")]
+            for schema_file in Path("claim_mappers").iterdir()
+        ]
+
     def _render_conf_file(self) -> None:
         """Render the Kratos configuration file."""
         # Open the template kratos.conf file.
@@ -117,16 +125,23 @@ class KratosCharm(CharmBase):
             template = Template(file.read())
 
         rendered = template.render(
-            config_dir_path=self._config_dir_path,
+            mappers_path=str(self._mappers_dir_path),
             identity_schema_file_path=self._identity_schema_file_path,
             default_browser_return_url="http://127.0.0.1:9999/",
             login_ui_url="http://localhost:4455/login",
             oidc_providers=self.external_provider.get_providers(),
+            available_mappers=self._get_available_mappers(),
             registration_ui_url="http://127.0.0.1:9999/registration",
             db_info=self._get_database_relation_info(),
             smtp_connection_uri=self.config.get("smtp_connection_uri"),
         )
         return rendered
+
+    def _push_schemas(self):
+        for schema_file in Path("claim_mappers").iterdir():
+            with open(Path(schema_file)) as f:
+                schema = f.read()
+            self._container.push(Path(self._config_dir_path, schema_file), schema, make_dirs=True)
 
     def _update_layer(self) -> None:
         """Updates the Pebble configuration layer and kratos config if changed."""
@@ -137,6 +152,7 @@ class KratosCharm(CharmBase):
             with open("src/identity.default.schema.json", encoding="utf-8") as schema_file:
                 schema = schema_file.read()
                 self._container.push(self._identity_schema_file_path, schema, make_dirs=True)
+            self._push_schemas()
             self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
             logger.info("Pebble plan updated with new configuration, replanning")
             self._container.replan()

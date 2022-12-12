@@ -152,7 +152,6 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness) ->
             "default_browser_return_url": "http://127.0.0.1:9999/",
             "flows": {
                 "login": {
-                    "enabled": True,
                     "ui_url": "http://localhost:4455/login",
                 },
                 "registration": {
@@ -389,12 +388,11 @@ def test_oidc_provider_relation(harness, mocked_kubernetes_service_patcher, mock
             "default_browser_return_url": "http://127.0.0.1:9999/",
             "flows": {
                 "login": {
-                    "enabled": True,
                     "ui_url": "http://localhost:4455/login",
                 },
                 "registration": {
-                    "after": {"oidc": {"hooks": [{"hook": "session"}]}},
                     "enabled": True,
+                    "after": {"oidc": {"hooks": [{"hook": "session"}]}},
                     "ui_url": "http://127.0.0.1:9999/registration",
                 },
             },
@@ -407,17 +405,17 @@ def test_oidc_provider_relation(harness, mocked_kubernetes_service_patcher, mock
                                 "client_id": "client_id",
                                 "client_secret": "client_secret",
                                 "issuer_url": "https://example.com/oidc",
-                                "mapper_url": "file:///etc/config/generic_schema.jsonnet",
+                                "mapper_url": "file:///etc/config/claim_mappers/default_schema.jsonnet",
                                 "provider": "generic",
                                 "scope": ["profile", "email", "address", "phone"],
                             },
                         ],
-                        "enabled": True,
                     },
+                    "enabled": True,
                 }
             },
         },
-        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/postgres",
+        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/kratos-model_kratos",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
         },

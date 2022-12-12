@@ -10,7 +10,6 @@ selfservice:
         {{ default_browser_return_url | d("http://127.0.0.1:9999/") }}
     flows:
         login:
-            enabled: True
             ui_url: {{ login_ui_url }}
         registration:
             enabled: True
@@ -30,9 +29,13 @@ selfservice:
                 - {% for key, value in provider.config().items() -%}
                   {{ key }}: "{{ value }}"
                   {% endfor -%}
-                  mapper_url: "file://{{ config_dir_path }}/{{ provider.provider }}_schema.jsonnet"
+                  {%- if provider.provider in available_mappers %}
+                  mapper_url: "file://{{ mappers_path }}/{{ provider.provider }}_schema.jsonnet"
+                  {%- else %}
+                  mapper_url: "file://{{ mappers_path }}/default_schema.jsonnet"
+                  {%- endif %}
                   scope: ["profile", "email", "address", "phone"]
-                {% endfor -%}
+                {%- endfor %}
             enabled: True
     {%- endif %}
 dsn: postgres://{{ db_info.get('username') }}:{{ db_info.get('password') }}@{{ db_info.get('endpoints') }}/{{ db_info.get('database_name') }}
