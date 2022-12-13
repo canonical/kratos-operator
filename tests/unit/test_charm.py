@@ -132,13 +132,6 @@ def test_on_pebble_ready_when_database_not_created_yet(harness) -> None:
     assert isinstance(harness.model.unit.status, WaitingStatus)
 
 
-def test_on_database_created_when_unit_is_not_leader(harness, mocked_pebble_exec_success) -> None:
-    harness.set_leader(False)
-    setup_postgres_relation(harness)
-
-    mocked_pebble_exec_success.assert_not_called()
-
-
 def test_on_database_created_cannot_connect_container(harness) -> None:
     harness.set_can_connect(CONTAINER_NAME, False)
 
@@ -152,6 +145,52 @@ def test_on_database_created_when_pebble_is_not_ready(harness, mocked_pebble_exe
 
     assert isinstance(harness.charm.unit.status, WaitingStatus)
     mocked_pebble_exec_success.assert_not_called()
+
+
+def test_on_database_created_updated_config_and_start_service_when_pebble_is_ready_in_leader_unit(
+    harness, mocked_pebble_exec_success
+) -> None:
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+    setup_postgres_relation(harness)
+
+    service = harness.model.unit.get_container("kratos").get_service("kratos")
+    assert service.is_running()
+    assert isinstance(harness.charm.unit.status, ActiveStatus)
+
+    updated_config = yaml.safe_load(harness.charm._config)
+    assert DB_ENDPOINTS in updated_config["dsn"]
+    assert DB_PASSWORD in updated_config["dsn"]
+    assert DB_USERNAME in updated_config["dsn"]
+
+
+def test_on_database_created_updated_config_and_start_service_when_pebble_is_ready_in_non_leader_unit(
+    harness,
+) -> None:
+    harness.set_leader(False)
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+    setup_postgres_relation(harness)
+
+    service = harness.model.unit.get_container("kratos").get_service("kratos")
+    assert service.is_running()
+    assert isinstance(harness.charm.unit.status, ActiveStatus)
+
+    updated_config = yaml.safe_load(harness.charm._config)
+    assert DB_ENDPOINTS in updated_config["dsn"]
+    assert DB_PASSWORD in updated_config["dsn"]
+    assert DB_USERNAME in updated_config["dsn"]
+
+
+def test_on_database_created_not_run_migration_in_non_leader_unit(
+    harness, mocked_pebble_exec
+) -> None:
+    harness.set_leader(False)
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+    setup_postgres_relation(harness)
+
+    mocked_pebble_exec.assert_not_called()
 
 
 def test_on_database_created_when_migration_is_successful(

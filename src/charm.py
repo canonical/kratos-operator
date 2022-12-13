@@ -156,9 +156,6 @@ class KratosCharm(CharmBase):
 
     def _on_database_created(self, event) -> None:
         """Event Handler for database created event."""
-        if not self.unit.is_leader():
-            return
-
         if not self._container.can_connect():
             event.defer()
             logger.info("Cannot connect to Kratos container. Deferring event.")
@@ -179,12 +176,12 @@ class KratosCharm(CharmBase):
 
         logger.info("Updating Kratos config and restarting service")
         self._container.push(self._config_file_path, self._config, make_dirs=True)
-        is_migration_success = self._run_sql_migration()
-        if is_migration_success:
+
+        if self.unit.is_leader() and not self._run_sql_migration():
+            self.unit.status = BlockedStatus("Database migration failed.")
+        else:
             self._container.start(self._container_name)
             self.unit.status = ActiveStatus()
-        else:
-            self.unit.status = BlockedStatus("Database migration failed.")
 
     def _on_database_changed(self, event: DatabaseCreatedEvent) -> None:
         """Event Handler for database changed event."""
