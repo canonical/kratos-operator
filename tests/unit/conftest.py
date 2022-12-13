@@ -2,15 +2,18 @@
 # See LICENSE file for licensing details.
 
 import pytest
+from ops.pebble import ExecError
 from ops.testing import Harness
 
 from charm import KratosCharm
 
 
 @pytest.fixture()
-def harness() -> None:
+def harness(mocked_kubernetes_service_patcher) -> None:
     harness = Harness(KratosCharm)
     harness.set_leader(True)
+    harness.set_can_connect("kratos", True)
+    harness.begin()
     return harness
 
 
@@ -22,12 +25,22 @@ def mocked_kubernetes_service_patcher(mocker):
 
 
 @pytest.fixture()
-def mocked_sql_migration(mocker):
-    mocked_sql_migration = mocker.patch("charm.KratosCharm._run_sql_migration")
-    yield mocked_sql_migration
+def mocked_pebble_exec(mocker):
+    mocked_pebble_exec = mocker.patch("ops.model.Container.exec")
+    yield mocked_pebble_exec
 
 
 @pytest.fixture()
-def mocked_update_container(mocker):
-    mocked_update_container = mocker.patch("charm.KratosCharm._update_container")
-    yield mocked_update_container
+def mocked_pebble_exec_success(mocker, mocked_pebble_exec):
+    mocked_process = mocker.patch("ops.pebble.ExecProcess")
+    mocked_process.wait_output.return_value = ("Success", None)
+    mocked_pebble_exec.return_value = mocked_process
+    yield mocked_pebble_exec
+
+
+@pytest.fixture()
+def mocked_pebble_exec_failed(mocked_pebble_exec):
+    mocked_pebble_exec.side_effect = ExecError(
+        exit_code=400, stderr="Failed to execute", stdout="Failed", command="test command"
+    )
+    yield mocked_pebble_exec

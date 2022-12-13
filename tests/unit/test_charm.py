@@ -2,7 +2,7 @@
 # See LICENSE file for licensing details.
 
 import yaml
-from ops.model import ActiveStatus, WaitingStatus
+from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 
 CONTAINER_NAME = "kratos"
 DB_USERNAME = "fake_relation_id_1"
@@ -38,10 +38,57 @@ def trigger_database_changed(harness) -> None:
     )
 
 
-def test_correct_config(harness, mocked_kubernetes_service_patcher, mocked_sql_migration) -> None:
-    harness.begin()
-    harness.set_can_connect(CONTAINER_NAME, True)
+def test_on_pebble_ready_cannot_connect_container(harness) -> None:
+    harness.set_can_connect(CONTAINER_NAME, False)
+
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    assert isinstance(harness.model.unit.status, WaitingStatus)
+
+
+def test_on_pebble_ready_correct_plan(harness) -> None:
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    expected_plan = {
+        "services": {
+            CONTAINER_NAME: {
+                "override": "replace",
+                "summary": "Kratos Operator layer",
+                "startup": "disabled",
+                "command": "kratos serve all --config /etc/config/kratos.yaml",
+            }
+        }
+    }
+    updated_plan = harness.get_container_pebble_plan(CONTAINER_NAME).to_dict()
+    assert expected_plan == updated_plan
+
+
+def test_on_pebble_ready_service_not_started_when_database_not_created(harness) -> None:
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    service = harness.model.unit.get_container("kratos").get_service("kratos")
+    assert not service.is_running()
+
+
+def test_on_pebble_ready_service_started_when_database_is_created(harness) -> None:
     setup_postgres_relation(harness)
+
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    service = harness.model.unit.get_container("kratos").get_service("kratos")
+    assert service.is_running()
+    assert harness.model.unit.status == ActiveStatus()
+
+
+def test_on_pebble_ready_has_correct_config_when_database_is_created(harness) -> None:
+    setup_postgres_relation(harness)
+
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
 
     expected_config = {
         "log": {"level": "trace"},
@@ -69,79 +116,30 @@ def test_correct_config(harness, mocked_kubernetes_service_patcher, mocked_sql_m
     assert yaml.safe_load(harness.charm._config) == expected_config
 
 
-def test_on_pebble_layer_without_database_connection(
-    harness, mocked_kubernetes_service_patcher, mocked_sql_migration
-) -> None:
+def test_on_pebble_ready_when_missing_database_relation(harness) -> None:
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
 
-    harness.set_can_connect(CONTAINER_NAME, True)
+    assert isinstance(harness.model.unit.status, BlockedStatus)
 
-    initial_plan = harness.get_container_pebble_plan(CONTAINER_NAME)
-    assert initial_plan.to_yaml() == "{}\n"
 
-    harness.begin()
+def test_on_pebble_ready_when_database_not_created_yet(harness) -> None:
+    trigger_database_changed(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
 
-    expected_plan = {
-        "services": {
-            CONTAINER_NAME: {
-                "override": "replace",
-                "summary": "Kratos Operator layer",
-                "startup": "disabled",
-                "command": "kratos serve all --config /etc/config/kratos.yaml",
-            }
-        }
-    }
-    updated_plan = harness.get_container_pebble_plan(CONTAINER_NAME).to_dict()
-    assert expected_plan == updated_plan
-
-    service = harness.model.unit.get_container("kratos").get_service("kratos")
-    assert not service.is_running()
-    assert harness.model.unit.status == ActiveStatus()
+    assert isinstance(harness.model.unit.status, WaitingStatus)
 
 
-def test_on_pebble_layer_with_database_connection(
-    harness, mocked_kubernetes_service_patcher, mocked_sql_migration
-) -> None:
-
-    harness.set_can_connect(CONTAINER_NAME, True)
-
-    initial_plan = harness.get_container_pebble_plan(CONTAINER_NAME)
-    assert initial_plan.to_yaml() == "{}\n"
-
+def test_on_database_created_when_unit_is_not_leader(harness, mocked_pebble_exec_success) -> None:
+    harness.set_leader(False)
     setup_postgres_relation(harness)
-    harness.begin()
 
-    container = harness.model.unit.get_container(CONTAINER_NAME)
-    harness.charm.on.kratos_pebble_ready.emit(container)
-
-    expected_plan = {
-        "services": {
-            CONTAINER_NAME: {
-                "override": "replace",
-                "summary": "Kratos Operator layer",
-                "startup": "disabled",
-                "command": "kratos serve all --config /etc/config/kratos.yaml",
-            }
-        }
-    }
-    updated_plan = harness.get_container_pebble_plan(CONTAINER_NAME).to_dict()
-    assert expected_plan == updated_plan
-    updated_config = yaml.safe_load(harness.charm._config)
-    assert DB_ENDPOINTS in updated_config["dsn"]
-    assert DB_PASSWORD in updated_config["dsn"]
-    assert DB_USERNAME in updated_config["dsn"]
-
-    service = harness.model.unit.get_container("kratos").get_service("kratos")
-    assert service.is_running()
-    assert harness.model.unit.status == ActiveStatus()
+    mocked_pebble_exec_success.assert_not_called()
 
 
-def test_on_database_created_cannot_connect_container(
-    harness, mocked_kubernetes_service_patcher
-) -> None:
-    harness.begin()
+def test_on_database_created_cannot_connect_container(harness) -> None:
     harness.set_can_connect(CONTAINER_NAME, False)
 
     setup_postgres_relation(harness)
@@ -149,32 +147,24 @@ def test_on_database_created_cannot_connect_container(
     assert isinstance(harness.charm.unit.status, WaitingStatus)
 
 
-def test_on_database_created_before_pebble_ready(
-    harness, mocked_kubernetes_service_patcher, mocked_sql_migration
-) -> None:
-    harness.begin()
-    harness.set_can_connect(CONTAINER_NAME, True)
+def test_on_database_created_when_pebble_is_not_ready(harness, mocked_pebble_exec_success) -> None:
     setup_postgres_relation(harness)
 
     assert isinstance(harness.charm.unit.status, WaitingStatus)
-    mocked_sql_migration.assert_not_called()
+    mocked_pebble_exec_success.assert_not_called()
 
 
-def test_on_database_created_after_pebble_ready(
-    harness, mocked_kubernetes_service_patcher, mocked_sql_migration
+def test_on_database_created_when_migration_is_successful(
+    harness, mocked_pebble_exec_success
 ) -> None:
-    harness.begin()
-    harness.set_can_connect(CONTAINER_NAME, True)
-
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
-
     setup_postgres_relation(harness)
 
     service = harness.model.unit.get_container("kratos").get_service("kratos")
     assert service.is_running()
     assert isinstance(harness.charm.unit.status, ActiveStatus)
-    mocked_sql_migration.assert_called_once()
+    mocked_pebble_exec_success.assert_called_once()
 
     updated_config = yaml.safe_load(harness.charm._config)
     assert DB_ENDPOINTS in updated_config["dsn"]
@@ -182,34 +172,28 @@ def test_on_database_created_after_pebble_ready(
     assert DB_USERNAME in updated_config["dsn"]
 
 
-def test_on_database_changed_cannot_connect_container(
-    harness, mocked_kubernetes_service_patcher
-) -> None:
-    harness.begin()
+def test_on_database_created_when_migration_failed(harness, mocked_pebble_exec_failed) -> None:
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+    setup_postgres_relation(harness)
+
+    assert isinstance(harness.charm.unit.status, BlockedStatus)
+
+
+def test_on_database_changed_cannot_connect_container(harness) -> None:
     harness.set_can_connect(CONTAINER_NAME, False)
-
     trigger_database_changed(harness)
 
     assert isinstance(harness.charm.unit.status, WaitingStatus)
 
 
-def test_on_database_changed_before_pebble_ready(
-    harness, mocked_kubernetes_service_patcher
-) -> None:
-    harness.begin()
-    harness.set_can_connect(CONTAINER_NAME, True)
-
+def test_on_database_changed_when_pebble_is_not_ready(harness) -> None:
     trigger_database_changed(harness)
 
     assert isinstance(harness.charm.unit.status, WaitingStatus)
 
 
-def test_on_database_changed_after_pebble_ready(
-    harness, mocked_kubernetes_service_patcher, mocked_sql_migration
-) -> None:
-    harness.begin()
-    harness.set_can_connect(CONTAINER_NAME, True)
-
+def test_on_database_changed_when_pebble_is_ready(harness, mocked_pebble_exec_success) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
 

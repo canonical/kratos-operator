@@ -108,17 +108,22 @@ class KratosCharm(CharmBase):
             "endpoints": relation_data.get("endpoints"),
         }
 
-    def _run_sql_migration(self) -> None:
-        """Runs database migration."""
-        process = self._container.exec(
-            ["kratos", "migrate", "sql", "-e", "--config", self._config_file_path, "--yes"],
-        )
+    def _run_sql_migration(self) -> bool:
+        """Runs database migration.
+
+        Returns True if migration was run successfully, else returns false.
+        """
         try:
-            stdout, _ = process.wait_output()
-            logger.info(f"Successfully executed automigration: {stdout}")
+            process = self._container.exec(
+                ["kratos", "migrate", "sql", "-e", "--config", self._config_file_path, "--yes"],
+            )
         except ExecError as err:
             logger.error(f"Exited with code {err.exit_code}. Stderr: {err.stderr}")
-            self.unit.status = BlockedStatus("Database migration job failed")
+            return False
+
+        stdout, _ = process.wait_output()
+        logger.info(f"Successfully executed automigration: {stdout}")
+        return True
 
     def _on_pebble_ready(self, event) -> None:
         """Event Handler for pebble ready event."""
@@ -136,10 +141,18 @@ class KratosCharm(CharmBase):
         self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
         logger.info("Pebble plan updated with new configuration, replanning")
         self._container.replan()
+
+        # in case container was terminated unexpectedly
         if self.database.is_database_created():
             self._container.push(self._config_file_path, self._config, make_dirs=True)
             self._container.start(self._container_name)
-        self.unit.status = ActiveStatus()
+            self.unit.status = ActiveStatus()
+            return
+
+        if self.model.relations["pg-database"]:
+            self.unit.status = WaitingStatus("Waiting for database creation")
+        else:
+            self.unit.status = BlockedStatus("Missing postgres database relation")
 
     def _on_database_created(self, event) -> None:
         """Event Handler for database created event."""
@@ -158,15 +171,20 @@ class KratosCharm(CharmBase):
 
         try:
             self._container.get_service(self._container_name)
-            logger.info("Updating Kratos config and restarting service")
-            self._container.push(self._config_file_path, self._config, make_dirs=True)
-            self._run_sql_migration()
-            self._container.start(self._container_name)
-            self.unit.status = ActiveStatus()
         except (ModelError, RuntimeError):
             event.defer()
             self.unit.status = WaitingStatus("Waiting for Kratos service")
             logger.info("Kratos service is absent. Deferring database created event.")
+            return
+
+        logger.info("Updating Kratos config and restarting service")
+        self._container.push(self._config_file_path, self._config, make_dirs=True)
+        is_migration_success = self._run_sql_migration()
+        if is_migration_success:
+            self._container.start(self._container_name)
+            self.unit.status = ActiveStatus()
+        else:
+            self.unit.status = BlockedStatus("Database migration failed.")
 
     def _on_database_changed(self, event: DatabaseCreatedEvent) -> None:
         """Event Handler for database changed event."""
@@ -180,13 +198,15 @@ class KratosCharm(CharmBase):
 
         try:
             self._container.get_service(self._container_name)
-            self._container.push(self._config_file_path, self._config, make_dirs=True)
-            self._container.restart(self._container_name)
-            self.unit.status = ActiveStatus()
         except (ModelError, RuntimeError):
             event.defer()
             self.unit.status = WaitingStatus("Waiting for Kratos service")
             logger.info("Kratos service is absent. Deferring database created event.")
+            return
+
+        self._container.push(self._config_file_path, self._config, make_dirs=True)
+        self._container.restart(self._container_name)
+        self.unit.status = ActiveStatus()
 
 
 if __name__ == "__main__":
