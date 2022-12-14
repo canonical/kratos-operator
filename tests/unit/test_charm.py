@@ -1,6 +1,7 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import pytest
 import yaml
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 
@@ -23,6 +24,17 @@ def setup_postgres_relation(harness):
             "username": DB_USERNAME,
         },
     )
+
+
+def public_ingress_relation(harness, type):
+    relation_id = harness.add_relation(f"{type}-ingress", f"{type}-traefik")
+    harness.add_relation_unit(relation_id, f"{type}-traefik/0")
+    harness.update_relation_data(
+        relation_id,
+        f"{type}-traefik",
+        {"url": f"http://{type}:80/{harness.model.name}-kratos"},
+    )
+    return relation_id
 
 
 def test_update_container_correct_config(
@@ -141,3 +153,22 @@ def test_on_database_created(
     setup_postgres_relation(harness)
 
     mocked_update_container.assert_called_once()
+
+
+@pytest.mark.parametrize("api_type,port", [("admin", "4434"), ("public", "4433")])
+def test_ingress_relation_created(
+    harness, mocked_kubernetes_service_patcher, mocked_fqdn, api_type, port
+) -> None:
+    harness.begin()
+    harness.set_can_connect(CONTAINER_NAME, True)
+
+    relation_id = public_ingress_relation(harness, api_type)
+    app_data = harness.get_relation_data(relation_id, harness.charm.app)
+
+    assert app_data == {
+        "host": mocked_fqdn.return_value,
+        "model": harness.model.name,
+        "name": "kratos",
+        "port": port,
+        "strip-prefix": "true",
+    }

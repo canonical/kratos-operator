@@ -11,6 +11,11 @@ import logging
 from charms.data_platform_libs.v0.database_requires import DatabaseCreatedEvent, DatabaseRequires
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from jinja2 import Template
+from charms.traefik_k8s.v1.ingress import (
+    IngressPerAppReadyEvent,
+    IngressPerAppRequirer,
+    IngressPerAppRevokedEvent,
+)
 from ops.charm import CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
@@ -22,6 +27,9 @@ logger = logging.getLogger(__name__)
 class KratosCharm(CharmBase):
     """Charmed Ory Kratos."""
 
+    admin_port = 4434
+    public_port = 4433
+
     def __init__(self, *args):
         super().__init__(*args)
         self._container_name = "kratos"
@@ -31,7 +39,29 @@ class KratosCharm(CharmBase):
         self._identity_schema_file_path = f"{self._config_dir_path}/identity.default.schema.json"
         self._db_name = f"{self.model.name}_{self.app.name}"
 
-        self.service_patcher = KubernetesServicePatch(self, [("admin", 4434), ("public", 4433)])
+        self.service_patcher = KubernetesServicePatch(
+            self, [("admin", self.admin_port), ("public", self.public_port)]
+        )
+        self.admin_ingress = IngressPerAppRequirer(
+            self,
+            relation_name="admin-ingress",
+            port=self.admin_port,
+            strip_prefix=True,
+        )
+        self.public_ingress = IngressPerAppRequirer(
+            self,
+            relation_name="public-ingress",
+            port=self.public_port,
+            strip_prefix=True,
+        )
+
+        # Admin ingress events
+        self.framework.observe(self.admin_ingress.on.ready, self._on_ingress_ready)
+        self.framework.observe(self.admin_ingress.on.revoked, self._on_ingress_revoked)
+
+        # Public ingress events
+        self.framework.observe(self.public_ingress.on.ready, self._on_ingress_ready)
+        self.framework.observe(self.public_ingress.on.revoked, self._on_ingress_revoked)
 
         self.database = DatabaseRequires(
             self,
@@ -174,6 +204,15 @@ class KratosCharm(CharmBase):
         """Event Handler for database created event."""
         self.unit.status = MaintenanceStatus("Retrieving database details")
         self._update_container(event)
+
+    def _on_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
+        if self.unit.is_leader():
+            type = "admin" if event.relation_name == self.admin_ingress.relation_name else "public"
+            logger.info(f"This app's {type} ingress URL: %s", event.url)
+
+    def _on_ingress_revoked(self, event: IngressPerAppRevokedEvent) -> None:
+        if self.unit.is_leader():
+            logger.info("This app no longer has ingress")
 
 
 if __name__ == "__main__":

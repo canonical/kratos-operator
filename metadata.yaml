@@ -18,3 +18,7 @@ requires:
   pg-database:
     interface: postgresql_client
     optional: false
+  public-ingress:
+    interface: ingress
+  admin-ingress:
+    interface: ingress
