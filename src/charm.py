@@ -70,7 +70,10 @@ class KratosCharm(CharmBase):
 
     @property
     def _config(self) -> str:
-        db_info = self._get_database_relation_info()
+        try:
+            db_info = self._get_database_relation_info() or {}
+        except IndexError:
+            db_info = {}
         config = {
             "log": {"level": "trace"},
             "identity": {
@@ -100,6 +103,9 @@ class KratosCharm(CharmBase):
     def _get_database_relation_info(self) -> dict:
         """Get database info from relation data bag."""
         relation_id = self.database.relations[0].id
+        print(
+            f"DEBUGGING ~ file: charm.py ~ line 103 ~ self.database.relations: {self.database.relations}"
+        )
         relation_data = self.database.fetch_relation_data()[relation_id]
 
         return {
@@ -138,13 +144,13 @@ class KratosCharm(CharmBase):
         with open("src/identity.default.schema.json", encoding="utf-8") as schema_file:
             schema = schema_file.read()
             self._container.push(self._identity_schema_file_path, schema, make_dirs=True)
+        self._container.push(self._config_file_path, self._config, make_dirs=True)
         self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
         logger.info("Pebble plan updated with new configuration, replanning")
         self._container.replan()
 
         # in case container was terminated unexpectedly
         if self.database.is_database_created():
-            self._container.push(self._config_file_path, self._config, make_dirs=True)
             self._container.start(self._container_name)
             self.unit.status = ActiveStatus()
             return
