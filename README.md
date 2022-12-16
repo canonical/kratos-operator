@@ -15,6 +15,20 @@ juju deploy kratos
 juju relate kratos postgresql-k8s
 ```
 
+### Ingress
+
+The Kratos Operator offers integration with the [traefik-k8s-operator](https://github.com/canonical/traefik-k8s-operator) for ingress. Kratos has two APIs which can be exposed through ingress, the public API and the admin API.
+
+If you have a traefik deployed and configured in your kratos model, to provide ingress to the admin API run:
+```console
+juju relate traefik-admin kratos:admin-ingress
+```
+
+To provide ingress to the public API run:
+```console
+juju relate traefik-public kratos:public-ingress
+```
+
 ### Interacting with Kratos API
 
 Below are two examples of the API. Visit [Ory](https://www.ory.sh/docs/kratos/reference/api) to see full API specification.
