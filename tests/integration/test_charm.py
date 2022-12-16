@@ -3,10 +3,10 @@
 # See LICENSE file for licensing details.
 
 import logging
-import requests
 from pathlib import Path
 
 import pytest
+import requests
 import yaml
 from pytest_operator.plugin import OpsTest
 
@@ -59,13 +59,13 @@ async def test_ingress_relation(ops_test: OpsTest):
         TRAEFIK,
         application_name=TRAEFIK_PUBLIC_APP,
         channel="latest/edge",
-        config={"external_hostname": "some_hostname"}
+        config={"external_hostname": "some_hostname"},
     )
     await ops_test.model.deploy(
         TRAEFIK,
         application_name=TRAEFIK_ADMIN_APP,
         channel="latest/edge",
-        config={"external_hostname": "some_hostname"}
+        config={"external_hostname": "some_hostname"},
     )
     await ops_test.model.add_relation(f"{APP_NAME}:admin-ingress", TRAEFIK_ADMIN_APP)
     await ops_test.model.add_relation(f"{APP_NAME}:public-ingress", TRAEFIK_PUBLIC_APP)
@@ -82,7 +82,9 @@ async def test_has_public_ingress(ops_test: OpsTest):
     # Get the traefik address and try to reach kratos
     public_address = await get_unit_address(ops_test, TRAEFIK_PUBLIC_APP, 0)
 
-    resp = requests.get(f"http://{public_address}/{ops_test.model.name}-{APP_NAME}/.well-known/ory/webauthn.js")
+    resp = requests.get(
+        f"http://{public_address}/{ops_test.model.name}-{APP_NAME}/.well-known/ory/webauthn.js"
+    )
 
     assert resp.status_code == 200
 
@@ -91,6 +93,8 @@ async def test_has_admin_ingress(ops_test: OpsTest):
     # Get the traefik address and try to reach kratos
     admin_address = await get_unit_address(ops_test, TRAEFIK_ADMIN_APP, 0)
 
-    resp = requests.get(f"http://{admin_address}/{ops_test.model.name}-{APP_NAME}/admin/identities")
+    resp = requests.get(
+        f"http://{admin_address}/{ops_test.model.name}-{APP_NAME}/admin/identities"
+    )
 
     assert resp.status_code == 200
