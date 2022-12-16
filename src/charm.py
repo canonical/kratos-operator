@@ -22,13 +22,12 @@ from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingSta
 from ops.pebble import ChangeError, ExecError, Layer
 
 logger = logging.getLogger(__name__)
+KRATOS_ADMIN_PORT = 4434
+KRATOS_PUBLIC_PORT = 4433
 
 
 class KratosCharm(CharmBase):
     """Charmed Ory Kratos."""
-
-    admin_port = 4434
-    public_port = 4433
 
     def __init__(self, *args):
         super().__init__(*args)
@@ -40,18 +39,18 @@ class KratosCharm(CharmBase):
         self._db_name = f"{self.model.name}_{self.app.name}"
 
         self.service_patcher = KubernetesServicePatch(
-            self, [("admin", self.admin_port), ("public", self.public_port)]
+            self, [("admin", KRATOS_ADMIN_PORT), ("public", KRATOS_PUBLIC_PORT)]
         )
         self.admin_ingress = IngressPerAppRequirer(
             self,
             relation_name="admin-ingress",
-            port=self.admin_port,
+            port=KRATOS_ADMIN_PORT,
             strip_prefix=True,
         )
         self.public_ingress = IngressPerAppRequirer(
             self,
             relation_name="public-ingress",
-            port=self.public_port,
+            port=KRATOS_PUBLIC_PORT,
             strip_prefix=True,
         )
 
