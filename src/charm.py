@@ -54,14 +54,6 @@ class KratosCharm(CharmBase):
             strip_prefix=True,
         )
 
-        # Admin ingress events
-        self.framework.observe(self.admin_ingress.on.ready, self._on_ingress_ready)
-        self.framework.observe(self.admin_ingress.on.revoked, self._on_ingress_revoked)
-
-        # Public ingress events
-        self.framework.observe(self.public_ingress.on.ready, self._on_ingress_ready)
-        self.framework.observe(self.public_ingress.on.revoked, self._on_ingress_revoked)
-
         self.database = DatabaseRequires(
             self,
             relation_name="pg-database",
@@ -72,6 +64,14 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.database.on.database_created, self._on_database_changed)
         self.framework.observe(self.database.on.endpoints_changed, self._on_database_changed)
+
+        # Admin ingress events
+        self.framework.observe(self.admin_ingress.on.ready, self._on_ingress_ready)
+        self.framework.observe(self.admin_ingress.on.revoked, self._on_ingress_revoked)
+
+        # Public ingress events
+        self.framework.observe(self.public_ingress.on.ready, self._on_ingress_ready)
+        self.framework.observe(self.public_ingress.on.revoked, self._on_ingress_revoked)
 
     @property
     def _pebble_layer(self) -> Layer:
