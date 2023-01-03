@@ -66,11 +66,11 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.database.on.endpoints_changed, self._on_database_changed)
 
         # Admin ingress events
-        self.framework.observe(self.admin_ingress.on.ready, self._on_ingress_ready)
+        self.framework.observe(self.admin_ingress.on.ready, self._on_admin_ingress_ready)
         self.framework.observe(self.admin_ingress.on.revoked, self._on_ingress_revoked)
 
         # Public ingress events
-        self.framework.observe(self.public_ingress.on.ready, self._on_ingress_ready)
+        self.framework.observe(self.public_ingress.on.ready, self._on_public_ingress_ready)
         self.framework.observe(self.public_ingress.on.revoked, self._on_ingress_revoked)
 
     @property
@@ -204,10 +204,13 @@ class KratosCharm(CharmBase):
         self.unit.status = MaintenanceStatus("Retrieving database details")
         self._update_container(event)
 
-    def _on_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
+    def _on_admin_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
         if self.unit.is_leader():
-            type = "admin" if event.relation_name == self.admin_ingress.relation_name else "public"
-            logger.info(f"This app's {type} ingress URL: %s", event.url)
+            logger.info("This app's admin ingress URL: %s", event.url)
+
+    def _on_public_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
+        if self.unit.is_leader():
+            logger.info("This app's public ingress URL: %s", event.url)
 
     def _on_ingress_revoked(self, event: IngressPerAppRevokedEvent) -> None:
         if self.unit.is_leader():
