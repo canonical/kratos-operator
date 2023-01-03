@@ -103,9 +103,6 @@ class KratosCharm(CharmBase):
     def _get_database_relation_info(self) -> dict:
         """Get database info from relation data bag."""
         relation_id = self.database.relations[0].id
-        print(
-            f"DEBUGGING ~ file: charm.py ~ line 103 ~ self.database.relations: {self.database.relations}"
-        )
         relation_data = self.database.fetch_relation_data()[relation_id]
 
         return {
