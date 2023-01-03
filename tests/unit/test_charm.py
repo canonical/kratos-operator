@@ -26,7 +26,7 @@ def setup_postgres_relation(harness):
     )
 
 
-def public_ingress_relation(harness, type):
+def setup_ingress_relation(harness, type):
     relation_id = harness.add_relation(f"{type}-ingress", f"{type}-traefik")
     harness.add_relation_unit(relation_id, f"{type}-traefik/0")
     harness.update_relation_data(
@@ -162,7 +162,7 @@ def test_ingress_relation_created(
     harness.begin()
     harness.set_can_connect(CONTAINER_NAME, True)
 
-    relation_id = public_ingress_relation(harness, api_type)
+    relation_id = setup_ingress_relation(harness, api_type)
     app_data = harness.get_relation_data(relation_id, harness.charm.app)
 
     assert app_data == {
