@@ -49,14 +49,14 @@ def test_update_container_correct_config(
                 }
             },
         },
-        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/postgres",
+        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.charm._db_name}",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
         },
     }
     mocked_sql_migration.assert_called_once()
 
-    assert harness.charm._config == yaml.dump(expected_config)
+    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
 
 
 def test_update_container_correct_pebble_layer(

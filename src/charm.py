@@ -8,9 +8,9 @@
 
 import logging
 
-import yaml
 from charms.data_platform_libs.v0.database_requires import DatabaseCreatedEvent, DatabaseRequires
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
+from jinja2 import Template
 from ops.charm import CharmBase
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingStatus
@@ -26,15 +26,17 @@ class KratosCharm(CharmBase):
         super().__init__(*args)
         self._container_name = "kratos"
         self._container = self.unit.get_container(self._container_name)
-        self._config_file_path = "/etc/config/kratos.yaml"
-        self._identity_schema_file_path = "/etc/config/identity.default.schema.json"
+        self._config_dir_path = "/etc/config"
+        self._config_file_path = f"{self._config_dir_path}/kratos.yaml"
+        self._identity_schema_file_path = f"{self._config_dir_path}/identity.default.schema.json"
+        self._db_name = f"{self.model.name}_{self.app.name}"
 
         self.service_patcher = KubernetesServicePatch(self, [("admin", 4434), ("public", 4433)])
 
         self.database = DatabaseRequires(
             self,
             relation_name="pg-database",
-            database_name="database",
+            database_name=self._db_name,
             extra_user_roles="SUPERUSER",
         )
 
@@ -68,40 +70,28 @@ class KratosCharm(CharmBase):
         }
         return Layer(pebble_layer)
 
-    @property
-    def _config(self) -> str:
-        db_info = self._get_database_relation_info()
-        config = {
-            "log": {"level": "trace"},
-            "identity": {
-                "default_schema_id": "default",
-                "schemas": [{"id": "default", "url": f"file://{self._identity_schema_file_path}"}],
-            },
-            "selfservice": {
-                "default_browser_return_url": "http://127.0.0.1:9999/",
-                "flows": {
-                    "registration": {
-                        "enabled": True,
-                        "ui_url": "http://127.0.0.1:9999/registration",
-                    }
-                },
-            },
-            "dsn": f"postgres://{db_info['username']}:{db_info['password']}@{db_info['endpoints']}/postgres",
-            "courier": {
-                "smtp": {
-                    # TODO: dynamic connection uri through charm config
-                    "connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"
-                }
-            },
-        }
+    def _render_conf_file(self) -> None:
+        """Render the Kratos configuration file."""
+        # Open the template kratos.conf file.
+        with open("templates/kratos.yaml.j2", "r") as file:
+            template = Template(file.read())
 
-        return yaml.dump(config)
+        rendered = template.render(
+            identity_schema_file_path=self._identity_schema_file_path,
+            default_browser_return_url="http://127.0.0.1:9999/",
+            login_ui_url="http://localhost:4455/login",
+            registration_ui_url="http://127.0.0.1:9999/registration",
+            db_info=self._get_database_relation_info(),
+            smtp_connection_uri="smtps://test:test@mailslurper:1025/?skip_ssl_verify=true",
+        )
+        return rendered
 
     def _update_layer(self) -> None:
         """Updates the Pebble configuration layer and kratos config if changed."""
+        config = self._render_conf_file()
         if not self._container.get_plan().to_dict():
             self.unit.status = MaintenanceStatus("Applying new pebble layer")
-            self._container.push(self._config_file_path, self._config, make_dirs=True)
+            self._container.push(self._config_file_path, config, make_dirs=True)
             with open("src/identity.default.schema.json", encoding="utf-8") as schema_file:
                 schema = schema_file.read()
                 self._container.push(self._identity_schema_file_path, schema, make_dirs=True)
@@ -111,9 +101,9 @@ class KratosCharm(CharmBase):
         else:
             # Compare changes in kratos config
             current_config = self._container.pull(self._config_file_path).read()
-            if current_config != self._config:
+            if current_config != config:
                 self.unit.status = MaintenanceStatus("Updating Kratos Config")
-                self._container.push(self._config_file_path, self._config, make_dirs=True)
+                self._container.push(self._config_file_path, config, make_dirs=True)
                 logger.info("Updated kratos config")
                 self._container.restart(self._container_name)
 
@@ -126,6 +116,7 @@ class KratosCharm(CharmBase):
             "username": relation_data["username"],
             "password": relation_data["password"],
             "endpoints": relation_data["endpoints"],
+            "database_name": self._db_name,
         }
 
     def _update_container(self, event) -> None:
