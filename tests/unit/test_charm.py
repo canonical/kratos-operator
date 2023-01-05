@@ -9,7 +9,6 @@ CONTAINER_NAME = "kratos"
 DB_USERNAME = "fake_relation_id_1"
 DB_PASSWORD = "fake-password"
 DB_ENDPOINTS = "postgresql-k8s-primary.namespace.svc.cluster.local:5432"
-MODEL_NAME = "kratos-model"
 
 
 def setup_postgres_relation(harness):
@@ -120,7 +119,7 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness) ->
                 }
             },
         },
-        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{MODEL_NAME}_{harness.charm.app.name}",
+        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
         },

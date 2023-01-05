@@ -131,16 +131,17 @@ class KratosCharm(CharmBase):
 
         Returns True if migration was run successfully, else returns false.
         """
-        try:
             process = self._container.exec(
                 ["kratos", "migrate", "sql", "-e", "--config", self._config_file_path, "--yes"],
             )
+        try:
+            stdout, _ = process.wait_output()
+            logger.info(f"Successfully executed automigration: {stdout}")
         except ExecError as err:
             logger.error(f"Exited with code {err.exit_code}. Stderr: {err.stderr}")
+            self.unit.status = BlockedStatus("Database migration job failed")
             return False
 
-        stdout, _ = process.wait_output()
-        logger.info(f"Successfully executed automigration: {stdout}")
         return True
 
     def _on_pebble_ready(self, event) -> None:
