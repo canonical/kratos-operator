@@ -11,6 +11,5 @@ bases:
         channel: "22.04"
 parts:
   charm:
-    build-packages: [git]
     prime:
       - claim_mappers/**
