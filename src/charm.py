@@ -131,10 +131,10 @@ class KratosCharm(CharmBase):
 
         Returns True if migration was run successfully, else returns false.
         """
+        try:
             process = self._container.exec(
                 ["kratos", "migrate", "sql", "-e", "--config", self._config_file_path, "--yes"],
             )
-        try:
             stdout, _ = process.wait_output()
             logger.info(f"Successfully executed automigration: {stdout}")
         except ExecError as err:

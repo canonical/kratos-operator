@@ -256,12 +256,7 @@ def test_on_database_changed_when_pebble_is_ready(harness, mocked_pebble_exec_su
 
 
 @pytest.mark.parametrize("api_type,port", [("admin", "4434"), ("public", "4433")])
-def test_ingress_relation_created(
-    harness, mocked_kubernetes_service_patcher, mocked_fqdn, api_type, port
-) -> None:
-    harness.begin()
-    harness.set_can_connect(CONTAINER_NAME, True)
-
+def test_ingress_relation_created(harness, mocked_fqdn, api_type, port) -> None:
     relation_id = setup_ingress_relation(harness, api_type)
     app_data = harness.get_relation_data(relation_id, harness.charm.app)
 

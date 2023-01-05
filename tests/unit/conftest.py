@@ -32,6 +32,7 @@ def mocked_fqdn(mocker):
     return mocked_fqdn
 
 
+@pytest.fixture()
 def mocked_pebble_exec(mocker):
     mocked_pebble_exec = mocker.patch("ops.model.Container.exec")
     yield mocked_pebble_exec
