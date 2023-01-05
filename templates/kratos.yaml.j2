@@ -3,15 +3,16 @@ log:
 identity:
     default_schema_id: default
     schemas:
-    - id: default
-      url: "file://{{ identity_schema_file_path }}"
+        - id: default
+          url: 'file://{{ identity_schema_file_path }}'
 selfservice:
-    default_browser_return_url: {{ default_browser_return_url | d("http://127.0.0.1:9999/")}}
+    default_browser_return_url:
+        {{ default_browser_return_url | d("http://127.0.0.1:9999/") }}
     flows:
         registration:
             enabled: True
             ui_url: {{ registration_ui_url }}
-dsn: postgres://{{ db_info['username'] }}:{{ db_info['password'] }}@{{ db_info['endpoints'] }}/{{ db_info['database_name'] }}
+dsn: postgres://{{ db_info.get('username') }}:{{ db_info.get('password') }}@{{ db_info.get('endpoints') }}/{{ db_info.get('database_name') }}
 courier:
     smtp:
         connection_uri: {{ smtp_connection_uri }}
