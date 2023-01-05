@@ -23,6 +23,13 @@ def mocked_kubernetes_service_patcher(mocker):
 
 
 @pytest.fixture()
+def mocked_fqdn(mocker):
+    mocked_fqdn = mocker.patch("socket.getfqdn")
+    mocked_fqdn.return_value = "kratos"
+    return mocked_fqdn
+
+
+@pytest.fixture()
 def mocked_sql_migration(mocker):
     mocked_sql_migration = mocker.patch("charm.KratosCharm._run_sql_migration")
     yield mocked_sql_migration

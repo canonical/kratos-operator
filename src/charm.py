@@ -10,6 +10,11 @@ import logging
 
 from charms.data_platform_libs.v0.database_requires import DatabaseCreatedEvent, DatabaseRequires
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
+from charms.traefik_k8s.v1.ingress import (
+    IngressPerAppReadyEvent,
+    IngressPerAppRequirer,
+    IngressPerAppRevokedEvent,
+)
 from jinja2 import Template
 from ops.charm import CharmBase
 from ops.main import main
@@ -17,6 +22,8 @@ from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, WaitingSta
 from ops.pebble import ChangeError, ExecError, Layer
 
 logger = logging.getLogger(__name__)
+KRATOS_ADMIN_PORT = 4434
+KRATOS_PUBLIC_PORT = 4433
 
 
 class KratosCharm(CharmBase):
@@ -31,7 +38,21 @@ class KratosCharm(CharmBase):
         self._identity_schema_file_path = f"{self._config_dir_path}/identity.default.schema.json"
         self._db_name = f"{self.model.name}_{self.app.name}"
 
-        self.service_patcher = KubernetesServicePatch(self, [("admin", 4434), ("public", 4433)])
+        self.service_patcher = KubernetesServicePatch(
+            self, [("admin", KRATOS_ADMIN_PORT), ("public", KRATOS_PUBLIC_PORT)]
+        )
+        self.admin_ingress = IngressPerAppRequirer(
+            self,
+            relation_name="admin-ingress",
+            port=KRATOS_ADMIN_PORT,
+            strip_prefix=True,
+        )
+        self.public_ingress = IngressPerAppRequirer(
+            self,
+            relation_name="public-ingress",
+            port=KRATOS_PUBLIC_PORT,
+            strip_prefix=True,
+        )
 
         self.database = DatabaseRequires(
             self,
@@ -43,6 +64,10 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.database.on.database_created, self._on_database_changed)
         self.framework.observe(self.database.on.endpoints_changed, self._on_database_changed)
+        self.framework.observe(self.admin_ingress.on.ready, self._on_admin_ingress_ready)
+        self.framework.observe(self.admin_ingress.on.revoked, self._on_ingress_revoked)
+        self.framework.observe(self.public_ingress.on.ready, self._on_public_ingress_ready)
+        self.framework.observe(self.public_ingress.on.revoked, self._on_ingress_revoked)
 
     @property
     def _pebble_layer(self) -> Layer:
@@ -174,6 +199,18 @@ class KratosCharm(CharmBase):
         """Event Handler for database created event."""
         self.unit.status = MaintenanceStatus("Retrieving database details")
         self._update_container(event)
+
+    def _on_admin_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
+        if self.unit.is_leader():
+            logger.info("This app's admin ingress URL: %s", event.url)
+
+    def _on_public_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
+        if self.unit.is_leader():
+            logger.info("This app's public ingress URL: %s", event.url)
+
+    def _on_ingress_revoked(self, event: IngressPerAppRevokedEvent) -> None:
+        if self.unit.is_leader():
+            logger.info("This app no longer has ingress")
 
 
 if __name__ == "__main__":
