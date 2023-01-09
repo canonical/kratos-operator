@@ -7,14 +7,18 @@
 """A Juju charm for Ory Kratos."""
 
 import logging
+from functools import cached_property
+from os.path import join
 from pathlib import Path
 
 from charms.data_platform_libs.v0.database_requires import (
     DatabaseEndpointsChangedEvent,
     DatabaseRequires,
 )
-from charms.data_platform_libs.v0.database_requires import DatabaseCreatedEvent, DatabaseRequires
-from charms.kratos_external_idp_integrator.v0.kratos_external_provider import ExternalIdpRequirer
+from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
+    ClientConfigChangedEvent,
+    ExternalIdpRequirer,
+)
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.traefik_k8s.v1.ingress import (
     IngressPerAppReadyEvent,
@@ -81,7 +85,6 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.admin_ingress.on.revoked, self._on_ingress_revoked)
         self.framework.observe(self.public_ingress.on.ready, self._on_public_ingress_ready)
         self.framework.observe(self.public_ingress.on.revoked, self._on_ingress_revoked)
-
         self.framework.observe(
             self.external_provider.on.client_config_changed, self._on_client_config_changed
         )
@@ -112,6 +115,11 @@ class KratosCharm(CharmBase):
         }
         return Layer(pebble_layer)
 
+    @property
+    def _domain_url(self):
+        return self.config["external_url"] or self.public_ingress.url
+
+    @cached_property
     def _get_available_mappers(self):
         return [
             schema_file.name[: -len("_schema.jsonnet")]
@@ -130,7 +138,7 @@ class KratosCharm(CharmBase):
             default_browser_return_url="http://127.0.0.1:9999/",
             login_ui_url="http://localhost:4455/login",
             oidc_providers=self.external_provider.get_providers(),
-            available_mappers=self._get_available_mappers(),
+            available_mappers=self._get_available_mappers,
             registration_ui_url="http://127.0.0.1:9999/registration",
             db_info=self._get_database_relation_info(),
             smtp_connection_uri=self.config.get("smtp_connection_uri"),
@@ -142,28 +150,6 @@ class KratosCharm(CharmBase):
             with open(Path(schema_file)) as f:
                 schema = f.read()
             self._container.push(Path(self._config_dir_path, schema_file), schema, make_dirs=True)
-
-    def _update_layer(self) -> None:
-        """Updates the Pebble configuration layer and kratos config if changed."""
-        config = self._render_conf_file()
-        if not self._container.get_plan().to_dict():
-            self.unit.status = MaintenanceStatus("Applying new pebble layer")
-            self._container.push(self._config_file_path, config, make_dirs=True)
-            with open("src/identity.default.schema.json", encoding="utf-8") as schema_file:
-                schema = schema_file.read()
-                self._container.push(self._identity_schema_file_path, schema, make_dirs=True)
-            self._push_schemas()
-            self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
-            logger.info("Pebble plan updated with new configuration, replanning")
-            self._container.replan()
-        else:
-            # Compare changes in kratos config
-            current_config = self._container.pull(self._config_file_path).read()
-            if current_config != config:
-                self.unit.status = MaintenanceStatus("Updating Kratos Config")
-                self._container.push(self._config_file_path, config, make_dirs=True)
-                logger.info("Updated kratos config")
-                self._container.restart(self._container_name)
 
     def _get_database_relation_info(self) -> dict:
         """Get database info from relation data bag."""
@@ -230,6 +216,7 @@ class KratosCharm(CharmBase):
         with open("src/identity.default.schema.json", encoding="utf-8") as schema_file:
             schema = schema_file.read()
             self._container.push(self._identity_schema_file_path, schema, make_dirs=True)
+        self._push_schemas()
 
         self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
         logger.info("Pebble plan updated with new configuration, replanning")
@@ -323,12 +310,25 @@ class KratosCharm(CharmBase):
         if self.unit.is_leader():
             logger.info("This app no longer has ingress")
 
-    def _on_client_config_changed(self, event):
-        self._update_container(event)
+    def _on_client_config_changed(self, event: ClientConfigChangedEvent) -> None:
+        domain_url = self._domain_url
+        if domain_url is None:
+            self.unit.status = BlockedStatus(
+                "Cannot add external provider without an external hostname. Please"
+                "provide an ingress relation or an external_url config."
+            )
+            event.defer()
+            return
 
-        # TODO: This `redirect_uri` is a place holder, until we have ingress integration
+        self.unit.status = MaintenanceStatus(f"Adding external provider: {event.provider}")
+        self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
+        self._container.restart(self._container_name)
+        self.unit.status = ActiveStatus()
+
         self.external_provider.set_relation_registered_provider(
-            "redirect_uri", event.provider_id, event.relation_id
+            join(domain_url, f"self-service/methods/oidc/callback/{event.provider_id}"),
+            event.provider_id,
+            event.relation_id,
         )
 
 
