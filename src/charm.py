@@ -170,7 +170,15 @@ class KratosCharm(CharmBase):
         """
         try:
             process = self._container.exec(
-                ["kratos", "migrate", "sql", "-e", "--config", self._config_file_path, "--yes"],
+                [
+                    "kratos",
+                    "migrate",
+                    "sql",
+                    "-e",
+                    "--config",
+                    str(self._config_file_path),
+                    "--yes",
+                ],
             )
             stdout, _ = process.wait_output()
             logger.info(f"Successfully executed automigration: {stdout}")
