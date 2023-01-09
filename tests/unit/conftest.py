@@ -33,6 +33,13 @@ def mocked_fqdn(mocker):
 
 
 @pytest.fixture()
+def mocked_container(harness, mocker):
+    container = harness.model.unit.get_container("kratos")
+    container.restart = mocker.MagicMock()
+    return container
+
+
+@pytest.fixture()
 def mocked_pebble_exec(mocker):
     mocked_pebble_exec = mocker.patch("ops.model.Container.exec")
     yield mocked_pebble_exec

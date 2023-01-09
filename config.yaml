@@ -1,0 +1,10 @@
+# Copyright 2022 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+options:
+  external_url:
+    description:
+      The URL under which Kratos is externally reachable (for example,
+      if Kratos is served via a reverse proxy).
+    type: string
+    default: ""
