@@ -291,7 +291,33 @@ def test_on_database_changed_when_pebble_is_not_ready(harness) -> None:
     assert "Waiting for Kratos service" in harness.charm.unit.status.message
 
 
-def test_on_database_changed_when_pebble_is_ready(harness, mocked_pebble_exec_success) -> None:
+def test_on_database_changed_when_pebble_is_ready(harness) -> None:
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    trigger_database_changed(harness)
+
+    updated_config = yaml.safe_load(harness.charm._render_conf_file())
+    assert DB_ENDPOINTS in updated_config["dsn"]
+    assert isinstance(harness.charm.unit.status, ActiveStatus)
+
+
+def test_on_config_changed_cannot_connect_container(harness) -> None:
+    harness.set_can_connect(CONTAINER_NAME, False)
+    trigger_database_changed(harness)
+
+    assert isinstance(harness.charm.unit.status, WaitingStatus)
+    assert "Waiting to connect to Kratos container" in harness.charm.unit.status.message
+
+
+def test_on_config_changed_when_pebble_is_not_ready(harness) -> None:
+    trigger_database_changed(harness)
+
+    assert isinstance(harness.charm.unit.status, WaitingStatus)
+    assert "Waiting for Kratos service" in harness.charm.unit.status.message
+
+
+def test_on_config_changed_when_pebble_is_ready(harness) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
 

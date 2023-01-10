@@ -15,6 +15,12 @@ juju deploy kratos
 juju relate kratos postgresql-k8s
 ```
 
+To set the smtp connection uri, do:
+
+```bash
+juju config kratos smtp_connection_uri={smtp_connection_uri}
+```
+
 ### Ingress
 
 The Kratos Operator offers integration with the [traefik-k8s-operator](https://github.com/canonical/traefik-k8s-operator) for ingress. Kratos has two APIs which can be exposed through ingress, the public API and the admin API.
