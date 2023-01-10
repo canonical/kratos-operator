@@ -27,6 +27,9 @@ from ops.pebble import ExecError, Layer
 logger = logging.getLogger(__name__)
 KRATOS_ADMIN_PORT = 4434
 KRATOS_PUBLIC_PORT = 4433
+PEER_RELATION_NAME = "kratos-peers"
+PEER_KEY_DB_MIGRATE_VERSION = "db_migrate_version"
+DB_MIGRATE_VERSION = "0.10.1"
 
 
 class KratosCharm(CharmBase):
@@ -163,7 +166,12 @@ class KratosCharm(CharmBase):
         self._container.replan()
 
         # in case container was terminated unexpectedly
-        if self.database.is_database_created():
+        peer_relation = self.model.relations[PEER_RELATION_NAME]
+        if (
+            peer_relation
+            and peer_relation[0].data[self.app].get(PEER_KEY_DB_MIGRATE_VERSION)
+            == DB_MIGRATE_VERSION
+        ):
             self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
             self._container.start(self._container_name)
             self.unit.status = ActiveStatus()
@@ -197,11 +205,33 @@ class KratosCharm(CharmBase):
         logger.info("Updating Kratos config and restarting service")
         self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
 
-        if self.unit.is_leader() and not self._run_sql_migration():
-            self.unit.status = BlockedStatus("Database migration failed.")
+        peer_relation = self.model.relations[PEER_RELATION_NAME]
+        if not peer_relation:
+            event.defer()
+            self.unit.status = WaitingStatus("Waiting for peer relation.")
+            return
+
+        if self.unit.is_leader():
+            if not self._run_sql_migration():
+                self.unit.status = BlockedStatus("Database migration failed.")
+            else:
+                peer_relation[0].data[self.app].update(
+                    {
+                        PEER_KEY_DB_MIGRATE_VERSION: DB_MIGRATE_VERSION,
+                    }
+                )
+                self._container.start(self._container_name)
+                self.unit.status = ActiveStatus()
         else:
-            self._container.start(self._container_name)
-            self.unit.status = ActiveStatus()
+            if (
+                peer_relation[0].data[self.app].get(PEER_KEY_DB_MIGRATE_VERSION)
+                == DB_MIGRATE_VERSION
+            ):
+                self._container.start(self._container_name)
+                self.unit.status = ActiveStatus()
+            else:
+                event.defer()
+                self.unit.status = WaitingStatus("Waiting for database migration to complete.")
 
     def _on_database_changed(self, event: DatabaseEndpointsChangedEvent) -> None:
         """Event Handler for database changed event."""

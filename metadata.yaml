@@ -22,3 +22,6 @@ requires:
     interface: ingress
   admin-ingress:
     interface: ingress
+peers:
+  kratos-peers:
+    interface: kratos-peers

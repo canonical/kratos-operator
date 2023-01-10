@@ -5,6 +5,8 @@ import pytest
 import yaml
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
 
+from charm import DB_MIGRATE_VERSION, PEER_KEY_DB_MIGRATE_VERSION
+
 CONTAINER_NAME = "kratos"
 DB_USERNAME = "fake_relation_id_1"
 DB_PASSWORD = "fake-password"
@@ -35,6 +37,16 @@ def setup_ingress_relation(harness, type):
         {"url": f"http://{type}:80/{harness.model.name}-kratos"},
     )
     return relation_id
+
+
+def setup_peer_relation(harness):
+    rel_id = harness.add_relation("kratos-peers", "kratos")
+    harness.add_relation_unit(rel_id, "kratos/1")
+    harness.update_relation_data(
+        rel_id,
+        "kratos",
+        {PEER_KEY_DB_MIGRATE_VERSION: DB_MIGRATE_VERSION},
+    )
 
 
 def trigger_database_changed(harness) -> None:
@@ -87,6 +99,7 @@ def test_on_pebble_ready_service_not_started_when_database_not_created(harness) 
 
 def test_on_pebble_ready_service_started_when_database_is_created(harness) -> None:
     setup_postgres_relation(harness)
+    setup_peer_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
@@ -133,6 +146,7 @@ def test_on_pebble_ready_when_missing_database_relation(harness) -> None:
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     assert isinstance(harness.model.unit.status, BlockedStatus)
+    assert "Missing postgres database relation" in harness.charm.unit.status.message
 
 
 def test_on_pebble_ready_when_database_not_created_yet(harness) -> None:
@@ -142,6 +156,7 @@ def test_on_pebble_ready_when_database_not_created_yet(harness) -> None:
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     assert isinstance(harness.model.unit.status, WaitingStatus)
+    assert "Waiting for database creation" in harness.charm.unit.status.message
 
 
 def test_on_database_created_cannot_connect_container(harness) -> None:
@@ -150,13 +165,26 @@ def test_on_database_created_cannot_connect_container(harness) -> None:
     setup_postgres_relation(harness)
 
     assert isinstance(harness.charm.unit.status, WaitingStatus)
+    assert "Waiting to connect to Kratos container" in harness.charm.unit.status.message
 
 
 def test_on_database_created_when_pebble_is_not_ready(harness, mocked_pebble_exec_success) -> None:
     setup_postgres_relation(harness)
 
     assert isinstance(harness.charm.unit.status, WaitingStatus)
+    assert "Waiting for Kratos service" in harness.charm.unit.status.message
     mocked_pebble_exec_success.assert_not_called()
+
+
+def test_on_database_created_when_pebble_is_ready_in_leader_unit_missing_peer_relation(
+    harness,
+) -> None:
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+    setup_postgres_relation(harness)
+
+    assert isinstance(harness.charm.unit.status, WaitingStatus)
+    assert "Waiting for peer relation" in harness.charm.unit.status.message
 
 
 def test_on_database_created_updated_config_and_start_service_when_pebble_is_ready_in_leader_unit(
@@ -164,6 +192,7 @@ def test_on_database_created_updated_config_and_start_service_when_pebble_is_rea
 ) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
+    setup_peer_relation(harness)
     setup_postgres_relation(harness)
 
     service = harness.model.unit.get_container("kratos").get_service("kratos")
@@ -182,6 +211,7 @@ def test_on_database_created_updated_config_and_start_service_when_pebble_is_rea
     harness.set_leader(False)
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
+    setup_peer_relation(harness)
     setup_postgres_relation(harness)
 
     service = harness.model.unit.get_container("kratos").get_service("kratos")
@@ -205,11 +235,25 @@ def test_on_database_created_not_run_migration_in_non_leader_unit(
     mocked_pebble_exec.assert_not_called()
 
 
+def test_on_database_created_pending_migration_in_non_leader_unit(harness):
+    harness.set_leader(False)
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+    rel_id = harness.add_relation("kratos-peers", "kratos")
+    harness.add_relation_unit(rel_id, "kratos/1")
+
+    setup_postgres_relation(harness)
+
+    assert isinstance(harness.charm.unit.status, WaitingStatus)
+    assert "Waiting for database migration to complete" in harness.charm.unit.status.message
+
+
 def test_on_database_created_when_migration_is_successful(
     harness, mocked_pebble_exec_success
 ) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
+    setup_peer_relation(harness)
     setup_postgres_relation(harness)
 
     service = harness.model.unit.get_container("kratos").get_service("kratos")
@@ -226,6 +270,7 @@ def test_on_database_created_when_migration_is_successful(
 def test_on_database_created_when_migration_failed(harness, mocked_pebble_exec_failed) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
+    setup_peer_relation(harness)
     setup_postgres_relation(harness)
 
     assert isinstance(harness.charm.unit.status, BlockedStatus)
@@ -236,12 +281,14 @@ def test_on_database_changed_cannot_connect_container(harness) -> None:
     trigger_database_changed(harness)
 
     assert isinstance(harness.charm.unit.status, WaitingStatus)
+    assert "Waiting to connect to Kratos container" in harness.charm.unit.status.message
 
 
 def test_on_database_changed_when_pebble_is_not_ready(harness) -> None:
     trigger_database_changed(harness)
 
     assert isinstance(harness.charm.unit.status, WaitingStatus)
+    assert "Waiting for Kratos service" in harness.charm.unit.status.message
 
 
 def test_on_database_changed_when_pebble_is_ready(harness, mocked_pebble_exec_success) -> None:
