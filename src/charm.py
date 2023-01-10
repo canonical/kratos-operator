@@ -217,7 +217,7 @@ class KratosCharm(CharmBase):
             else:
                 peer_relation[0].data[self.app].update(
                     {
-                        PEER_KEY_DB_MIGRATE_VERSION: "true",
+                        PEER_KEY_DB_MIGRATE_VERSION: DB_MIGRATE_VERSION,
                     }
                 )
                 self._container.start(self._container_name)
