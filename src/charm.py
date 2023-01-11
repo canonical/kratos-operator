@@ -68,6 +68,7 @@ class KratosCharm(CharmBase):
         )
 
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
+        self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.database.on.database_created, self._on_database_created)
         self.framework.observe(self.database.on.endpoints_changed, self._on_database_changed)
         self.framework.observe(self.admin_ingress.on.ready, self._on_admin_ingress_ready)
@@ -113,7 +114,7 @@ class KratosCharm(CharmBase):
             login_ui_url="http://localhost:4455/login",
             registration_ui_url="http://127.0.0.1:9999/registration",
             db_info=self._get_database_relation_info(),
-            smtp_connection_uri="smtps://test:test@mailslurper:1025/?skip_ssl_verify=true",
+            smtp_connection_uri=self.config.get("smtp_connection_uri"),
         )
         return rendered
 
@@ -146,6 +147,28 @@ class KratosCharm(CharmBase):
             return False
 
         return True
+
+    def _update_config_restart_service(self, event) -> None:
+        """Event Handler for database changed event."""
+        if not self._container.can_connect():
+            event.defer()
+            logger.info("Cannot connect to Kratos container. Deferring event.")
+            self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
+            return
+
+        self.unit.status = MaintenanceStatus("Updating database details")
+
+        try:
+            self._container.get_service(self._container_name)
+        except (ModelError, RuntimeError):
+            event.defer()
+            self.unit.status = WaitingStatus("Waiting for Kratos service")
+            logger.info("Kratos service is absent. Deferring database created event.")
+            return
+
+        self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
+        self._container.restart(self._container_name)
+        self.unit.status = ActiveStatus()
 
     def _on_pebble_ready(self, event) -> None:
         """Event Handler for pebble ready event."""
@@ -181,6 +204,10 @@ class KratosCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting for database creation")
         else:
             self.unit.status = BlockedStatus("Missing postgres database relation")
+
+    def _on_config_changed(self, event) -> None:
+        """Event Handler for config changed event."""
+        self._update_config_restart_service(event)
 
     def _on_database_created(self, event) -> None:
         """Event Handler for database created event."""
@@ -235,25 +262,7 @@ class KratosCharm(CharmBase):
 
     def _on_database_changed(self, event: DatabaseEndpointsChangedEvent) -> None:
         """Event Handler for database changed event."""
-        if not self._container.can_connect():
-            event.defer()
-            logger.info("Cannot connect to Kratos container. Deferring event.")
-            self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
-            return
-
-        self.unit.status = MaintenanceStatus("Updating database details")
-
-        try:
-            self._container.get_service(self._container_name)
-        except (ModelError, RuntimeError):
-            event.defer()
-            self.unit.status = WaitingStatus("Waiting for Kratos service")
-            logger.info("Kratos service is absent. Deferring database created event.")
-            return
-
-        self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
-        self._container.restart(self._container_name)
-        self.unit.status = ActiveStatus()
+        self._update_config_restart_service(event)
 
     def _on_admin_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
         if self.unit.is_leader():

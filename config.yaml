@@ -1,0 +1,5 @@
+options:
+  smtp_connection_uri:
+    description: SMTP connection URI
+    type: string
+    default: 'smtps://test:test@mailslurper:1025/?skip_ssl_verify=true'
