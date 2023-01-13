@@ -22,8 +22,8 @@ requires:
     interface: ingress
   admin-ingress:
     interface: ingress
+  kratos-external-idp:
+    interface: external_provider
 peers:
   kratos-peers:
     interface: kratos-peers
-  kratos-external-idp:
-    interface: external_provider
