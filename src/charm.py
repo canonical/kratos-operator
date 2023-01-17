@@ -50,6 +50,7 @@ class KratosCharm(CharmBase):
         self._config_file_path = self._config_dir_path / "kratos.yaml"
         self._identity_schema_file_path = self._config_dir_path / "identity.default.schema.json"
         self._mappers_dir_path = self._config_dir_path / "claim_mappers"
+        self._mappers_local_dir_path = Path("claim_mappers")
         self._db_name = f"{self.model.name}_{self.app.name}"
 
         self.service_patcher = KubernetesServicePatch(
@@ -123,7 +124,7 @@ class KratosCharm(CharmBase):
     def _get_available_mappers(self):
         return [
             schema_file.name[: -len("_schema.jsonnet")]
-            for schema_file in Path("claim_mappers").iterdir()
+            for schema_file in self._mappers_local_dir_path.iterdir()
         ]
 
     def _render_conf_file(self) -> None:
@@ -146,7 +147,7 @@ class KratosCharm(CharmBase):
         return rendered
 
     def _push_schemas(self):
-        for schema_file in Path("claim_mappers").iterdir():
+        for schema_file in self._mappers_local_dir_path.iterdir():
             with open(Path(schema_file)) as f:
                 schema = f.read()
             self._container.push(Path(self._config_dir_path, schema_file), schema, make_dirs=True)
