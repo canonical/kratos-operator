@@ -63,7 +63,7 @@ This charm requires a relation with [postgresql-k8s-operator](https://github.com
 
 ### External Provider Relation
 
-Kratos can be used as an identity broker. To connect Kratos with an external identity provider you can use the external provider relation. All you need to do is deploy the [kratos-external-idp-integrator](https://charmhub.io/kratos-external-idp-integrator), confifure it and relate it to Kratos:
+Kratos can be used as an identity broker. To connect Kratos with an external identity provider you can use the external provider relation. All you need to do is deploy the [kratos-external-idp-integrator](https://charmhub.io/kratos-external-idp-integrator), configure it and relate it to Kratos:
 
 ```console
 juju deploy kratos-external-provider-integrator
