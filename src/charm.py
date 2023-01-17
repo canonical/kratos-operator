@@ -322,7 +322,7 @@ class KratosCharm(CharmBase):
         domain_url = self._domain_url
         if domain_url is None:
             self.unit.status = BlockedStatus(
-                "Cannot add external provider without an external hostname. Please"
+                "Cannot add external provider without an external hostname. Please "
                 "provide an ingress relation or an external_url config."
             )
             event.defer()
