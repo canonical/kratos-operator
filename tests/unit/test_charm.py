@@ -1,6 +1,8 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import json
+
 import pytest
 import yaml
 from ops.model import ActiveStatus, BlockedStatus, WaitingStatus
@@ -34,7 +36,7 @@ def setup_ingress_relation(harness, type):
     harness.update_relation_data(
         relation_id,
         f"{type}-traefik",
-        {"url": f"http://{type}:80/{harness.model.name}-kratos"},
+        {"ingress": json.dumps({"url": f"http://{type}:80/{harness.model.name}-kratos"})},
     )
     return relation_id
 
@@ -60,6 +62,29 @@ def trigger_database_changed(harness) -> None:
             "endpoints": DB_ENDPOINTS,
         },
     )
+
+
+def setup_external_provider_relation(harness):
+    relation_id = harness.add_relation("kratos-external-idp", "kratos-external-idp-integrator")
+    harness.add_relation_unit(relation_id, "kratos-external-idp-integrator/0")
+    harness.update_relation_data(
+        relation_id,
+        "kratos-external-idp-integrator",
+        {
+            "providers": json.dumps(
+                [
+                    {
+                        "client_id": "client_id",
+                        "provider": "generic",
+                        "secret_backend": "relation",
+                        "client_secret": "client_secret",
+                        "issuer_url": "https://example.com/oidc",
+                    },
+                ],
+            ),
+        },
+    )
+    return relation_id
 
 
 def test_on_pebble_ready_cannot_connect_container(harness) -> None:
@@ -126,10 +151,13 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness) ->
         "selfservice": {
             "default_browser_return_url": "http://127.0.0.1:9999/",
             "flows": {
+                "login": {
+                    "ui_url": "http://localhost:4455/login",
+                },
                 "registration": {
                     "enabled": True,
                     "ui_url": "http://127.0.0.1:9999/registration",
-                }
+                },
             },
         },
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
@@ -340,3 +368,129 @@ def test_ingress_relation_created(harness, mocked_fqdn, api_type, port) -> None:
         "port": port,
         "strip-prefix": "true",
     }
+
+
+def test_on_client_config_changed_when_no_dns_available(harness) -> None:
+    setup_postgres_relation(harness)
+    setup_external_provider_relation(harness)
+
+    assert isinstance(harness.charm.unit.status, BlockedStatus)
+
+
+def test_on_client_config_changed_with_ingress(harness, mocked_container) -> None:
+    setup_postgres_relation(harness)
+    setup_ingress_relation(harness, "public")
+    relation_id = setup_external_provider_relation(harness)
+
+    expected_config = {
+        "log": {"level": "trace"},
+        "identity": {
+            "default_schema_id": "default",
+            "schemas": [
+                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
+            ],
+        },
+        "selfservice": {
+            "default_browser_return_url": "http://127.0.0.1:9999/",
+            "flows": {
+                "login": {
+                    "ui_url": "http://localhost:4455/login",
+                },
+                "registration": {
+                    "enabled": True,
+                    "after": {"oidc": {"hooks": [{"hook": "session"}]}},
+                    "ui_url": "http://127.0.0.1:9999/registration",
+                },
+            },
+            "methods": {
+                "oidc": {
+                    "config": {
+                        "providers": [
+                            {
+                                "id": "generic_9d07bcc95549089d7f16120e8bed5396469a5426",
+                                "client_id": "client_id",
+                                "client_secret": "client_secret",
+                                "issuer_url": "https://example.com/oidc",
+                                "mapper_url": "file:///etc/config/claim_mappers/default_schema.jsonnet",
+                                "provider": "generic",
+                                "scope": ["profile", "email", "address", "phone"],
+                            },
+                        ],
+                    },
+                    "enabled": True,
+                }
+            },
+        },
+        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/kratos-model_kratos",
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+    }
+
+    app_data = json.loads(harness.get_relation_data(relation_id, harness.charm.app)["providers"])
+
+    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
+    assert app_data[0]["redirect_uri"].startswith(harness.charm.public_ingress.url)
+
+
+def test_on_client_config_changed_with_external_url_config(harness, mocked_container) -> None:
+    # This is the provider id that will be computed based on the provider config
+    provider_id = "generic_9d07bcc95549089d7f16120e8bed5396469a5426"
+    harness.update_config({"external_url": "https://example.com"})
+    setup_postgres_relation(harness)
+    relation_id = setup_external_provider_relation(harness)
+
+    expected_config = {
+        "log": {"level": "trace"},
+        "identity": {
+            "default_schema_id": "default",
+            "schemas": [
+                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
+            ],
+        },
+        "selfservice": {
+            "default_browser_return_url": "http://127.0.0.1:9999/",
+            "flows": {
+                "login": {
+                    "ui_url": "http://localhost:4455/login",
+                },
+                "registration": {
+                    "enabled": True,
+                    "after": {"oidc": {"hooks": [{"hook": "session"}]}},
+                    "ui_url": "http://127.0.0.1:9999/registration",
+                },
+            },
+            "methods": {
+                "oidc": {
+                    "config": {
+                        "providers": [
+                            {
+                                "id": provider_id,
+                                "client_id": "client_id",
+                                "client_secret": "client_secret",
+                                "issuer_url": "https://example.com/oidc",
+                                "mapper_url": "file:///etc/config/claim_mappers/default_schema.jsonnet",
+                                "provider": "generic",
+                                "scope": ["profile", "email", "address", "phone"],
+                            },
+                        ],
+                    },
+                    "enabled": True,
+                }
+            },
+        },
+        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/kratos-model_kratos",
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+    }
+
+    app_data = json.loads(harness.get_relation_data(relation_id, harness.charm.app)["providers"])
+
+    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
+    assert app_data == [
+        {
+            "provider_id": provider_id,
+            "redirect_uri": f'{harness.charm.config["external_url"]}/self-service/methods/oidc/callback/{provider_id}',
+        }
+    ]

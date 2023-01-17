@@ -61,6 +61,24 @@ You should be able to see the identity created earlier.
 
 This charm requires a relation with [postgresql-k8s-operator](https://github.com/canonical/postgresql-k8s-operator).
 
+### External Provider Relation
+
+Kratos can be used as an identity broker. To connect Kratos with an external identity provider you can use the external provider relation. All you need to do is deploy the [kratos-external-idp-integrator](https://charmhub.io/kratos-external-idp-integrator), configure it and relate it to Kratos:
+
+```console
+juju deploy kratos-external-provider-integrator
+juju config kratos-external-provider-integrator \
+    client_id={client_id} \
+    client_secret={client_secret} \
+    provider={provider}
+juju relate kratos-external-provider-integrator kratos
+```
+
+Once kratos has registered the provider, you will be able to retrieve the redirect_uri from the integrator by running:
+```console
+juju run-action {external_provider_integrator_unit_name} get-redirect-uri --wait
+```
+
 ## OCI Images
 
 The image used by this charm is hosted on [Docker Hub](https://hub.docker.com/r/oryd/kratos) and maintained by Ory.

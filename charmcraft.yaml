@@ -9,3 +9,7 @@ bases:
     run-on:
       - name: "ubuntu"
         channel: "22.04"
+parts:
+  charm:
+    prime:
+      - claim_mappers/**
