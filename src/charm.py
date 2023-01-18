@@ -91,6 +91,15 @@ class KratosCharm(CharmBase):
         )
 
     @property
+    def _kratos_service_params(self):
+        ret = ["--config", str(self._config_file_path)]
+        if self.config["dev"]:
+            logger.warn("Running Kratos in dev mode, don't do this in production")
+            ret.append("--dev")
+
+        return " ".join(ret)
+
+    @property
     def _pebble_layer(self) -> Layer:
         pebble_layer = {
             "summary": "kratos layer",
@@ -100,7 +109,7 @@ class KratosCharm(CharmBase):
                     "override": "replace",
                     "summary": "Kratos Operator layer",
                     "startup": "disabled",
-                    "command": f"kratos serve all --config {self._config_file_path}",
+                    "command": f"kratos serve all " + self._kratos_service_params,
                 }
             },
             "checks": {
