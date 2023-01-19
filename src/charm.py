@@ -109,7 +109,7 @@ class KratosCharm(CharmBase):
                     "override": "replace",
                     "summary": "Kratos Operator layer",
                     "startup": "disabled",
-                    "command": f"kratos serve all " + self._kratos_service_params,
+                    "command": "kratos serve all " + self._kratos_service_params,
                 }
             },
             "checks": {
