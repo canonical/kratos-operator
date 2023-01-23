@@ -15,4 +15,4 @@ jobs:
     name: Run Tests
     uses: ./.github/workflows/tests.yaml
     secrets:
-      charmcraft-credentials: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
+      CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
