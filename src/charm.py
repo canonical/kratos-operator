@@ -11,7 +11,7 @@ from functools import cached_property
 from os.path import join
 from pathlib import Path
 
-from charms.data_platform_libs.v0.database_requires import (
+from charms.data_platform_libs.v0.data_interfaces import (
     DatabaseEndpointsChangedEvent,
     DatabaseRequires,
 )
@@ -52,6 +52,7 @@ class KratosCharm(CharmBase):
         self._mappers_dir_path = self._config_dir_path / "claim_mappers"
         self._mappers_local_dir_path = Path("claim_mappers")
         self._db_name = f"{self.model.name}_{self.app.name}"
+        self._db_relation_name = "pg-database"
 
         self.service_patcher = KubernetesServicePatch(
             self, [("admin", KRATOS_ADMIN_PORT), ("public", KRATOS_PUBLIC_PORT)]
@@ -71,7 +72,7 @@ class KratosCharm(CharmBase):
 
         self.database = DatabaseRequires(
             self,
-            relation_name="pg-database",
+            relation_name=self._db_relation_name,
             database_name=self._db_name,
             extra_user_roles="SUPERUSER",
         )
@@ -208,9 +209,16 @@ class KratosCharm(CharmBase):
             logger.info("Kratos service is absent. Deferring database created event.")
             return
 
-        self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
-        self._container.restart(self._container_name)
-        self.unit.status = ActiveStatus()
+        if self.database.is_resource_created():
+            self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
+            self._container.restart(self._container_name)
+            self.unit.status = ActiveStatus()
+            return
+
+        if self.model.relations[self._db_relation_name]:
+            self.unit.status = WaitingStatus("Waiting for database creation")
+        else:
+            self.unit.status = BlockedStatus("Missing postgres database relation")
 
     def _on_pebble_ready(self, event) -> None:
         """Event Handler for pebble ready event."""
@@ -243,7 +251,7 @@ class KratosCharm(CharmBase):
             self.unit.status = ActiveStatus()
             return
 
-        if self.model.relations["pg-database"]:
+        if self.model.relations[self._db_relation_name]:
             self.unit.status = WaitingStatus("Waiting for database creation")
         else:
             self.unit.status = BlockedStatus("Missing postgres database relation")
@@ -330,15 +338,20 @@ class KratosCharm(CharmBase):
             return
 
         self.unit.status = MaintenanceStatus(f"Adding external provider: {event.provider}")
-        self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
-        self._container.restart(self._container_name)
-        self.unit.status = ActiveStatus()
 
-        self.external_provider.set_relation_registered_provider(
-            join(domain_url, f"self-service/methods/oidc/callback/{event.provider_id}"),
-            event.provider_id,
-            event.relation_id,
-        )
+        if self.database.is_resource_created():
+            self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
+            self._container.restart(self._container_name)
+            self.unit.status = ActiveStatus()
+
+            self.external_provider.set_relation_registered_provider(
+                join(domain_url, f"self-service/methods/oidc/callback/{event.provider_id}"),
+                event.provider_id,
+                event.relation_id,
+            )
+        else:
+            event.defer()
+            logger.info("Database is not created. Deferring event.")
 
 
 if __name__ == "__main__":
