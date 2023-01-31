@@ -114,6 +114,26 @@ def test_on_pebble_ready_correct_plan(harness) -> None:
     assert expected_plan == updated_plan
 
 
+def test_on_pebble_ready_correct_plan_with_dev_flag(harness, caplog) -> None:
+    harness.update_config({"dev": True})
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    expected_plan = {
+        "services": {
+            CONTAINER_NAME: {
+                "override": "replace",
+                "summary": "Kratos Operator layer",
+                "startup": "disabled",
+                "command": "kratos serve all --config /etc/config/kratos.yaml --dev",
+            }
+        }
+    }
+    updated_plan = harness.get_container_pebble_plan(CONTAINER_NAME).to_dict()
+    assert expected_plan == updated_plan
+    assert "Running Kratos in dev mode, don't do this in production" in caplog.messages
+
+
 def test_on_pebble_ready_service_not_started_when_database_not_created(harness) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)

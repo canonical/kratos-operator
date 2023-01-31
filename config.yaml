@@ -9,3 +9,8 @@ options:
       if Kratos is served via a reverse proxy).
     type: string
     default: ""
+  dev:
+    description:
+      Run Kratos on dev mode, it is needed if HTTPS is not set up. This should only be used for development purposes.
+    type: boolean
+    default: False
