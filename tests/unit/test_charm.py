@@ -339,11 +339,12 @@ def test_on_database_changed_when_pebble_is_not_ready(harness) -> None:
     assert "Waiting for Kratos service" in harness.charm.unit.status.message
 
 
-def test_on_database_changed_when_pebble_is_ready(harness) -> None:
+def test_on_database_changed_when_pebble_is_ready(harness, mocked_pebble_exec_success) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
 
-    trigger_database_changed(harness)
+    setup_peer_relation(harness)
+    setup_postgres_relation(harness)
 
     updated_config = yaml.safe_load(harness.charm._render_conf_file())
     assert DB_ENDPOINTS in updated_config["dsn"]
@@ -365,11 +366,12 @@ def test_on_config_changed_when_pebble_is_not_ready(harness) -> None:
     assert "Waiting for Kratos service" in harness.charm.unit.status.message
 
 
-def test_on_config_changed_when_pebble_is_ready(harness) -> None:
+def test_on_config_changed_when_pebble_is_ready(harness, mocked_pebble_exec_success) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
 
-    trigger_database_changed(harness)
+    setup_peer_relation(harness)
+    setup_postgres_relation(harness)
 
     updated_config = yaml.safe_load(harness.charm._render_conf_file())
     assert DB_ENDPOINTS in updated_config["dsn"]
