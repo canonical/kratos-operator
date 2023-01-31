@@ -36,7 +36,7 @@ KRATOS_ADMIN_PORT = 4434
 KRATOS_PUBLIC_PORT = 4433
 PEER_RELATION_NAME = "kratos-peers"
 PEER_KEY_DB_MIGRATE_VERSION = "db_migrate_version"
-DB_MIGRATE_VERSION = "0.10.1"
+DB_MIGRATE_VERSION = "0.11.1"
 
 
 class KratosCharm(CharmBase):
