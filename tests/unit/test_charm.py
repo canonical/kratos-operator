@@ -169,20 +169,34 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness) ->
             ],
         },
         "selfservice": {
-            "default_browser_return_url": "http://127.0.0.1:9999/",
+            "default_browser_return_url": "http://127.0.0.1:4455/",
             "flows": {
+                "error": {
+                    "ui_url": "http://127.0.0.1:4455/error",
+                },
                 "login": {
-                    "ui_url": "http://localhost:4455/login",
+                    "ui_url": "http://127.0.0.1:4455/login",
                 },
                 "registration": {
                     "enabled": True,
-                    "ui_url": "http://127.0.0.1:9999/registration",
+                    "ui_url": "http://127.0.0.1:4455/registration",
                 },
             },
         },
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "base_url": "None",
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+        "oauth2_provider": {
+            "url": "http://127.0.0.1:4445/",
         },
     }
 
@@ -413,18 +427,24 @@ def test_on_client_config_changed_with_ingress(harness, mocked_container) -> Non
             ],
         },
         "selfservice": {
-            "default_browser_return_url": "http://127.0.0.1:9999/",
+            "default_browser_return_url": "http://127.0.0.1:4455/",
             "flows": {
+                "error": {
+                    "ui_url": "http://127.0.0.1:4455/error",
+                },
                 "login": {
-                    "ui_url": "http://localhost:4455/login",
+                    "ui_url": "http://127.0.0.1:4455/login",
                 },
                 "registration": {
                     "enabled": True,
                     "after": {"oidc": {"hooks": [{"hook": "session"}]}},
-                    "ui_url": "http://127.0.0.1:9999/registration",
+                    "ui_url": "http://127.0.0.1:4455/registration",
                 },
             },
             "methods": {
+                "password": {
+                    "enabled": False,
+                },
                 "oidc": {
                     "config": {
                         "providers": [
@@ -440,12 +460,23 @@ def test_on_client_config_changed_with_ingress(harness, mocked_container) -> Non
                         ],
                     },
                     "enabled": True,
-                }
+                },
             },
         },
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/kratos-model_kratos",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "base_url": "http://public:80/kratos-model-kratos",
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+        "oauth2_provider": {
+            "url": "http://127.0.0.1:4445/",
         },
     }
 
@@ -471,18 +502,24 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
             ],
         },
         "selfservice": {
-            "default_browser_return_url": "http://127.0.0.1:9999/",
+            "default_browser_return_url": "http://127.0.0.1:4455/",
             "flows": {
+                "error": {
+                    "ui_url": "http://127.0.0.1:4455/error",
+                },
                 "login": {
-                    "ui_url": "http://localhost:4455/login",
+                    "ui_url": "http://127.0.0.1:4455/login",
                 },
                 "registration": {
                     "enabled": True,
                     "after": {"oidc": {"hooks": [{"hook": "session"}]}},
-                    "ui_url": "http://127.0.0.1:9999/registration",
+                    "ui_url": "http://127.0.0.1:4455/registration",
                 },
             },
             "methods": {
+                "password": {
+                    "enabled": False,
+                },
                 "oidc": {
                     "config": {
                         "providers": [
@@ -498,12 +535,23 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
                         ],
                     },
                     "enabled": True,
-                }
+                },
             },
         },
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/kratos-model_kratos",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "base_url": "https://example.com",
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+        "oauth2_provider": {
+            "url": "http://127.0.0.1:4445/",
         },
     }
 

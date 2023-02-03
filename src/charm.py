@@ -146,12 +146,15 @@ class KratosCharm(CharmBase):
         rendered = template.render(
             mappers_path=str(self._mappers_dir_path),
             identity_schema_file_path=self._identity_schema_file_path,
-            default_browser_return_url="http://127.0.0.1:9999/",
-            login_ui_url="http://localhost:4455/login",
+            default_browser_return_url=self.config.get("kratos_ui_url"),
+            public_base_url=self._domain_url,
+            login_ui_url=join(self.config.get("kratos_ui_url"), "login"),
+            error_ui_url=join(self.config.get("kratos_ui_url"), "error"),
             oidc_providers=self.external_provider.get_providers(),
             available_mappers=self._get_available_mappers,
-            registration_ui_url="http://127.0.0.1:9999/registration",
+            registration_ui_url=join(self.config.get("kratos_ui_url"), "registration"),
             db_info=self._get_database_relation_info(),
+            oauth2_provider_url=self.config.get("oauth2_provider_url"),
             smtp_connection_uri=self.config.get("smtp_connection_uri"),
         )
         return rendered
