@@ -204,7 +204,6 @@ class KratosCharm(CharmBase):
         return True
 
     def _update_config_restart_service(self, event) -> None:
-        """Event Handler for database changed event."""
         if not self._container.can_connect():
             event.defer()
             logger.info("Cannot connect to Kratos container. Deferring event.")
