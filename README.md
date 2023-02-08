@@ -21,20 +21,6 @@ To set the smtp connection uri, do:
 juju config kratos smtp_connection_uri={smtp_connection_uri}
 ```
 
-### Ingress
-
-The Kratos Operator offers integration with the [traefik-k8s-operator](https://github.com/canonical/traefik-k8s-operator) for ingress. Kratos has two APIs which can be exposed through ingress, the public API and the admin API.
-
-If you have a traefik deployed and configured in your kratos model, to provide ingress to the admin API run:
-```console
-juju relate traefik-admin kratos:admin-ingress
-```
-
-To provide ingress to the public API run:
-```console
-juju relate traefik-public kratos:public-ingress
-```
-
 ### Interacting with Kratos API
 
 Below are two examples of the API. Visit [Ory](https://www.ory.sh/docs/kratos/reference/api) to see full API specification.
@@ -59,7 +45,23 @@ You should be able to see the identity created earlier.
 
 ## Relations
 
+### PostgreSQL
+
 This charm requires a relation with [postgresql-k8s-operator](https://github.com/canonical/postgresql-k8s-operator).
+
+### Ingress
+
+The Kratos Operator offers integration with the [traefik-k8s-operator](https://github.com/canonical/traefik-k8s-operator) for ingress. Kratos has two APIs which can be exposed through ingress, the public API and the admin API.
+
+If you have a traefik deployed and configured in your kratos model, to provide ingress to the admin API run:
+```console
+juju relate traefik-admin kratos:admin-ingress
+```
+
+To provide ingress to the public API run:
+```console
+juju relate traefik-public kratos:public-ingress
+```
 
 ### External Provider Relation
 
@@ -78,6 +80,28 @@ Once kratos has registered the provider, you will be able to retrieve the redire
 ```console
 juju run-action {external_provider_integrator_unit_name} get-redirect-uri --wait
 ```
+
+### Hydra
+
+This charm offers integration with [hydra-operator](https://github.com/canonical/hydra-operator).
+
+## Integration with Hydra and UI
+
+The following instructions assume that you have deployed `traefik-admin` and `traefik-public` charms and related them to kratos.
+
+If you have deployed [Login UI charm](https://github.com/canonical/identity-platform-login-ui), you can configure it with kratos by providing its URL.
+Note that the UI charm should run behind a proxy.
+```console
+juju config kratos kratos_ui_url=http://{traefik_public_ip}/{model_name}-{kratos_ui_app_name}
+```
+
+In order to integrate kratos with hydra, it needs to be able to access hydra's admin API endpoint.
+To enable that, relate the two charms:
+```console
+juju relate kratos hydra
+```
+
+For further guidance on integration on hydra side, visit the [hydra-operator](https://github.com/canonical/hydra-operator#readme) repository.
 
 ## OCI Images
 
