@@ -18,7 +18,3 @@ options:
     description: Kratos UI URL
     type: string
     default: "http://127.0.0.1:4455/"
-  oauth2_provider_url:
-    description: Hydra Admin URL
-    type: string
-    default: "http://127.0.0.1:4445/"

@@ -15,6 +15,10 @@ from charms.data_platform_libs.v0.data_interfaces import (
     DatabaseEndpointsChangedEvent,
     DatabaseRequires,
 )
+from charms.hydra.v0.hydra_endpoints_info import (
+    HydraEndpointsRelationDataMissingError,
+    HydraEndpointsRequirer,
+)
 from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ClientConfigChangedEvent,
     ExternalIdpRequirer,
@@ -53,6 +57,7 @@ class KratosCharm(CharmBase):
         self._mappers_local_dir_path = Path("claim_mappers")
         self._db_name = f"{self.model.name}_{self.app.name}"
         self._db_relation_name = "pg-database"
+        self._hydra_relation_name = "endpoint-info"
 
         self.service_patcher = KubernetesServicePatch(
             self, [("admin", KRATOS_ADMIN_PORT), ("public", KRATOS_PUBLIC_PORT)]
@@ -79,8 +84,15 @@ class KratosCharm(CharmBase):
 
         self.external_provider = ExternalIdpRequirer(self, relation_name="kratos-external-idp")
 
+        self.hydra_endpoints = HydraEndpointsRequirer(
+            self, relation_name=self._hydra_relation_name
+        )
+
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
+        self.framework.observe(
+            self.on[self._hydra_relation_name].relation_changed, self._on_config_changed
+        )
         self.framework.observe(self.database.on.database_created, self._on_database_created)
         self.framework.observe(self.database.on.endpoints_changed, self._on_database_changed)
         self.framework.observe(self.admin_ingress.on.ready, self._on_admin_ingress_ready)
@@ -154,7 +166,7 @@ class KratosCharm(CharmBase):
             available_mappers=self._get_available_mappers,
             registration_ui_url=join(self.config.get("kratos_ui_url"), "registration"),
             db_info=self._get_database_relation_info(),
-            oauth2_provider_url=self.config.get("oauth2_provider_url"),
+            oauth2_provider_url=self._get_hydra_endpoint_info(),
             smtp_connection_uri=self.config.get("smtp_connection_uri"),
         )
         return rendered
@@ -164,6 +176,19 @@ class KratosCharm(CharmBase):
             with open(Path(schema_file)) as f:
                 schema = f.read()
             self._container.push(Path(self._config_dir_path, schema_file), schema, make_dirs=True)
+
+    def _get_hydra_endpoint_info(self) -> str:
+        if self.model.relations[self._hydra_relation_name]:
+            try:
+                hydra_endpoints = self.hydra_endpoints.get_relation_data()
+                oauth2_provider_url = hydra_endpoints["admin_endpoint"]
+            except HydraEndpointsRelationDataMissingError:
+                logger.info("No hydra endpoint-info relation found, default value will be used")
+        else:
+            # Assign a default value as config file won't accept an empty string
+            oauth2_provider_url = "http://127.0.0.1:4445/"
+
+        return oauth2_provider_url
 
     def _get_database_relation_info(self) -> dict:
         """Get database info from relation data bag."""
