@@ -51,6 +51,20 @@ def setup_peer_relation(harness):
     )
 
 
+def setup_hydra_relation(harness):
+    relation_id = harness.add_relation("endpoint-info", "hydra")
+    harness.add_relation_unit(relation_id, "hydra/0")
+    harness.update_relation_data(
+        relation_id,
+        "hydra",
+        {
+            "admin_endpoint": "http://hydra-admin-url:80/testing-hydra",
+            "public_endpoint": "http://hydra-public-url:80/testing-hydra",
+        },
+    )
+    return relation_id
+
+
 def trigger_database_changed(harness) -> None:
     db_relation_id = harness.add_relation("pg-database", "postgresql-k8s")
     harness.add_relation_unit(db_relation_id, "postgresql-k8s/0")
@@ -564,3 +578,54 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
             "redirect_uri": f'{harness.charm.config["external_url"]}/self-service/methods/oidc/callback/{provider_id}',
         }
     ]
+
+
+def test_on_client_config_changed_with_hydra(harness) -> None:
+    setup_postgres_relation(harness)
+
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    setup_hydra_relation(harness)
+
+    expected_config = {
+        "log": {"level": "trace"},
+        "identity": {
+            "default_schema_id": "default",
+            "schemas": [
+                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
+            ],
+        },
+        "selfservice": {
+            "default_browser_return_url": "http://127.0.0.1:4455/",
+            "flows": {
+                "error": {
+                    "ui_url": "http://127.0.0.1:4455/error",
+                },
+                "login": {
+                    "ui_url": "http://127.0.0.1:4455/login",
+                },
+                "registration": {
+                    "enabled": True,
+                    "ui_url": "http://127.0.0.1:4455/registration",
+                },
+            },
+        },
+        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "base_url": "None",
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+        "oauth2_provider": {
+            "url": "http://hydra-admin-url:80/testing-hydra",
+        },
+    }
+
+    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
