@@ -629,3 +629,55 @@ def test_on_client_config_changed_with_hydra(harness) -> None:
     }
 
     assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
+
+
+def test_on_client_config_changed_when_missing_hydra_relation_data(harness) -> None:
+    setup_postgres_relation(harness)
+
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    relation_id = harness.add_relation("endpoint-info", "hydra")
+    harness.add_relation_unit(relation_id, "hydra/0")
+
+    expected_config = {
+        "log": {"level": "trace"},
+        "identity": {
+            "default_schema_id": "default",
+            "schemas": [
+                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
+            ],
+        },
+        "selfservice": {
+            "default_browser_return_url": "http://127.0.0.1:4455/",
+            "flows": {
+                "error": {
+                    "ui_url": "http://127.0.0.1:4455/error",
+                },
+                "login": {
+                    "ui_url": "http://127.0.0.1:4455/login",
+                },
+                "registration": {
+                    "enabled": True,
+                    "ui_url": "http://127.0.0.1:4455/registration",
+                },
+            },
+        },
+        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "base_url": "None",
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+        "oauth2_provider": {
+            "url": "http://127.0.0.1:4445/",
+        },
+    }
+
+    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config

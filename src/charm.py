@@ -178,15 +178,14 @@ class KratosCharm(CharmBase):
             self._container.push(Path(self._config_dir_path, schema_file), schema, make_dirs=True)
 
     def _get_hydra_endpoint_info(self) -> str:
+        # Assign a default value as config file won't accept an empty string
+        oauth2_provider_url = "http://127.0.0.1:4445/"
         if self.model.relations[self._hydra_relation_name]:
             try:
                 hydra_endpoints = self.hydra_endpoints.get_relation_data()
                 oauth2_provider_url = hydra_endpoints["admin_endpoint"]
             except HydraEndpointsRelationDataMissingError:
                 logger.info("No hydra endpoint-info relation found, default value will be used")
-        else:
-            # Assign a default value as config file won't accept an empty string
-            oauth2_provider_url = "http://127.0.0.1:4445/"
 
         return oauth2_provider_url
 
