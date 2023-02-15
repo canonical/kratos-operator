@@ -6,6 +6,8 @@ jobs:
   update-charm-libs:
     name: Update Charm Libraries
     uses: ./.github/workflows/update_libs.yaml
+    secrets:
+      CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
 
   update-deps:
     name: Update Dependencies
@@ -14,5 +16,3 @@ jobs:
   tests:
     name: Run Tests
     uses: ./.github/workflows/tests.yaml
-    secrets:
-      CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
