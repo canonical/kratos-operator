@@ -25,7 +25,7 @@ requires:
   kratos-external-idp:
     interface: external_provider
   endpoint-info:
-    interface: hydra-endpoints-info
+    interface: hydra_endpoints
     limit: 1
 peers:
   kratos-peers:

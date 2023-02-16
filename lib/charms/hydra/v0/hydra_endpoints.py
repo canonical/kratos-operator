@@ -10,7 +10,7 @@ This library provides a Python API for both requesting and providing public and 
 To get started using the library, you need to fetch the library using `charmcraft`.
 ```shell
 cd some-charm
-charmcraft fetch-lib charms.hydra.v0.hydra_endpoints_info
+charmcraft fetch-lib charms.hydra.v0.hydra_endpoints
 ```
 
 To use the library from the provider side (Hydra):
@@ -18,7 +18,7 @@ In the `metadata.yaml` of the charm, add the following:
 ```yaml
 provides:
   endpoint-info:
-    interface: hydra-endpoints-info
+    interface: hydra_endpoints
     description: Provides API endpoints to a related application
 ```
 
@@ -27,12 +27,12 @@ In the `metadata.yaml` of the charm, add the following:
 ```yaml
 requires:
   endpoint-info:
-    interface: hydra-endpoints-info
+    interface: hydra_endpoints
     limit: 1
 ```
 Then, to initialise the library:
 ```python
-from charms.hydra.v0.hydra_endpoints_info import (
+from charms.hydra.v0.hydra_endpoints import (
     HydraEndpointsRelationError,
     HydraEndpointsRequirer,
 )
@@ -56,20 +56,37 @@ import logging
 from ops.framework import Object
 from ops.model import Application
 
-# TODO: Update once the lib is published
-# # The unique Charmhub library identifier, never change it
-# LIBID = ""
-#
-# # Increment this major API version when introducing breaking changes
-# LIBAPI = 0
-#
-# # Increment this PATCH version before using `charmcraft publish-lib` or reset
-# # to 0 if you are raising the major API version
-# LIBPATCH = 0
+# The unique Charmhub library identifier, never change it
+LIBID = "a9dbc14576874a508dc3b7f717c72f73"
+
+# Increment this major API version when introducing breaking changes
+LIBAPI = 0
+
+# Increment this PATCH version before using `charmcraft publish-lib` or reset
+# to 0 if you are raising the major API version
+LIBPATCH = 1
 
 RELATION_NAME = "endpoint-info"
-INTERFACE_NAME = "hydra-endpoints-info"
+INTERFACE_NAME = "hydra_endpoints"
 logger = logging.getLogger(__name__)
+
+
+class HydraEndpointsProvider(Object):
+    """Provider side of the endpoint-info relation."""
+
+    def __init__(self, charm, relation_name=RELATION_NAME):
+        super().__init__(charm, relation_name)
+
+    def send_endpoint_relation_data(self, charm, admin_endpoint, public_endpoint):
+        """Updates relation with endpoints info."""
+        relations = self.model.relations[RELATION_NAME]
+        for relation in relations:
+            relation.data[charm].update(
+                {
+                    "admin_endpoint": admin_endpoint,
+                    "public_endpoint": public_endpoint,
+                }
+            )
 
 
 class HydraEndpointsRelationError(Exception):
@@ -89,12 +106,13 @@ class HydraEndpointsRelationDataMissingError(HydraEndpointsRelationError):
 
 
 class HydraEndpointsRequirer(Object):
+    """Requirer side of the endpoint-info relation."""
     def __init__(self, charm, relation_name: str = RELATION_NAME):
         super().__init__(charm, relation_name)
         self.charm = charm
         self.relation_name = relation_name
 
-    def get_relation_data(self):
+    def get_relation_data(self) -> dict:
         if not self.model.unit.is_leader():
             return
         endpoints = self.model.relations[self.relation_name]
