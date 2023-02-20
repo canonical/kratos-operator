@@ -209,9 +209,6 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness) ->
                 },
             },
         },
-        "oauth2_provider": {
-            "url": "http://127.0.0.1:4445/",
-        },
     }
 
     assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
@@ -489,9 +486,6 @@ def test_on_client_config_changed_with_ingress(harness, mocked_container) -> Non
                 },
             },
         },
-        "oauth2_provider": {
-            "url": "http://127.0.0.1:4445/",
-        },
     }
 
     app_data = json.loads(harness.get_relation_data(relation_id, harness.charm.app)["providers"])
@@ -563,9 +557,6 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
                     "enabled": True,
                 },
             },
-        },
-        "oauth2_provider": {
-            "url": "http://127.0.0.1:4445/",
         },
     }
 
@@ -674,9 +665,6 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness) -> N
                     "enabled": True,
                 },
             },
-        },
-        "oauth2_provider": {
-            "url": "http://127.0.0.1:4445/",
         },
     }
 

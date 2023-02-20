@@ -51,5 +51,7 @@ serve:
         cors:
             enabled: true
         base_url: {{ public_base_url }}
+{%- if oauth2_provider_url %}
 oauth2_provider:
     url: {{ oauth2_provider_url }}
+{%- endif %}
