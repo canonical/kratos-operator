@@ -186,7 +186,7 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness) ->
             "default_browser_return_url": "http://127.0.0.1:4455/",
             "flows": {
                 "error": {
-                    "ui_url": "http://127.0.0.1:4455/error",
+                    "ui_url": "http://127.0.0.1:4455/oidc_error",
                 },
                 "login": {
                     "ui_url": "http://127.0.0.1:4455/login",
@@ -441,7 +441,7 @@ def test_on_client_config_changed_with_ingress(harness, mocked_container) -> Non
             "default_browser_return_url": "http://127.0.0.1:4455/",
             "flows": {
                 "error": {
-                    "ui_url": "http://127.0.0.1:4455/error",
+                    "ui_url": "http://127.0.0.1:4455/oidc_error",
                 },
                 "login": {
                     "ui_url": "http://127.0.0.1:4455/login",
@@ -513,7 +513,7 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
             "default_browser_return_url": "http://127.0.0.1:4455/",
             "flows": {
                 "error": {
-                    "ui_url": "http://127.0.0.1:4455/error",
+                    "ui_url": "http://127.0.0.1:4455/oidc_error",
                 },
                 "login": {
                     "ui_url": "http://127.0.0.1:4455/login",
@@ -591,7 +591,7 @@ def test_on_client_config_changed_with_hydra(harness) -> None:
             "default_browser_return_url": "http://127.0.0.1:4455/",
             "flows": {
                 "error": {
-                    "ui_url": "http://127.0.0.1:4455/error",
+                    "ui_url": "http://127.0.0.1:4455/oidc_error",
                 },
                 "login": {
                     "ui_url": "http://127.0.0.1:4455/login",
@@ -643,7 +643,7 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness) -> N
             "default_browser_return_url": "http://127.0.0.1:4455/",
             "flows": {
                 "error": {
-                    "ui_url": "http://127.0.0.1:4455/error",
+                    "ui_url": "http://127.0.0.1:4455/oidc_error",
                 },
                 "login": {
                     "ui_url": "http://127.0.0.1:4455/login",

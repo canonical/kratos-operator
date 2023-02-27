@@ -161,7 +161,7 @@ class KratosCharm(CharmBase):
             default_browser_return_url=self.config.get("login_ui_url"),
             public_base_url=self._domain_url,
             login_ui_url=join(self.config.get("login_ui_url"), "login"),
-            error_ui_url=join(self.config.get("login_ui_url"), "error"),
+            error_ui_url=join(self.config.get("login_ui_url"), "oidc_error"),
             oidc_providers=self.external_provider.get_providers(),
             available_mappers=self._get_available_mappers,
             registration_ui_url=join(self.config.get("login_ui_url"), "registration"),
@@ -181,7 +181,7 @@ class KratosCharm(CharmBase):
         oauth2_provider_url = None
         if self.model.relations[self._hydra_relation_name]:
             try:
-                hydra_endpoints = self.hydra_endpoints.get_relation_data()
+                hydra_endpoints = self.hydra_endpoints.get_hydra_endpoints()
                 oauth2_provider_url = hydra_endpoints["admin_endpoint"]
             except HydraEndpointsRelationDataMissingError:
                 logger.info("No hydra endpoint-info relation data found")
