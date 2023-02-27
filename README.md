@@ -87,8 +87,6 @@ This charm offers integration with [hydra-operator](https://github.com/canonical
 
 ## Integration with Hydra and UI
 
-The following instructions assume that you have deployed `traefik-admin` and `traefik-public` charms and related them to kratos.
-
 If you have deployed [Login UI charm](https://github.com/canonical/identity-platform-login-ui), you can configure it with kratos by providing its URL.
 Note that the UI charm should run behind a proxy.
 ```console
