@@ -68,14 +68,14 @@ INTERFACE_NAME = "hydra_endpoints"
 logger = logging.getLogger(__name__)
 
 
-class RelationReadyEvent(EventBase):
+class HydraEndpointsRelationReadyEvent(EventBase):
     """Event to notify the charm that the relation is ready."""
 
 
 class HydraEndpointsProviderEvents(ObjectEvents):
     """Event descriptor for events raised by `HydraEndpointsProvider`."""
 
-    ready = EventSource(RelationReadyEvent)
+    ready = EventSource(HydraEndpointsRelationReadyEvent)
 
 
 class HydraEndpointsProvider(Object):

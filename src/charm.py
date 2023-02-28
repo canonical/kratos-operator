@@ -10,6 +10,7 @@ import logging
 from functools import cached_property
 from os.path import join
 from pathlib import Path
+from typing import Optional
 
 from charms.data_platform_libs.v0.data_interfaces import (
     DatabaseEndpointsChangedEvent,
@@ -177,7 +178,7 @@ class KratosCharm(CharmBase):
                 schema = f.read()
             self._container.push(Path(self._config_dir_path, schema_file), schema, make_dirs=True)
 
-    def _get_hydra_endpoint_info(self) -> None | str:
+    def _get_hydra_endpoint_info(self) -> Optional[str]:
         oauth2_provider_url = None
         if self.model.relations[self._hydra_relation_name]:
             try:
@@ -185,6 +186,7 @@ class KratosCharm(CharmBase):
                 oauth2_provider_url = hydra_endpoints["admin_endpoint"]
             except HydraEndpointsRelationDataMissingError:
                 logger.info("No hydra endpoint-info relation data found")
+                return None
 
         return oauth2_provider_url
 

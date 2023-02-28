@@ -51,7 +51,7 @@ def setup_peer_relation(harness):
     )
 
 
-def setup_hydra_relation(harness):
+def setup_hydra_relation(harness) -> int:
     relation_id = harness.add_relation("endpoint-info", "hydra")
     harness.add_relation_unit(relation_id, "hydra/0")
     harness.update_relation_data(
@@ -428,6 +428,7 @@ def test_on_client_config_changed_with_ingress(harness, mocked_container) -> Non
     setup_postgres_relation(harness)
     setup_ingress_relation(harness, "public")
     relation_id = setup_external_provider_relation(harness)
+    container = harness.model.unit.get_container(CONTAINER_NAME)
 
     expected_config = {
         "log": {"level": "trace"},
@@ -490,7 +491,8 @@ def test_on_client_config_changed_with_ingress(harness, mocked_container) -> Non
 
     app_data = json.loads(harness.get_relation_data(relation_id, harness.charm.app)["providers"])
 
-    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
+    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
+    assert yaml.load(container_config.read(), yaml.Loader) == expected_config
     assert app_data[0]["redirect_uri"].startswith(harness.charm.public_ingress.url)
 
 
@@ -500,6 +502,7 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
     harness.update_config({"external_url": "https://example.com"})
     setup_postgres_relation(harness)
     relation_id = setup_external_provider_relation(harness)
+    container = harness.model.unit.get_container(CONTAINER_NAME)
 
     expected_config = {
         "log": {"level": "trace"},
@@ -562,7 +565,8 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
 
     app_data = json.loads(harness.get_relation_data(relation_id, harness.charm.app)["providers"])
 
-    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
+    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
+    assert yaml.load(container_config.read(), yaml.Loader) == expected_config
     assert app_data == [
         {
             "provider_id": provider_id,
@@ -619,11 +623,13 @@ def test_on_client_config_changed_with_hydra(harness) -> None:
         },
     }
 
-    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
+    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
+    assert yaml.load(container_config.read(), yaml.Loader) == expected_config
 
 
 def test_on_client_config_changed_when_missing_hydra_relation_data(harness) -> None:
     setup_postgres_relation(harness)
+    setup_peer_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
@@ -668,4 +674,5 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness) -> N
         },
     }
 
-    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
+    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
+    assert yaml.load(container_config.read(), yaml.Loader) == expected_config
