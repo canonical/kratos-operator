@@ -51,6 +51,20 @@ def setup_peer_relation(harness):
     )
 
 
+def setup_hydra_relation(harness) -> int:
+    relation_id = harness.add_relation("endpoint-info", "hydra")
+    harness.add_relation_unit(relation_id, "hydra/0")
+    harness.update_relation_data(
+        relation_id,
+        "hydra",
+        {
+            "admin_endpoint": "http://hydra-admin-url:80/testing-hydra",
+            "public_endpoint": "http://hydra-public-url:80/testing-hydra",
+        },
+    )
+    return relation_id
+
+
 def trigger_database_changed(harness) -> None:
     db_relation_id = harness.add_relation("pg-database", "postgresql-k8s")
     harness.add_relation_unit(db_relation_id, "postgresql-k8s/0")
@@ -169,20 +183,31 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness) ->
             ],
         },
         "selfservice": {
-            "default_browser_return_url": "http://127.0.0.1:9999/",
+            "default_browser_return_url": "http://127.0.0.1:4455/",
             "flows": {
+                "error": {
+                    "ui_url": "http://127.0.0.1:4455/oidc_error",
+                },
                 "login": {
-                    "ui_url": "http://localhost:4455/login",
+                    "ui_url": "http://127.0.0.1:4455/login",
                 },
                 "registration": {
                     "enabled": True,
-                    "ui_url": "http://127.0.0.1:9999/registration",
+                    "ui_url": "http://127.0.0.1:4455/registration",
                 },
             },
         },
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "base_url": "None",
+                "cors": {
+                    "enabled": True,
+                },
+            },
         },
     }
 
@@ -403,6 +428,7 @@ def test_on_client_config_changed_with_ingress(harness, mocked_container) -> Non
     setup_postgres_relation(harness)
     setup_ingress_relation(harness, "public")
     relation_id = setup_external_provider_relation(harness)
+    container = harness.model.unit.get_container(CONTAINER_NAME)
 
     expected_config = {
         "log": {"level": "trace"},
@@ -413,18 +439,24 @@ def test_on_client_config_changed_with_ingress(harness, mocked_container) -> Non
             ],
         },
         "selfservice": {
-            "default_browser_return_url": "http://127.0.0.1:9999/",
+            "default_browser_return_url": "http://127.0.0.1:4455/",
             "flows": {
+                "error": {
+                    "ui_url": "http://127.0.0.1:4455/oidc_error",
+                },
                 "login": {
-                    "ui_url": "http://localhost:4455/login",
+                    "ui_url": "http://127.0.0.1:4455/login",
                 },
                 "registration": {
                     "enabled": True,
                     "after": {"oidc": {"hooks": [{"hook": "session"}]}},
-                    "ui_url": "http://127.0.0.1:9999/registration",
+                    "ui_url": "http://127.0.0.1:4455/registration",
                 },
             },
             "methods": {
+                "password": {
+                    "enabled": False,
+                },
                 "oidc": {
                     "config": {
                         "providers": [
@@ -440,18 +472,27 @@ def test_on_client_config_changed_with_ingress(harness, mocked_container) -> Non
                         ],
                     },
                     "enabled": True,
-                }
+                },
             },
         },
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/kratos-model_kratos",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
         },
+        "serve": {
+            "public": {
+                "base_url": "http://public:80/kratos-model-kratos",
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
     }
 
     app_data = json.loads(harness.get_relation_data(relation_id, harness.charm.app)["providers"])
 
-    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
+    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
+    assert yaml.load(container_config.read(), yaml.Loader) == expected_config
     assert app_data[0]["redirect_uri"].startswith(harness.charm.public_ingress.url)
 
 
@@ -461,6 +502,7 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
     harness.update_config({"external_url": "https://example.com"})
     setup_postgres_relation(harness)
     relation_id = setup_external_provider_relation(harness)
+    container = harness.model.unit.get_container(CONTAINER_NAME)
 
     expected_config = {
         "log": {"level": "trace"},
@@ -471,18 +513,24 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
             ],
         },
         "selfservice": {
-            "default_browser_return_url": "http://127.0.0.1:9999/",
+            "default_browser_return_url": "http://127.0.0.1:4455/",
             "flows": {
+                "error": {
+                    "ui_url": "http://127.0.0.1:4455/oidc_error",
+                },
                 "login": {
-                    "ui_url": "http://localhost:4455/login",
+                    "ui_url": "http://127.0.0.1:4455/login",
                 },
                 "registration": {
                     "enabled": True,
                     "after": {"oidc": {"hooks": [{"hook": "session"}]}},
-                    "ui_url": "http://127.0.0.1:9999/registration",
+                    "ui_url": "http://127.0.0.1:4455/registration",
                 },
             },
             "methods": {
+                "password": {
+                    "enabled": False,
+                },
                 "oidc": {
                     "config": {
                         "providers": [
@@ -498,21 +546,133 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
                         ],
                     },
                     "enabled": True,
-                }
+                },
             },
         },
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/kratos-model_kratos",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
         },
+        "serve": {
+            "public": {
+                "base_url": "https://example.com",
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
     }
 
     app_data = json.loads(harness.get_relation_data(relation_id, harness.charm.app)["providers"])
 
-    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
+    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
+    assert yaml.load(container_config.read(), yaml.Loader) == expected_config
     assert app_data == [
         {
             "provider_id": provider_id,
             "redirect_uri": f'{harness.charm.config["external_url"]}/self-service/methods/oidc/callback/{provider_id}',
         }
     ]
+
+
+def test_on_client_config_changed_with_hydra(harness) -> None:
+    setup_postgres_relation(harness)
+
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    setup_hydra_relation(harness)
+
+    expected_config = {
+        "log": {"level": "trace"},
+        "identity": {
+            "default_schema_id": "default",
+            "schemas": [
+                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
+            ],
+        },
+        "selfservice": {
+            "default_browser_return_url": "http://127.0.0.1:4455/",
+            "flows": {
+                "error": {
+                    "ui_url": "http://127.0.0.1:4455/oidc_error",
+                },
+                "login": {
+                    "ui_url": "http://127.0.0.1:4455/login",
+                },
+                "registration": {
+                    "enabled": True,
+                    "ui_url": "http://127.0.0.1:4455/registration",
+                },
+            },
+        },
+        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "base_url": "None",
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+        "oauth2_provider": {
+            "url": "http://hydra-admin-url:80/testing-hydra",
+        },
+    }
+
+    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
+    assert yaml.load(container_config.read(), yaml.Loader) == expected_config
+
+
+def test_on_client_config_changed_when_missing_hydra_relation_data(harness) -> None:
+    setup_postgres_relation(harness)
+    setup_peer_relation(harness)
+
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    relation_id = harness.add_relation("endpoint-info", "hydra")
+    harness.add_relation_unit(relation_id, "hydra/0")
+
+    expected_config = {
+        "log": {"level": "trace"},
+        "identity": {
+            "default_schema_id": "default",
+            "schemas": [
+                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
+            ],
+        },
+        "selfservice": {
+            "default_browser_return_url": "http://127.0.0.1:4455/",
+            "flows": {
+                "error": {
+                    "ui_url": "http://127.0.0.1:4455/oidc_error",
+                },
+                "login": {
+                    "ui_url": "http://127.0.0.1:4455/login",
+                },
+                "registration": {
+                    "enabled": True,
+                    "ui_url": "http://127.0.0.1:4455/registration",
+                },
+            },
+        },
+        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "base_url": "None",
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+    }
+
+    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
+    assert yaml.load(container_config.read(), yaml.Loader) == expected_config
