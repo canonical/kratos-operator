@@ -46,9 +46,7 @@ import logging
 
 from ops.charm import (
     CharmBase,
-    RelationChangedEvent,
     RelationCreatedEvent,
-    RelationJoinedEvent,
 )
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.model import Application
@@ -90,23 +88,13 @@ class HydraEndpointsProvider(Object):
         self._relation_name = relation_name
 
         events = self._charm.on[relation_name]
-        self.framework.observe(events.relation_joined, self._on_provider_endpoint_relation_joined)
-        self.framework.observe(events.relation_created, self._on_provider_endpoint_relation_joined)
-        self.framework.observe(
-            events.relation_changed, self._on_provider_endpoint_relation_changed
-        )
-
-    def _on_provider_endpoint_relation_joined(self, event: RelationJoinedEvent):
-        self.on.ready.emit()
+        self.framework.observe(events.relation_created, self._on_provider_endpoint_relation_created)
 
     def _on_provider_endpoint_relation_created(self, event: RelationCreatedEvent):
         self.on.ready.emit()
 
-    def _on_provider_endpoint_relation_changed(self, event: RelationChangedEvent):
-        self.on.ready.emit()
-
     def send_endpoint_relation_data(
-        self, charm, admin_endpoint: str, public_endpoint: str
+        self, charm: CharmBase, admin_endpoint: str, public_endpoint: str
     ) -> None:
         """Updates relation with endpoints info."""
         if not self._charm.unit.is_leader():
