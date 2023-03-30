@@ -20,6 +20,7 @@ from charms.hydra.v0.hydra_endpoints import (
     HydraEndpointsRelationDataMissingError,
     HydraEndpointsRequirer,
 )
+from charms.kratos.v0.kratos_endpoints import KratosEndpointsProvider
 from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ClientConfigChangedEvent,
     ExternalIdpRequirer,
@@ -31,7 +32,7 @@ from charms.traefik_k8s.v1.ingress import (
     IngressPerAppRevokedEvent,
 )
 from jinja2 import Template
-from ops.charm import CharmBase
+from ops.charm import CharmBase, HookEvent, RelationEvent
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
 from ops.pebble import ExecError, Layer
@@ -89,8 +90,13 @@ class KratosCharm(CharmBase):
             self, relation_name=self._hydra_relation_name
         )
 
+        self.endpoints_provider = KratosEndpointsProvider(self)
+
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
+        self.framework.observe(
+            self.endpoints_provider.on.ready, self._update_kratos_endpoints_relation_data
+        )
         self.framework.observe(
             self.on[self._hydra_relation_name].relation_changed, self._on_config_changed
         )
@@ -108,7 +114,7 @@ class KratosCharm(CharmBase):
     def _kratos_service_params(self):
         ret = ["--config", str(self._config_file_path)]
         if self.config["dev"]:
-            logger.warn("Running Kratos in dev mode, don't do this in production")
+            logger.warning("Running Kratos in dev mode, don't do this in production")
             ret.append("--dev")
 
         return " ".join(ret)
@@ -176,7 +182,9 @@ class KratosCharm(CharmBase):
         for schema_file in self._mappers_local_dir_path.iterdir():
             with open(Path(schema_file)) as f:
                 schema = f.read()
-            self._container.push(Path(self._config_dir_path, schema_file), schema, make_dirs=True)
+            self._container.push(
+                path=Path(self._config_dir_path, schema_file), source=schema, make_dirs=True
+            )
 
     def _get_hydra_endpoint_info(self) -> Optional[str]:
         oauth2_provider_url = None
@@ -228,14 +236,14 @@ class KratosCharm(CharmBase):
 
         return True
 
-    def _update_config_restart_service(self, event) -> None:
+    def _handle_status_update_config(self, event: HookEvent) -> None:
         if not self._container.can_connect():
             event.defer()
             logger.info("Cannot connect to Kratos container. Deferring event.")
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
 
-        self.unit.status = MaintenanceStatus("Updating database details")
+        self.unit.status = MaintenanceStatus("Configuring/deploying resources")
 
         try:
             self._container.get_service(self._container_name)
@@ -294,7 +302,25 @@ class KratosCharm(CharmBase):
 
     def _on_config_changed(self, event) -> None:
         """Event Handler for config changed event."""
-        self._update_config_restart_service(event)
+        self._handle_status_update_config(event)
+
+    def _update_kratos_endpoints_relation_data(self, event: RelationEvent) -> None:
+        admin_endpoint = (
+            self.admin_ingress.url
+            if self.admin_ingress.is_ready()
+            else f"{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}",
+        )
+        public_endpoint = (
+            self.public_ingress.url
+            if self.public_ingress.is_ready()
+            else f"{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}",
+        )
+
+        logger.info(
+            f"Sending endpoints info: public - {public_endpoint[0]}, admin - {admin_endpoint[0]}"
+        )
+
+        self.endpoints_provider.send_endpoint_relation_data(admin_endpoint[0], public_endpoint[0])
 
     def _on_database_created(self, event) -> None:
         """Event Handler for database created event."""
@@ -349,19 +375,28 @@ class KratosCharm(CharmBase):
 
     def _on_database_changed(self, event: DatabaseEndpointsChangedEvent) -> None:
         """Event Handler for database changed event."""
-        self._update_config_restart_service(event)
+        self._handle_status_update_config(event)
 
     def _on_admin_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
         if self.unit.is_leader():
             logger.info("This app's admin ingress URL: %s", event.url)
 
+        self._handle_status_update_config(event)
+        self._update_kratos_endpoints_relation_data(event)
+
     def _on_public_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
         if self.unit.is_leader():
             logger.info("This app's public ingress URL: %s", event.url)
 
+        self._handle_status_update_config(event)
+        self._update_kratos_endpoints_relation_data(event)
+
     def _on_ingress_revoked(self, event: IngressPerAppRevokedEvent) -> None:
         if self.unit.is_leader():
             logger.info("This app no longer has ingress")
+
+        self._handle_status_update_config(event)
+        self._update_kratos_endpoints_relation_data(event)
 
     def _on_client_config_changed(self, event: ClientConfigChangedEvent) -> None:
         domain_url = self._domain_url
