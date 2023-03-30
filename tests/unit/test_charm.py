@@ -700,8 +700,6 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harn
 def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(
     harness: Harness,
 ) -> None:
-    harness.set_can_connect(CONTAINER_NAME, True)
-
     # set ingress relations without data
     public_ingress_relation_id = harness.add_relation("public-ingress", "public-traefik")
     harness.add_relation_unit(public_ingress_relation_id, "public-traefik/0")
@@ -722,8 +720,6 @@ def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(
 
 
 def test_kratos_endpoint_info_relation_data_with_ingress_relation_data(harness: Harness) -> None:
-    harness.set_can_connect(CONTAINER_NAME, True)
-
     # set ingress relations with data
     setup_ingress_relation(harness, "public")
     setup_ingress_relation(harness, "admin")
