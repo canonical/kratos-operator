@@ -88,7 +88,9 @@ class HydraEndpointsProvider(Object):
         self._relation_name = relation_name
 
         events = self._charm.on[relation_name]
-        self.framework.observe(events.relation_created, self._on_provider_endpoint_relation_created)
+        self.framework.observe(
+            events.relation_created, self._on_provider_endpoint_relation_created
+        )
 
     def _on_provider_endpoint_relation_created(self, event: RelationCreatedEvent):
         self.on.ready.emit()
