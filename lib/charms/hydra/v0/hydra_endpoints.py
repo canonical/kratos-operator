@@ -5,14 +5,12 @@
 """Interface library for sharing hydra endpoints.
 
 This library provides a Python API for both requesting and providing public and admin endpoints.
-
 ## Getting Started
 To get started using the library, you need to fetch the library using `charmcraft`.
 ```shell
 cd some-charm
 charmcraft fetch-lib charms.hydra.v0.hydra_endpoints
 ```
-
 To use the library from the requirer side:
 In the `metadata.yaml` of the charm, add the following:
 ```yaml
@@ -27,7 +25,6 @@ from charms.hydra.v0.hydra_endpoints import (
     HydraEndpointsRelationError,
     HydraEndpointsRequirer,
 )
-
 Class SomeCharm(CharmBase):
     def __init__(self, *args):
         self.hydra_endpoints_relation = HydraEndpointsRequirer(self)
@@ -39,15 +36,12 @@ Class SomeCharm(CharmBase):
         except HydraEndpointsRelationError as error:
             ...
 ```
-
 """
 
 import logging
+from typing import Dict, Optional
 
-from ops.charm import (
-    CharmBase,
-    RelationCreatedEvent,
-)
+from ops.charm import CharmBase, RelationCreatedEvent
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.model import Application
 
@@ -59,7 +53,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 1
+LIBPATCH = 2
 
 RELATION_NAME = "endpoint-info"
 INTERFACE_NAME = "hydra_endpoints"
@@ -92,19 +86,17 @@ class HydraEndpointsProvider(Object):
             events.relation_created, self._on_provider_endpoint_relation_created
         )
 
-    def _on_provider_endpoint_relation_created(self, event: RelationCreatedEvent):
+    def _on_provider_endpoint_relation_created(self, event: RelationCreatedEvent) -> None:
         self.on.ready.emit()
 
-    def send_endpoint_relation_data(
-        self, charm: CharmBase, admin_endpoint: str, public_endpoint: str
-    ) -> None:
+    def send_endpoint_relation_data(self, admin_endpoint: str, public_endpoint: str) -> None:
         """Updates relation with endpoints info."""
         if not self._charm.unit.is_leader():
             return
 
         relations = self.model.relations[RELATION_NAME]
         for relation in relations:
-            relation.data[charm].update(
+            relation.data[self._charm.app].update(
                 {
                     "admin_endpoint": admin_endpoint,
                     "public_endpoint": public_endpoint,
@@ -113,17 +105,23 @@ class HydraEndpointsProvider(Object):
 
 
 class HydraEndpointsRelationError(Exception):
+    """Base class for the relation exceptions."""
+
     pass
 
 
 class HydraEndpointsRelationMissingError(HydraEndpointsRelationError):
-    def __init__(self):
+    """Raised when the relation is missing."""
+
+    def __init__(self) -> None:
         self.message = "Missing endpoint-info relation with hydra"
         super().__init__(self.message)
 
 
 class HydraEndpointsRelationDataMissingError(HydraEndpointsRelationError):
-    def __init__(self, message):
+    """Raised when information is missing from the relation."""
+
+    def __init__(self, message: str) -> None:
         self.message = message
         super().__init__(self.message)
 
@@ -136,9 +134,10 @@ class HydraEndpointsRequirer(Object):
         self.charm = charm
         self.relation_name = relation_name
 
-    def get_hydra_endpoints(self) -> dict:
+    def get_hydra_endpoints(self) -> Optional[Dict]:
+        """Get the hydra endpoints."""
         if not self.model.unit.is_leader():
-            return
+            return None
         endpoints = self.model.relations[self.relation_name]
         if len(endpoints) == 0:
             raise HydraEndpointsRelationMissingError()
@@ -151,7 +150,7 @@ class HydraEndpointsRequirer(Object):
 
         data = endpoints[0].data[remote_app]
 
-        if not "admin_endpoint" in data:
+        if "admin_endpoint" not in data:
             raise HydraEndpointsRelationDataMissingError(
                 "Missing admin endpoint in endpoint-info relation data"
             )
