@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from charms.data_platform_libs.v0.data_interfaces import (
+    DatabaseCreatedEvent,
     DatabaseEndpointsChangedEvent,
     DatabaseRequires,
 )
@@ -32,7 +33,7 @@ from charms.traefik_k8s.v1.ingress import (
     IngressPerAppRevokedEvent,
 )
 from jinja2 import Template
-from ops.charm import CharmBase, HookEvent, RelationEvent
+from ops.charm import CharmBase, ConfigChangedEvent, HookEvent, PebbleReadyEvent, RelationEvent
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
 from ops.pebble import ExecError, Layer
@@ -111,7 +112,7 @@ class KratosCharm(CharmBase):
         )
 
     @property
-    def _kratos_service_params(self):
+    def _kratos_service_params(self) -> str:
         ret = ["--config", str(self._config_file_path)]
         if self.config["dev"]:
             logger.warning("Running Kratos in dev mode, don't do this in production")
@@ -146,17 +147,17 @@ class KratosCharm(CharmBase):
         return Layer(pebble_layer)
 
     @property
-    def _domain_url(self):
+    def _domain_url(self) -> str:
         return self.config["external_url"] or self.public_ingress.url
 
     @cached_property
-    def _get_available_mappers(self):
+    def _get_available_mappers(self) -> list:
         return [
             schema_file.name[: -len("_schema.jsonnet")]
             for schema_file in self._mappers_local_dir_path.iterdir()
         ]
 
-    def _render_conf_file(self) -> None:
+    def _render_conf_file(self) -> str:
         """Render the Kratos configuration file."""
         # Open the template kratos.conf file.
         with open("templates/kratos.yaml.j2", "r") as file:
@@ -178,7 +179,7 @@ class KratosCharm(CharmBase):
         )
         return rendered
 
-    def _push_schemas(self):
+    def _push_schemas(self) -> None:
         for schema_file in self._mappers_local_dir_path.iterdir():
             with open(Path(schema_file)) as f:
                 schema = f.read()
@@ -264,7 +265,7 @@ class KratosCharm(CharmBase):
         else:
             self.unit.status = BlockedStatus("Missing postgres database relation")
 
-    def _on_pebble_ready(self, event) -> None:
+    def _on_pebble_ready(self, event: PebbleReadyEvent) -> None:
         """Event Handler for pebble ready event."""
         if not self._container.can_connect():
             event.defer()
@@ -300,7 +301,7 @@ class KratosCharm(CharmBase):
         else:
             self.unit.status = BlockedStatus("Missing postgres database relation")
 
-    def _on_config_changed(self, event) -> None:
+    def _on_config_changed(self, event: ConfigChangedEvent) -> None:
         """Event Handler for config changed event."""
         self._handle_status_update_config(event)
 
@@ -322,7 +323,7 @@ class KratosCharm(CharmBase):
 
         self.endpoints_provider.send_endpoint_relation_data(admin_endpoint[0], public_endpoint[0])
 
-    def _on_database_created(self, event) -> None:
+    def _on_database_created(self, event: DatabaseCreatedEvent) -> None:
         """Event Handler for database created event."""
         if not self._container.can_connect():
             event.defer()
