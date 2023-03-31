@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2023 Canonical Ltd.
+# Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 #
 # Learn more at: https://juju.is/docs/sdk
@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Optional
 
 from charms.data_platform_libs.v0.data_interfaces import (
-    DatabaseCreatedEvent,
     DatabaseEndpointsChangedEvent,
     DatabaseRequires,
 )
@@ -33,7 +32,7 @@ from charms.traefik_k8s.v1.ingress import (
     IngressPerAppRevokedEvent,
 )
 from jinja2 import Template
-from ops.charm import CharmBase, ConfigChangedEvent, HookEvent, PebbleReadyEvent, RelationEvent
+from ops.charm import CharmBase, HookEvent, RelationEvent
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
 from ops.pebble import ExecError, Layer
@@ -112,7 +111,7 @@ class KratosCharm(CharmBase):
         )
 
     @property
-    def _kratos_service_params(self) -> str:
+    def _kratos_service_params(self):
         ret = ["--config", str(self._config_file_path)]
         if self.config["dev"]:
             logger.warning("Running Kratos in dev mode, don't do this in production")
@@ -147,11 +146,11 @@ class KratosCharm(CharmBase):
         return Layer(pebble_layer)
 
     @property
-    def _domain_url(self) -> str:
+    def _domain_url(self):
         return self.config["external_url"] or self.public_ingress.url
 
     @cached_property
-    def _get_available_mappers(self) -> list:
+    def _get_available_mappers(self):
         return [
             schema_file.name[: -len("_schema.jsonnet")]
             for schema_file in self._mappers_local_dir_path.iterdir()
@@ -179,7 +178,7 @@ class KratosCharm(CharmBase):
         )
         return rendered
 
-    def _push_schemas(self) -> None:
+    def _push_schemas(self):
         for schema_file in self._mappers_local_dir_path.iterdir():
             with open(Path(schema_file)) as f:
                 schema = f.read()
@@ -265,7 +264,7 @@ class KratosCharm(CharmBase):
         else:
             self.unit.status = BlockedStatus("Missing postgres database relation")
 
-    def _on_pebble_ready(self, event: PebbleReadyEvent) -> None:
+    def _on_pebble_ready(self, event) -> None:
         """Event Handler for pebble ready event."""
         if not self._container.can_connect():
             event.defer()
@@ -301,7 +300,7 @@ class KratosCharm(CharmBase):
         else:
             self.unit.status = BlockedStatus("Missing postgres database relation")
 
-    def _on_config_changed(self, event: ConfigChangedEvent) -> None:
+    def _on_config_changed(self, event) -> None:
         """Event Handler for config changed event."""
         self._handle_status_update_config(event)
 
@@ -323,7 +322,7 @@ class KratosCharm(CharmBase):
 
         self.endpoints_provider.send_endpoint_relation_data(admin_endpoint[0], public_endpoint[0])
 
-    def _on_database_created(self, event: DatabaseCreatedEvent) -> None:
+    def _on_database_created(self, event) -> None:
         """Event Handler for database created event."""
         if not self._container.can_connect():
             event.defer()
