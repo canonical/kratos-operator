@@ -12,7 +12,7 @@ The Kratos Operator may be deployed using the Juju command line as follows:
 ```bash
 juju deploy postgresql-k8s --channel edge --trust
 juju deploy kratos
-juju relate kratos postgresql-k8s
+juju integrate kratos postgresql-k8s
 ```
 
 To set the smtp connection uri, do:
@@ -55,12 +55,12 @@ The Kratos Operator offers integration with the [traefik-k8s-operator](https://g
 
 If you have a traefik deployed and configured in your kratos model, to provide ingress to the admin API run:
 ```console
-juju relate traefik-admin kratos:admin-ingress
+juju integrate traefik-admin kratos:admin-ingress
 ```
 
 To provide ingress to the public API run:
 ```console
-juju relate traefik-public kratos:public-ingress
+juju integrate traefik-public kratos:public-ingress
 ```
 
 ### External Provider Relation
@@ -73,12 +73,12 @@ juju config kratos-external-provider-integrator \
     client_id={client_id} \
     client_secret={client_secret} \
     provider={provider}
-juju relate kratos-external-provider-integrator kratos
+juju integrate kratos-external-provider-integrator kratos
 ```
 
 Once kratos has registered the provider, you will be able to retrieve the redirect_uri from the integrator by running:
 ```console
-juju run-action {external_provider_integrator_unit_name} get-redirect-uri --wait
+juju run {external_provider_integrator_unit_name} get-redirect-uri --wait
 ```
 
 ### Hydra
@@ -88,7 +88,7 @@ This charm offers integration with [hydra-operator](https://github.com/canonical
 In order to integrate kratos with hydra, it needs to be able to access hydra's admin API endpoint.
 To enable that, relate the two charms:
 ```console
-juju relate kratos hydra
+juju integrate kratos hydra
 ```
 
 For further guidance on integration on hydra side, visit the [hydra-operator](https://github.com/canonical/hydra-operator#readme) repository.
@@ -104,7 +104,7 @@ juju config kratos kratos_ui_url=http://{traefik_public_ip}/{model_name}-{identi
 
 Relate the two charms to provide `identity-platform-login-ui-operator` with kratos endpoints:
 ```console
-juju relate kratos identity-platform-login-ui-operator
+juju integrate kratos identity-platform-login-ui-operator
 ```
 
 ## OCI Images
