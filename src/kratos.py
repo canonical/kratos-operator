@@ -42,7 +42,7 @@ class KratosAPI:
 
         stdout, _ = self._run_cmd(cmd, stdin=json.dumps(identity))
         json_stdout = json.loads(stdout)
-        logger.info(f"Successfully created identitiy: {json_stdout.get('id')}")
+        logger.info(f"Successfully created identity: {json_stdout.get('id')}")
         return json_stdout
 
     def get_identity(self, identity_id: str) -> Dict:

@@ -69,7 +69,9 @@ class KratosCharm(CharmBase):
         self._config_dir_path = Path("/etc/config")
         self._config_file_path = self._config_dir_path / "kratos.yaml"
         self._identity_schema_file_path = self._config_dir_path / "identity.default.schema.json"
-        self._admin_identity_schema_file_path = self._config_dir_path / "identity.admin.schema.json"
+        self._admin_identity_schema_file_path = (
+            self._config_dir_path / "identity.admin.schema.json"
+        )
         self._mappers_dir_path = self._config_dir_path / "claim_mappers"
         self._mappers_local_dir_path = Path("claim_mappers")
         self._db_name = f"{self.model.name}_{self.app.name}"

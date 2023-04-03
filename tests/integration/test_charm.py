@@ -113,8 +113,8 @@ async def test_create_admin_account(ops_test: OpsTest):
                 "email": ADMIN_MAIL,
                 "name": "Admin Admin",
                 "phone_number": "6912345678",
-                "password": "123456"
-            }
+                "password": "123456",
+            },
         )
     )
 
@@ -139,10 +139,7 @@ async def test_get_identity(ops_test: OpsTest):
 
 
 @pytest.mark.skip(
-    reason=(
-        "the recovery and settings UI page must be provided to kratos for this "
-        "to work"
-    )
+    reason=("the recovery and settings UI page must be provided to kratos for this " "to work")
 )
 async def test_reset_password(ops_test: OpsTest):
     action = (
@@ -178,7 +175,7 @@ async def test_delete_identity(ops_test: OpsTest):
             "delete-identity",
             **{
                 "identity-id": res["id"],
-            }
+            },
         )
     )
 
@@ -192,6 +189,6 @@ async def test_delete_identity(ops_test: OpsTest):
             email=ADMIN_MAIL,
         )
     )
-    res = (await action.wait())
+    res = await action.wait()
 
     assert res.message == "Couldn't retrieve identity_id from email."

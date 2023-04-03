@@ -1016,7 +1016,7 @@ def test_run_migration(
 def test_error_on_run_migration(
     harness: Harness, mocked_kratos_is_running: MagicMock, mocked_run_migration: MagicMock
 ) -> None:
-    mocked_run_migration.return_value= (None, "Error")
+    mocked_run_migration.return_value = (None, "Error")
     event = MagicMock()
 
     harness.charm._on_run_migration_action(event)
