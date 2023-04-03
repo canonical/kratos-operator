@@ -143,7 +143,7 @@ class KratosAPI:
         return self._run_cmd(cmd, timeout=timeout)
 
     def _run_cmd(
-        self, cmd: List[str], timeout: float = 120, stdin: str = None
+        self, cmd: List[str], timeout: float = 20, stdin: str = None
     ) -> Tuple[Union[str, bytes], Union[str, bytes]]:
         logger.debug(f"Running cmd: {cmd}")
         process = self.container.exec(cmd, timeout=timeout)
