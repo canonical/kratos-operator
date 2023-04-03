@@ -9,7 +9,7 @@ from charm import KratosCharm
 
 
 @pytest.fixture()
-def harness(mocked_kubernetes_service_patcher) -> None:
+def harness(mocked_kubernetes_service_patcher) -> Harness:
     harness = Harness(KratosCharm)
     harness.set_model_name("kratos-model")
     harness.set_can_connect("kratos", True)

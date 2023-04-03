@@ -676,3 +676,41 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness) -> N
 
     container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
     assert yaml.load(container_config.read(), yaml.Loader) == expected_config
+
+
+def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(harness) -> None:
+    # set ingress relations without data
+    public_ingress_relation_id = harness.add_relation("public-ingress", "public-traefik")
+    harness.add_relation_unit(public_ingress_relation_id, "public-traefik/0")
+    admin_ingress_relation_id = harness.add_relation("admin-ingress", "admin-traefik")
+    harness.add_relation_unit(admin_ingress_relation_id, "admin-traefik/0")
+
+    endpoint_info_relation_id = harness.add_relation(
+        "kratos-endpoint-info", "identity-platform-login-ui-operator"
+    )
+    harness.add_relation_unit(endpoint_info_relation_id, "identity-platform-login-ui-operator/0")
+
+    expected_data = {
+        "admin_endpoint": "kratos.kratos-model.svc.cluster.local:4434",
+        "public_endpoint": "kratos.kratos-model.svc.cluster.local:4433",
+    }
+
+    assert harness.get_relation_data(endpoint_info_relation_id, "kratos") == expected_data
+
+
+def test_kratos_endpoint_info_relation_data_with_ingress_relation_data(harness) -> None:
+    # set ingress relations with data
+    setup_ingress_relation(harness, "public")
+    setup_ingress_relation(harness, "admin")
+
+    endpoint_info_relation_id = harness.add_relation(
+        "kratos-endpoint-info", "identity-platform-login-ui-operator"
+    )
+    harness.add_relation_unit(endpoint_info_relation_id, "identity-platform-login-ui-operator/0")
+
+    expected_data = {
+        "admin_endpoint": "http://admin:80/kratos-model-kratos",
+        "public_endpoint": "http://public:80/kratos-model-kratos",
+    }
+
+    assert harness.get_relation_data(endpoint_info_relation_id, "kratos") == expected_data

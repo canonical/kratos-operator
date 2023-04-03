@@ -2,38 +2,37 @@
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Interface library for sharing hydra endpoints.
-
+"""Interface library for sharing kratos endpoints.
 This library provides a Python API for both requesting and providing public and admin endpoints.
 ## Getting Started
 To get started using the library, you need to fetch the library using `charmcraft`.
 ```shell
 cd some-charm
-charmcraft fetch-lib charms.hydra.v0.hydra_endpoints
+charmcraft fetch-lib charms.kratos.v0.kratos_endpoints
 ```
 To use the library from the requirer side:
 In the `metadata.yaml` of the charm, add the following:
 ```yaml
 requires:
-  endpoint-info:
-    interface: hydra_endpoints
+  kratos-endpoint-info:
+    interface: kratos_endpoints
     limit: 1
 ```
 Then, to initialise the library:
 ```python
-from charms.hydra.v0.hydra_endpoints import (
-    HydraEndpointsRelationError,
-    HydraEndpointsRequirer,
+from charms.kratos.v0.kratos_endpoints import (
+    KratosEndpointsRelationError,
+    KratosEndpointsRequirer,
 )
 Class SomeCharm(CharmBase):
     def __init__(self, *args):
-        self.hydra_endpoints_relation = HydraEndpointsRequirer(self)
+        self.kratos_endpoints_relation = KratosEndpointsRequirer(self)
         self.framework.observe(self.on.some_event_emitted, self.some_event_function)
     def some_event_function():
         # fetch the relation info
         try:
-            hydra_data = self.hydra_endpoints_relation.get_hydra_endpoints()
-        except HydraEndpointsRelationError as error:
+            kratos_data = self.kratos_endpoints_relation.get_kratos_endpoints()
+        except KratosEndpointsRelationError as error:
             ...
 ```
 """
@@ -46,34 +45,34 @@ from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.model import Application
 
 # The unique Charmhub library identifier, never change it
-LIBID = "a9dbc14576874a508dc3b7f717c72f73"
+LIBID = "5868b36df1c04c90b33f5e5557327162"
 
 # Increment this major API version when introducing breaking changes
 LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 1
 
-RELATION_NAME = "endpoint-info"
-INTERFACE_NAME = "hydra_endpoints"
+RELATION_NAME = "kratos-endpoint-info"
+INTERFACE_NAME = "kratos_endpoints"
 logger = logging.getLogger(__name__)
 
 
-class HydraEndpointsRelationReadyEvent(EventBase):
+class KratosEndpointsRelationReadyEvent(EventBase):
     """Event to notify the charm that the relation is ready."""
 
 
-class HydraEndpointsProviderEvents(ObjectEvents):
-    """Event descriptor for events raised by `HydraEndpointsProvider`."""
+class KratosEndpointsProviderEvents(ObjectEvents):
+    """Event descriptor for events raised by `KratosEndpointsProvider`."""
 
-    ready = EventSource(HydraEndpointsRelationReadyEvent)
+    ready = EventSource(KratosEndpointsRelationReadyEvent)
 
 
-class HydraEndpointsProvider(Object):
-    """Provider side of the endpoint-info relation."""
+class KratosEndpointsProvider(Object):
+    """Provider side of the kratos-endpoint-info relation."""
 
-    on = HydraEndpointsProviderEvents()
+    on = KratosEndpointsProviderEvents()
 
     def __init__(self, charm: CharmBase, relation_name: str = RELATION_NAME):
         super().__init__(charm, relation_name)
@@ -94,7 +93,7 @@ class HydraEndpointsProvider(Object):
         if not self._charm.unit.is_leader():
             return
 
-        relations = self.model.relations[RELATION_NAME]
+        relations = self.model.relations[self._relation_name]
         for relation in relations:
             relation.data[self._charm.app].update(
                 {
@@ -104,21 +103,21 @@ class HydraEndpointsProvider(Object):
             )
 
 
-class HydraEndpointsRelationError(Exception):
+class KratosEndpointsRelationError(Exception):
     """Base class for the relation exceptions."""
 
     pass
 
 
-class HydraEndpointsRelationMissingError(HydraEndpointsRelationError):
+class KratosEndpointsRelationMissingError(KratosEndpointsRelationError):
     """Raised when the relation is missing."""
 
     def __init__(self) -> None:
-        self.message = "Missing endpoint-info relation with hydra"
+        self.message = "Missing kratos-endpoint-info relation with kratos"
         super().__init__(self.message)
 
 
-class HydraEndpointsRelationDataMissingError(HydraEndpointsRelationError):
+class KratosEndpointsRelationDataMissingError(KratosEndpointsRelationError):
     """Raised when information is missing from the relation."""
 
     def __init__(self, message: str) -> None:
@@ -126,33 +125,27 @@ class HydraEndpointsRelationDataMissingError(HydraEndpointsRelationError):
         super().__init__(self.message)
 
 
-class HydraEndpointsRequirer(Object):
-    """Requirer side of the endpoint-info relation."""
+class KratosEndpointsRequirer(Object):
+    """Requirer side of the kratos-endpoint-info relation."""
 
     def __init__(self, charm: CharmBase, relation_name: str = RELATION_NAME):
         super().__init__(charm, relation_name)
         self.charm = charm
         self.relation_name = relation_name
 
-    def get_hydra_endpoints(self) -> Optional[Dict]:
-        """Get the hydra endpoints."""
+    def get_kratos_endpoints(self) -> Optional[Dict]:
+        """Get the kratos endpoints."""
         if not self.model.unit.is_leader():
             return None
         endpoints = self.model.relations[self.relation_name]
         if len(endpoints) == 0:
-            raise HydraEndpointsRelationMissingError()
+            raise KratosEndpointsRelationMissingError()
 
-        remote_app = [
-            app
-            for app in endpoints[0].data.keys()
-            if isinstance(app, Application) and not app._is_our_app
-        ][0]
+        data = endpoints[0].data[endpoints[0].app]
 
-        data = endpoints[0].data[remote_app]
-
-        if "admin_endpoint" not in data:
-            raise HydraEndpointsRelationDataMissingError(
-                "Missing admin endpoint in endpoint-info relation data"
+        if "public_endpoint" not in data:
+            raise KratosEndpointsRelationDataMissingError(
+                "Missing public endpoint in kratos-endpoint-info relation data"
             )
 
         return {
