@@ -5,6 +5,8 @@ identity:
     schemas:
         - id: default
           url: 'file://{{ identity_schema_file_path }}'
+        - id: admin
+          url: 'file://{{ admin_identity_schema_file_path }}'
 selfservice:
     default_browser_return_url:
         {{ default_browser_return_url }}

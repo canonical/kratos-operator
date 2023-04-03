@@ -3,3 +3,4 @@ lightkube
 lightkube-models
 Jinja2
 jsonschema
+requests
