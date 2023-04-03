@@ -183,7 +183,8 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness) ->
         "identity": {
             "default_schema_id": "default",
             "schemas": [
-                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
+                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"},
+                {"id": "admin", "url": "file:///etc/config/identity.admin.schema.json"},
             ],
         },
         "selfservice": {
@@ -439,7 +440,8 @@ def test_on_client_config_changed_with_ingress(harness, mocked_container) -> Non
         "identity": {
             "default_schema_id": "default",
             "schemas": [
-                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
+                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"},
+                {"id": "admin", "url": "file:///etc/config/identity.admin.schema.json"},
             ],
         },
         "selfservice": {
@@ -513,7 +515,8 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
         "identity": {
             "default_schema_id": "default",
             "schemas": [
-                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
+                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"},
+                {"id": "admin", "url": "file:///etc/config/identity.admin.schema.json"},
             ],
         },
         "selfservice": {
@@ -592,7 +595,8 @@ def test_on_client_config_changed_with_hydra(harness) -> None:
         "identity": {
             "default_schema_id": "default",
             "schemas": [
-                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
+                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"},
+                {"id": "admin", "url": "file:///etc/config/identity.admin.schema.json"},
             ],
         },
         "selfservice": {
@@ -646,7 +650,8 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness) -> N
         "identity": {
             "default_schema_id": "default",
             "schemas": [
-                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
+                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"},
+                {"id": "admin", "url": "file:///etc/config/identity.admin.schema.json"},
             ],
         },
         "selfservice": {
