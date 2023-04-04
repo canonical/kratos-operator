@@ -62,5 +62,5 @@ run-migration:
   params:
     timeout:
       description: Timeout after which the migration will be canceled
-      type: integer
+      type: number
       default: 120
