@@ -139,7 +139,7 @@ async def test_get_identity(ops_test: OpsTest):
 
 
 @pytest.mark.skip(
-    reason=("the recovery and settings UI page must be provided to kratos for this " "to work")
+    reason=("the recovery and settings UI page must be provided to kratos for this test to work")
 )
 async def test_reset_password(ops_test: OpsTest):
     action = (
