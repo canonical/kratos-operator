@@ -132,7 +132,8 @@ class KratosCharm(CharmBase):
 
         self.framework.observe(self.on.get_identity_action, self._on_get_identity_action)
         self.framework.observe(self.on.delete_identity_action, self._on_delete_identity_action)
-        self.framework.observe(self.on.reset_password_action, self._on_reset_password_action)
+        # TODO: Uncomment this line after we have implemented the recovery endpoint
+        # self.framework.observe(self.on.reset_password_action, self._on_reset_password_action)
         self.framework.observe(
             self.on.create_admin_account_action, self._on_create_admin_account_action
         )
