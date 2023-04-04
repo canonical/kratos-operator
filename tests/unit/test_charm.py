@@ -73,13 +73,13 @@ def setup_login_ui_relation(harness) -> int:
         relation_id,
         "identity-platform-login-ui-operator",
         {
-            "consent": f"{endpoint}/consent",
-            "error": f"{endpoint}/error",
-            "index": f"{endpoint}/index",
-            "login": f"{endpoint}/login",
-            "oidc_error": f"{endpoint}/oidc_error",
-            "registration": f"{endpoint}/registration",
-            "browser": endpoint,
+            "consent_url": f"{endpoint}/consent",
+            "error_url": f"{endpoint}/error",
+            "index_url": f"{endpoint}/index",
+            "login_url": f"{endpoint}/login",
+            "oidc_error_url": f"{endpoint}/oidc_error",
+            "registration_url": f"{endpoint}/registration",
+            "default_url": endpoint,
         },
     )
     return relation_id
@@ -206,23 +206,23 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness) ->
         "selfservice": {
             "default_browser_return_url": harness.get_relation_data(
                 login_relation_id, "identity-platform-login-ui-operator"
-            )["browser"],
+            )["default_url"],
             "flows": {
                 "error": {
                     "ui_url": harness.get_relation_data(
                         login_relation_id, "identity-platform-login-ui-operator"
-                    )["error"],
+                    )["error_url"],
                 },
                 "login": {
                     "ui_url": harness.get_relation_data(
                         login_relation_id, "identity-platform-login-ui-operator"
-                    )["login"],
+                    )["login_url"],
                 },
                 "registration": {
                     "enabled": True,
                     "ui_url": harness.get_relation_data(
                         login_relation_id, "identity-platform-login-ui-operator"
-                    )["registration"],
+                    )["registration_url"],
                 },
             },
         },
@@ -471,24 +471,24 @@ def test_on_client_config_changed_with_ingress(harness, mocked_container) -> Non
         "selfservice": {
             "default_browser_return_url": harness.get_relation_data(
                 login_relation_id, "identity-platform-login-ui-operator"
-            )["browser"],
+            )["default_url"],
             "flows": {
                 "error": {
                     "ui_url": harness.get_relation_data(
                         login_relation_id, "identity-platform-login-ui-operator"
-                    )["error"],
+                    )["error_url"],
                 },
                 "login": {
                     "ui_url": harness.get_relation_data(
                         login_relation_id, "identity-platform-login-ui-operator"
-                    )["login"],
+                    )["login_url"],
                 },
                 "registration": {
                     "enabled": True,
                     "after": {"oidc": {"hooks": [{"hook": "session"}]}},
                     "ui_url": harness.get_relation_data(
                         login_relation_id, "identity-platform-login-ui-operator"
-                    )["registration"],
+                    )["registration_url"],
                 },
             },
             "methods": {
@@ -554,24 +554,24 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
         "selfservice": {
             "default_browser_return_url": harness.get_relation_data(
                 login_relation_id, "identity-platform-login-ui-operator"
-            )["browser"],
+            )["default_url"],
             "flows": {
                 "error": {
                     "ui_url": harness.get_relation_data(
                         login_relation_id, "identity-platform-login-ui-operator"
-                    )["error"],
+                    )["error_url"],
                 },
                 "login": {
                     "ui_url": harness.get_relation_data(
                         login_relation_id, "identity-platform-login-ui-operator"
-                    )["login"],
+                    )["login_url"],
                 },
                 "registration": {
                     "enabled": True,
                     "after": {"oidc": {"hooks": [{"hook": "session"}]}},
                     "ui_url": harness.get_relation_data(
                         login_relation_id, "identity-platform-login-ui-operator"
-                    )["registration"],
+                    )["registration_url"],
                 },
             },
             "methods": {
@@ -642,23 +642,23 @@ def test_on_client_config_changed_with_hydra(harness) -> None:
         "selfservice": {
             "default_browser_return_url": harness.get_relation_data(
                 login_relation_id, "identity-platform-login-ui-operator"
-            )["browser"],
+            )["default_url"],
             "flows": {
                 "error": {
                     "ui_url": harness.get_relation_data(
                         login_relation_id, "identity-platform-login-ui-operator"
-                    )["error"],
+                    )["error_url"],
                 },
                 "login": {
                     "ui_url": harness.get_relation_data(
                         login_relation_id, "identity-platform-login-ui-operator"
-                    )["login"],
+                    )["login_url"],
                 },
                 "registration": {
                     "enabled": True,
                     "ui_url": harness.get_relation_data(
                         login_relation_id, "identity-platform-login-ui-operator"
-                    )["registration"],
+                    )["registration_url"],
                 },
             },
         },
@@ -705,23 +705,23 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness) -> N
         "selfservice": {
             "default_browser_return_url": harness.get_relation_data(
                 login_relation_id, "identity-platform-login-ui-operator"
-            )["browser"],
+            )["default_url"],
             "flows": {
                 "error": {
                     "ui_url": harness.get_relation_data(
                         login_relation_id, "identity-platform-login-ui-operator"
-                    )["error"],
+                    )["error_url"],
                 },
                 "login": {
                     "ui_url": harness.get_relation_data(
                         login_relation_id, "identity-platform-login-ui-operator"
-                    )["login"],
+                    )["login_url"],
                 },
                 "registration": {
                     "enabled": True,
                     "ui_url": harness.get_relation_data(
                         login_relation_id, "identity-platform-login-ui-operator"
-                    )["registration"],
+                    )["registration_url"],
                 },
             },
         },

@@ -59,13 +59,13 @@ INTERFACE_NAME = "login_ui_endpoints"
 logger = logging.getLogger(__name__)
 
 RELATION_KEYS = [
-    "consent",
-    "error",
-    "index",
-    "login",
-    "oidc_error",
-    "registration",
-    "browser",
+    "consent_url",
+    "error_url",
+    "index_url",
+    "login_url",
+    "oidc_error_url",
+    "registration_url",
+    "default_url",
 ]
 
 
@@ -107,13 +107,13 @@ class LoginUIEndpointsProvider(Object):
         for relation in relations:
             relation.data[self._charm.app].update(
                 {
-                    "consent": f"{endpoint}/consent",
-                    "error": f"{endpoint}/error",
-                    "index": f"{endpoint}/index",
-                    "login": f"{endpoint}/login",
-                    "oidc_error": f"{endpoint}/oidc_error",
-                    "registration": f"{endpoint}/registration",
-                    "browser": endpoint,
+                    "consent_url": f"{endpoint}/consent",
+                    "error_url": f"{endpoint}/error",
+                    "index_url": f"{endpoint}/index",
+                    "login_url": f"{endpoint}/login",
+                    "oidc_error_url": f"{endpoint}/oidc_error",
+                    "registration_url": f"{endpoint}/registration",
+                    "default_url": endpoint,
                 }
             )
 
@@ -156,13 +156,7 @@ class LoginUIEndpointsRequirer(Object):
         if len(endpoints) == 0:
             raise LoginUIEndpointsRelationMissingError()
 
-        remote_app = [
-            app
-            for app in endpoints[0].data.keys()
-            if isinstance(app, Application) and not app._is_our_app
-        ][0]
-
-        data = endpoints[0].data[remote_app]
+        data = endpoints[0].data[endpoints[0].app]
         return_dict = {}
 
         for k in RELATION_KEYS:
