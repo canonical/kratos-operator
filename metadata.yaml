@@ -27,6 +27,9 @@ requires:
   endpoint-info:
     interface: hydra_endpoints
     limit: 1
+  ui-endpoint-info:
+    interface: login_ui_endpoints
+    limit: 1
 peers:
   kratos-peers:
     interface: kratos-peers

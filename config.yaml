@@ -14,7 +14,3 @@ options:
       Run Kratos on dev mode, it is needed if HTTPS is not set up. This should only be used for development purposes.
     type: boolean
     default: False
-  login_ui_url:
-    description: Kratos UI URL
-    type: string
-    default: "http://127.0.0.1:4455/"

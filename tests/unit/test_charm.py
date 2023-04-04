@@ -65,6 +65,26 @@ def setup_hydra_relation(harness) -> int:
     return relation_id
 
 
+def setup_login_ui_relation(harness) -> int:
+    relation_id = harness.add_relation("ui-endpoint-info", "identity-platform-login-ui-operator")
+    harness.add_relation_unit(relation_id, "identity-platform-login-ui-operator/0")
+    endpoint = f"http://public:80/{harness.model.name}-identity-platform-login-ui-operator"
+    harness.update_relation_data(
+        relation_id,
+        "identity-platform-login-ui-operator",
+        {
+            "consent": f"{endpoint}/consent",
+            "error": f"{endpoint}/error",
+            "index": f"{endpoint}/index",
+            "login": f"{endpoint}/login",
+            "oidc_error": f"{endpoint}/oidc_error",
+            "registration": f"{endpoint}/registration",
+            "browser": endpoint,
+        },
+    )
+    return relation_id
+
+
 def trigger_database_changed(harness) -> None:
     db_relation_id = harness.add_relation("pg-database", "postgresql-k8s")
     harness.add_relation_unit(db_relation_id, "postgresql-k8s/0")
@@ -170,6 +190,7 @@ def test_on_pebble_ready_service_started_when_database_is_created(harness) -> No
 
 def test_on_pebble_ready_has_correct_config_when_database_is_created(harness) -> None:
     setup_postgres_relation(harness)
+    login_relation_id = setup_login_ui_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
@@ -183,17 +204,25 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness) ->
             ],
         },
         "selfservice": {
-            "default_browser_return_url": "http://127.0.0.1:4455/",
+            "default_browser_return_url": harness.get_relation_data(
+                login_relation_id, "identity-platform-login-ui-operator"
+            )["browser"],
             "flows": {
                 "error": {
-                    "ui_url": "http://127.0.0.1:4455/oidc_error",
+                    "ui_url": harness.get_relation_data(
+                        login_relation_id, "identity-platform-login-ui-operator"
+                    )["error"],
                 },
                 "login": {
-                    "ui_url": "http://127.0.0.1:4455/login",
+                    "ui_url": harness.get_relation_data(
+                        login_relation_id, "identity-platform-login-ui-operator"
+                    )["login"],
                 },
                 "registration": {
                     "enabled": True,
-                    "ui_url": "http://127.0.0.1:4455/registration",
+                    "ui_url": harness.get_relation_data(
+                        login_relation_id, "identity-platform-login-ui-operator"
+                    )["registration"],
                 },
             },
         },
@@ -427,6 +456,7 @@ def test_on_client_config_changed_when_no_dns_available(harness) -> None:
 def test_on_client_config_changed_with_ingress(harness, mocked_container) -> None:
     setup_postgres_relation(harness)
     setup_ingress_relation(harness, "public")
+    login_relation_id = setup_login_ui_relation(harness)
     relation_id = setup_external_provider_relation(harness)
     container = harness.model.unit.get_container(CONTAINER_NAME)
 
@@ -439,18 +469,26 @@ def test_on_client_config_changed_with_ingress(harness, mocked_container) -> Non
             ],
         },
         "selfservice": {
-            "default_browser_return_url": "http://127.0.0.1:4455/",
+            "default_browser_return_url": harness.get_relation_data(
+                login_relation_id, "identity-platform-login-ui-operator"
+            )["browser"],
             "flows": {
                 "error": {
-                    "ui_url": "http://127.0.0.1:4455/oidc_error",
+                    "ui_url": harness.get_relation_data(
+                        login_relation_id, "identity-platform-login-ui-operator"
+                    )["error"],
                 },
                 "login": {
-                    "ui_url": "http://127.0.0.1:4455/login",
+                    "ui_url": harness.get_relation_data(
+                        login_relation_id, "identity-platform-login-ui-operator"
+                    )["login"],
                 },
                 "registration": {
                     "enabled": True,
                     "after": {"oidc": {"hooks": [{"hook": "session"}]}},
-                    "ui_url": "http://127.0.0.1:4455/registration",
+                    "ui_url": harness.get_relation_data(
+                        login_relation_id, "identity-platform-login-ui-operator"
+                    )["registration"],
                 },
             },
             "methods": {
@@ -501,6 +539,7 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
     provider_id = "generic_9d07bcc95549089d7f16120e8bed5396469a5426"
     harness.update_config({"external_url": "https://example.com"})
     setup_postgres_relation(harness)
+    login_relation_id = setup_login_ui_relation(harness)
     relation_id = setup_external_provider_relation(harness)
     container = harness.model.unit.get_container(CONTAINER_NAME)
 
@@ -513,18 +552,26 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
             ],
         },
         "selfservice": {
-            "default_browser_return_url": "http://127.0.0.1:4455/",
+            "default_browser_return_url": harness.get_relation_data(
+                login_relation_id, "identity-platform-login-ui-operator"
+            )["browser"],
             "flows": {
                 "error": {
-                    "ui_url": "http://127.0.0.1:4455/oidc_error",
+                    "ui_url": harness.get_relation_data(
+                        login_relation_id, "identity-platform-login-ui-operator"
+                    )["error"],
                 },
                 "login": {
-                    "ui_url": "http://127.0.0.1:4455/login",
+                    "ui_url": harness.get_relation_data(
+                        login_relation_id, "identity-platform-login-ui-operator"
+                    )["login"],
                 },
                 "registration": {
                     "enabled": True,
                     "after": {"oidc": {"hooks": [{"hook": "session"}]}},
-                    "ui_url": "http://127.0.0.1:4455/registration",
+                    "ui_url": harness.get_relation_data(
+                        login_relation_id, "identity-platform-login-ui-operator"
+                    )["registration"],
                 },
             },
             "methods": {
@@ -577,6 +624,7 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
 
 def test_on_client_config_changed_with_hydra(harness) -> None:
     setup_postgres_relation(harness)
+    login_relation_id = setup_login_ui_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
@@ -592,17 +640,25 @@ def test_on_client_config_changed_with_hydra(harness) -> None:
             ],
         },
         "selfservice": {
-            "default_browser_return_url": "http://127.0.0.1:4455/",
+            "default_browser_return_url": harness.get_relation_data(
+                login_relation_id, "identity-platform-login-ui-operator"
+            )["browser"],
             "flows": {
                 "error": {
-                    "ui_url": "http://127.0.0.1:4455/oidc_error",
+                    "ui_url": harness.get_relation_data(
+                        login_relation_id, "identity-platform-login-ui-operator"
+                    )["error"],
                 },
                 "login": {
-                    "ui_url": "http://127.0.0.1:4455/login",
+                    "ui_url": harness.get_relation_data(
+                        login_relation_id, "identity-platform-login-ui-operator"
+                    )["login"],
                 },
                 "registration": {
                     "enabled": True,
-                    "ui_url": "http://127.0.0.1:4455/registration",
+                    "ui_url": harness.get_relation_data(
+                        login_relation_id, "identity-platform-login-ui-operator"
+                    )["registration"],
                 },
             },
         },
@@ -630,6 +686,7 @@ def test_on_client_config_changed_with_hydra(harness) -> None:
 def test_on_client_config_changed_when_missing_hydra_relation_data(harness) -> None:
     setup_postgres_relation(harness)
     setup_peer_relation(harness)
+    login_relation_id = setup_login_ui_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
@@ -646,17 +703,25 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness) -> N
             ],
         },
         "selfservice": {
-            "default_browser_return_url": "http://127.0.0.1:4455/",
+            "default_browser_return_url": harness.get_relation_data(
+                login_relation_id, "identity-platform-login-ui-operator"
+            )["browser"],
             "flows": {
                 "error": {
-                    "ui_url": "http://127.0.0.1:4455/oidc_error",
+                    "ui_url": harness.get_relation_data(
+                        login_relation_id, "identity-platform-login-ui-operator"
+                    )["error"],
                 },
                 "login": {
-                    "ui_url": "http://127.0.0.1:4455/login",
+                    "ui_url": harness.get_relation_data(
+                        login_relation_id, "identity-platform-login-ui-operator"
+                    )["login"],
                 },
                 "registration": {
                     "enabled": True,
-                    "ui_url": "http://127.0.0.1:4455/registration",
+                    "ui_url": harness.get_relation_data(
+                        login_relation_id, "identity-platform-login-ui-operator"
+                    )["registration"],
                 },
             },
         },
