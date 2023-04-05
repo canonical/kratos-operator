@@ -10,7 +10,7 @@ import logging
 from functools import cached_property
 from os.path import join
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 import requests
 from charms.data_platform_libs.v0.data_interfaces import (
@@ -48,7 +48,7 @@ PEER_KEY_DB_MIGRATE_VERSION = "db_migrate_version"
 DB_MIGRATE_VERSION = "0.11.1"
 
 
-def dict_to_action_output(d):
+def dict_to_action_output(d: Dict) -> Dict:
     """Convert all keys in a dict to the format of a juju action output."""
     ret = {}
     for k, v in d.items():
@@ -475,11 +475,13 @@ class KratosCharm(CharmBase):
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
-        event.log("Getting the identity.")
         identity_id = event.params.get("identity-id")
         email = event.params.get("email")
         if identity_id and email:
             event.fail("Only one of identity-id and email can be provided.")
+            return
+        elif not identity_id and not email:
+            event.fail("One of identity-id and email must be provided.")
             return
 
         event.log("Fetching the identity.")
@@ -512,6 +514,9 @@ class KratosCharm(CharmBase):
         if identity_id and email:
             event.fail("Only one of identity-id and email can be provided.")
             return
+        elif not identity_id and not email:
+            event.fail("One of identity-id and email must be provided.")
+            return
 
         if email:
             identity = self.kratos.get_identity_from_email(email)
@@ -540,12 +545,16 @@ class KratosCharm(CharmBase):
         if identity_id and email:
             event.fail("Only one of identity-id and email can be provided.")
             return
+        elif not identity_id and not email:
+            event.fail("One of identity-id and email must be provided.")
+            return
 
         if email:
             identity = self.kratos.get_identity_from_email(email)
             if not identity:
                 event.fail("Couldn't retrieve identity_id from email.")
                 return
+            identity_id = identity["id"]
 
         if recovery_method == "code":
             fun = self.kratos.recover_password_with_code
@@ -594,7 +603,11 @@ class KratosCharm(CharmBase):
         event.log(f"Successfully created admin account: {identity_id}.")
         if not password:
             event.log("Creating magic link for resetting admin password.")
-            link = self.kratos.recover_password_with_link(identity_id)
+            try:
+                link = self.kratos.recover_password_with_link(identity_id)
+            except requests.exceptions.RequestException as e:
+                event.fail(f"Failed to request Kratos API: {e}")
+                return
             res["password-reset-link"] = link["recovery_link"]
             res["expires-at"] = link["expires_at"]
 
@@ -605,7 +618,7 @@ class KratosCharm(CharmBase):
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
-        timeout = event.params.get("timeout")
+        timeout = float(event.params.get("timeout", 120))
         event.log("Migrating database.")
         try:
             _, err = self.kratos.run_migration(timeout=timeout)

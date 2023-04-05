@@ -80,7 +80,7 @@ class KratosAPI:
         logger.info(f"Successfully deleted identity: {identity_id}")
         return stdout
 
-    def list_identities(self):
+    def list_identities(self) -> List:
         """List all identities."""
         cmd = [
             "kratos",
@@ -129,7 +129,7 @@ class KratosAPI:
 
         return r.json()
 
-    def run_migration(self, timeout: float = 120) -> Tuple[Union[str, bytes], Union[str, bytes]]:
+    def run_migration(self, timeout: float = 120) -> Tuple[str, str]:
         """Run an sql migration."""
         cmd = [
             "kratos",
@@ -143,12 +143,18 @@ class KratosAPI:
         return self._run_cmd(cmd, timeout=timeout)
 
     def _run_cmd(
-        self, cmd: List[str], timeout: float = 20, stdin: str = None
-    ) -> Tuple[Union[str, bytes], Union[str, bytes]]:
+        self, cmd: List[str], timeout: float = 20, stdin: Optional[str] = None
+    ) -> Tuple[str, str]:
         logger.debug(f"Running cmd: {cmd}")
         process = self.container.exec(cmd, timeout=timeout)
         if stdin:
             process.stdin.write(stdin)
             process.stdin.close()
         stdout, stderr = process.wait_output()
+
+        if isinstance(stdout, bytes):
+            stdout = stdout.decode()
+        if isinstance(stderr, bytes):
+            stderr = stderr.decode()
+
         return stdout, stderr

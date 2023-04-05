@@ -16,21 +16,6 @@ delete-identity:
     email:
       description: The user's email
       type: string
-# reset-password:
-#   description: |
-#     Reset a user’s using either the identity ID or the user email, either a magic
-#     link or link and a one time code will be returned where the user will be asked to
-#     provide a new password
-#   params:
-#     identity-id:
-#       description: The Identity ID
-#       type: string
-#     email:
-#       description: The user's email
-#       type: string
-#     recovery-method:
-#       description: Whether a magic link or a one-time code will be used for resetting
-#       default: "link"
 create-admin-account:
   description: |
     Create an admin user. If no password was provided, the command will return a

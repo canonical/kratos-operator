@@ -102,7 +102,7 @@ async def test_has_admin_ingress(ops_test: OpsTest):
 
 
 @pytest.mark.abort_on_fail
-async def test_create_admin_account(ops_test: OpsTest):
+async def test_create_admin_account(ops_test: OpsTest) -> None:
     action = (
         await ops_test.model.applications[APP_NAME]
         .units[0]
@@ -123,7 +123,7 @@ async def test_create_admin_account(ops_test: OpsTest):
     assert "identity-id" in res.results
 
 
-async def test_get_identity(ops_test: OpsTest):
+async def test_get_identity(ops_test: OpsTest) -> None:
     action = (
         await ops_test.model.applications[APP_NAME]
         .units[0]
@@ -141,7 +141,7 @@ async def test_get_identity(ops_test: OpsTest):
 @pytest.mark.skip(
     reason=("the recovery and settings UI page must be provided to kratos for this test to work")
 )
-async def test_reset_password(ops_test: OpsTest):
+async def test_reset_password(ops_test: OpsTest) -> None:
     action = (
         await ops_test.model.applications[APP_NAME]
         .units[0]
@@ -156,7 +156,7 @@ async def test_reset_password(ops_test: OpsTest):
     assert "recovery_link" in res
 
 
-async def test_delete_identity(ops_test: OpsTest):
+async def test_delete_identity(ops_test: OpsTest) -> None:
     action = (
         await ops_test.model.applications[APP_NAME]
         .units[0]

@@ -1,6 +1,7 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import json
 from typing import Dict, Generator
 from unittest.mock import MagicMock
 
@@ -10,6 +11,7 @@ from ops.testing import Harness
 from pytest_mock import MockerFixture
 
 from charm import KratosCharm
+from kratos import KratosAPI
 
 
 @pytest.fixture()
@@ -23,6 +25,20 @@ def harness(mocked_kubernetes_service_patcher) -> Harness:
 
 
 @pytest.fixture()
+def mocked_kratos_process() -> MagicMock:
+    mock = MagicMock()
+    mock.wait_output.return_value = (json.dumps(dict(identity_id=1234)), None)
+    return mock
+
+
+@pytest.fixture()
+def kratos_api(mocked_kratos_process):
+    container = MagicMock()
+    container.exec = MagicMock(return_value=mocked_kratos_process)
+    return KratosAPI("http://localhost:4434", container, "/etc/config/kratos.yaml")
+
+
+@pytest.fixture()
 def mocked_kubernetes_service_patcher(mocker):
     mocked_service_patcher = mocker.patch("charm.KubernetesServicePatch")
     mocked_service_patcher.return_value = lambda x, y: None
@@ -30,8 +46,11 @@ def mocked_kubernetes_service_patcher(mocker):
 
 
 @pytest.fixture()
-def mocked_kratos_is_running(mocker: MockerFixture) -> Generator:
-    return mocker.patch("charm.KratosCharm._kratos_service_is_running", return_value=True)
+def mocked_kratos_service(harness: Harness, mocked_container: MagicMock) -> Generator:
+    service = MagicMock()
+    service.is_running = lambda: True
+    mocked_container.get_service = MagicMock(return_value=service)
+    return service
 
 
 @pytest.fixture()
@@ -136,23 +155,39 @@ def mocked_get_identity_from_email(mocker: MockerFixture, kratos_identity_json: 
 
 
 @pytest.fixture()
-def mocked_recover_password_with_code(mocker: MockerFixture) -> MagicMock:
-    ret = {
+def recover_password_with_code_resp() -> Dict:
+    return {
         "recovery_link": "http://kratos-ui/recovery?flow=2ebd739f-7c9c-404e-8ec9-769c055f5393",
         "recovery_code": "123456",
         "expires_at": "2023-04-03T21:47:52.869721347Z",
     }
-    mock = mocker.patch("charm.KratosAPI.recover_password_with_code", return_value=ret)
+
+
+@pytest.fixture()
+def mocked_recover_password_with_code(
+    mocker: MockerFixture, recover_password_with_code_resp: Dict
+) -> MagicMock:
+    mock = mocker.patch(
+        "charm.KratosAPI.recover_password_with_code", return_value=recover_password_with_code_resp
+    )
     return mock
 
 
 @pytest.fixture()
-def mocked_recover_password_with_link(mocker: MockerFixture) -> MagicMock:
-    ret = {
+def recover_password_with_link_resp() -> Dict:
+    return {
         "recovery_link": "http://kratos-ui/self-service/recovery?flow=e18560f9-8f50-4679-bcc9-d6cea2bb203f&token=5UJ9GgQTxvSp53zkwgOkjG9eRvnYjEYq",
         "expires_at": "2023-04-03T21:47:52.869721347Z",
     }
-    mock = mocker.patch("charm.KratosAPI.recover_password_with_link", return_value=ret)
+
+
+@pytest.fixture()
+def mocked_recover_password_with_link(
+    mocker: MockerFixture, recover_password_with_link_resp: Dict
+) -> MagicMock:
+    mock = mocker.patch(
+        "charm.KratosAPI.recover_password_with_link", return_value=recover_password_with_link_resp
+    )
     return mock
 
 
