@@ -6,7 +6,7 @@ on:
     branches:
       - main
     paths:
-      - "./lib/charms/kratos/v0/kratos_endpoints.py"
+      - "lib/charms/kratos/v0/kratos_endpoints.py"
 
 jobs:
   publish-lib:
