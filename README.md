@@ -107,6 +107,56 @@ Relate the two charms to provide `identity-platform-login-ui-operator` with krat
 juju integrate kratos identity-platform-login-ui-operator
 ```
 
+## Actions
+
+The kratos charm offers the following actions:
+
+### create-admin-account
+
+This action can be used to create an admin account:
+
+```console
+juju run kratos/0 create-admin-account username=admin123 password=abc123456 email=admin@example.com
+```
+
+NOTE: The email registered for an admin account must not be used from any other user (admin or not).
+
+### get-identity
+
+This action can be used to get information about an existing identity:
+
+An identity_id can be used to specify the identity:
+```console
+juju run kratos/0 get-identity identity-id={identity_id}
+```
+
+An email can be used to specify the identity as well:
+```console
+juju run kratos/0 get-identity email={email}
+```
+
+### delete-identity
+
+This action can be used to delete an existing identity:
+
+An identity_id can be used to specify the identity:
+```console
+juju run kratos/0 delete-identity identity-id={identity_id}
+```
+
+An email can be used to specify the identity as well:
+```console
+juju run kratos/0 delete-identity email={email}
+```
+
+### run-migration
+
+This action can be used to trigger a database migration:
+
+```console
+juju run kratos/0 run-migration
+```
+
 ## OCI Images
 
 The image used by this charm is hosted on [Docker Hub](https://hub.docker.com/r/oryd/kratos) and maintained by Ory.
