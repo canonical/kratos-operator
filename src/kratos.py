@@ -6,7 +6,7 @@
 import json
 import logging
 from os.path import join
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple
 
 import requests
 from ops.model import Container

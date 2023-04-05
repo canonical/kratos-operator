@@ -1,3 +1,6 @@
+# Copyright 2022 Canonical Ltd.
+# See LICENSE file for licensing details.
+
 import json
 from typing import Dict, Tuple
 from unittest.mock import MagicMock
