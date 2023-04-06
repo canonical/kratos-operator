@@ -18,3 +18,9 @@ options:
     description: Kratos UI URL
     type: string
     default: "http://127.0.0.1:4455/"
+  identity_schemas:
+    description: A mapping of schema_id to identity schemas.
+    type: string
+  default_identity_schema:
+    description: The default identity schema id, this option only works when `identity_schemas` is defined
+    type: string

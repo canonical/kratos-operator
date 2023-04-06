@@ -13,3 +13,4 @@ parts:
   charm:
     prime:
       - claim_mappers/**
+      - identity_schemas/**

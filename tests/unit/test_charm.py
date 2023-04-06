@@ -1,6 +1,7 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import base64
 import json
 from unittest.mock import MagicMock
 
@@ -17,6 +18,27 @@ CONTAINER_NAME = "kratos"
 DB_USERNAME = "fake_relation_id_1"
 DB_PASSWORD = "fake-password"
 DB_ENDPOINTS = "postgresql-k8s-primary.namespace.svc.cluster.local:5432"
+IDENTITY_SCHEMA = {
+  "$id": "https://schemas.ory.sh/presets/kratos/quickstart/email-password/identity.schema.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Person",
+  "type": "object",
+  "properties": {
+    "traits": {
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "title": "E-Mail"
+          },
+        "name": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
 
 
 def setup_postgres_relation(harness: Harness) -> None:
@@ -183,10 +205,10 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness: Ha
     expected_config = {
         "log": {"level": "trace"},
         "identity": {
-            "default_schema_id": "default",
+            "default_schema_id": "social_user_v0",
             "schemas": [
-                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"},
-                {"id": "admin", "url": "file:///etc/config/identity.admin.schema.json"},
+                {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
+                {"id": "social_user_v0", "url": "file:///etc/config/schemas/default/social_user_v0.json"},
             ],
         },
         "selfservice": {
@@ -237,6 +259,109 @@ def test_on_pebble_ready_when_database_not_created_yet(harness: Harness) -> None
 
     assert isinstance(harness.model.unit.status, WaitingStatus)
     assert "Waiting for database creation" in harness.charm.unit.status.message
+
+
+def test_on_config_changed_when_identity_schemas_config(harness: Harness) -> None:
+    setup_postgres_relation(harness)
+    schema_id = "user_v0"
+    harness.update_config(
+        dict(
+            identity_schemas=json.dumps({ "user_v1": IDENTITY_SCHEMA, schema_id: IDENTITY_SCHEMA}),
+            default_identity_schema=schema_id
+        )
+    )
+
+    expected_config = {
+        "log": {"level": "trace"},
+        "identity": {
+            "default_schema_id": schema_id,
+            "schemas": [
+                {"id": "user_v0", "url": f"base64://{base64.b64encode(json.dumps(IDENTITY_SCHEMA).encode()).decode()}"},
+                {"id": "user_v1", "url": f"base64://{base64.b64encode(json.dumps(IDENTITY_SCHEMA).encode()).decode()}"},
+            ],
+        },
+        "selfservice": {
+            "default_browser_return_url": "http://127.0.0.1:4455/",
+            "flows": {
+                "error": {
+                    "ui_url": "http://127.0.0.1:4455/oidc_error",
+                },
+                "login": {
+                    "ui_url": "http://127.0.0.1:4455/login",
+                },
+                "registration": {
+                    "enabled": True,
+                    "ui_url": "http://127.0.0.1:4455/registration",
+                },
+            },
+        },
+        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "base_url": "None",
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+    }
+
+    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
+
+
+def test_on_config_changed_when_identity_schemas_config_unset(harness: Harness) -> None:
+    setup_postgres_relation(harness)
+    schema_id = "user_v0"
+    harness.update_config(
+        dict(
+            identity_schemas=json.dumps({ "user_v1": IDENTITY_SCHEMA, schema_id: IDENTITY_SCHEMA}),
+            default_identity_schema=schema_id
+        )
+    )
+    harness.update_config(unset=["identity_schemas", "default_identity_schema"])
+
+    expected_config = {
+        "log": {"level": "trace"},
+        "identity": {
+            "default_schema_id": "social_user_v0",
+            "schemas": [
+                {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
+                {"id": "social_user_v0", "url": "file:///etc/config/schemas/default/social_user_v0.json"},
+            ],
+        },
+        "selfservice": {
+            "default_browser_return_url": "http://127.0.0.1:4455/",
+            "flows": {
+                "error": {
+                    "ui_url": "http://127.0.0.1:4455/oidc_error",
+                },
+                "login": {
+                    "ui_url": "http://127.0.0.1:4455/login",
+                },
+                "registration": {
+                    "enabled": True,
+                    "ui_url": "http://127.0.0.1:4455/registration",
+                },
+            },
+        },
+        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "base_url": "None",
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+    }
+
+    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
 
 
 def test_on_database_created_cannot_connect_container(harness: Harness) -> None:
@@ -452,10 +577,10 @@ def test_on_client_config_changed_with_ingress(
     expected_config = {
         "log": {"level": "trace"},
         "identity": {
-            "default_schema_id": "default",
+            "default_schema_id": "social_user_v0",
             "schemas": [
-                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"},
-                {"id": "admin", "url": "file:///etc/config/identity.admin.schema.json"},
+                {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
+                {"id": "social_user_v0", "url": "file:///etc/config/schemas/default/social_user_v0.json"},
             ],
         },
         "selfservice": {
@@ -529,10 +654,10 @@ def test_on_client_config_changed_with_external_url_config(
     expected_config = {
         "log": {"level": "trace"},
         "identity": {
-            "default_schema_id": "default",
+            "default_schema_id": "social_user_v0",
             "schemas": [
-                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"},
-                {"id": "admin", "url": "file:///etc/config/identity.admin.schema.json"},
+                {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
+                {"id": "social_user_v0", "url": "file:///etc/config/schemas/default/social_user_v0.json"},
             ],
         },
         "selfservice": {
@@ -609,10 +734,10 @@ def test_on_client_config_changed_with_hydra(harness: Harness) -> None:
     expected_config = {
         "log": {"level": "trace"},
         "identity": {
-            "default_schema_id": "default",
+            "default_schema_id": "social_user_v0",
             "schemas": [
-                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"},
-                {"id": "admin", "url": "file:///etc/config/identity.admin.schema.json"},
+                {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
+                {"id": "social_user_v0", "url": "file:///etc/config/schemas/default/social_user_v0.json"},
             ],
         },
         "selfservice": {
@@ -664,10 +789,10 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harn
     expected_config = {
         "log": {"level": "trace"},
         "identity": {
-            "default_schema_id": "default",
+            "default_schema_id": "social_user_v0",
             "schemas": [
-                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"},
-                {"id": "admin", "url": "file:///etc/config/identity.admin.schema.json"},
+                {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
+                {"id": "social_user_v0", "url": "file:///etc/config/schemas/default/social_user_v0.json"},
             ],
         },
         "selfservice": {
