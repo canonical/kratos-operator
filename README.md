@@ -123,14 +123,14 @@ NOTE: The email registered for an admin account must not be used for any other u
 
 ### get-identity
 
-This action can be used to get information about an existing identity:
+This action can be used to get information about an existing identity by email or id:
 
-An identity_id can be used to specify the identity:
+By id:
 ```console
 juju run kratos/0 get-identity identity-id={identity_id}
 ```
 
-An email can be used to specify the identity as well:
+By email:
 ```console
 juju run kratos/0 get-identity email={email}
 ```
