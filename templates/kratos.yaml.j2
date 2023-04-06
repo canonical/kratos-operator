@@ -6,13 +6,20 @@ identity:
         - id: default
           url: 'file://{{ identity_schema_file_path }}'
 selfservice:
+    {%- if default_browser_return_url %}
     default_browser_return_url:
         {{ default_browser_return_url }}
+    {%- endif %}
     flows:
+        {%- if error_ui_url %}
         error:
             ui_url: {{ error_ui_url }}
+        {%- endif %}
+        {%- if login_ui_url %}
         login:
             ui_url: {{ login_ui_url }}
+        {%- endif %}
+        {%- if registration_ui_url %}
         registration:
             enabled: True
             ui_url: {{ registration_ui_url }}
@@ -22,6 +29,7 @@ selfservice:
                     hooks:
                     - hook: session
             {%- endif %}
+        {%- endif %}
     {%- if oidc_providers %}
     methods:
         password:

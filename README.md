@@ -95,7 +95,7 @@ For further guidance on integration on hydra side, visit the [hydra-operator](ht
 
 ### Identity Platform Login UI
 
-The following instructions assume that you have deployed `traefik-admin` and `traefik-public` charms and related them to hydra. Note that the UI charm should run behind a proxy.
+The following instructions assume that you have deployed `traefik-admin` and `traefik-public` charms and related them to Kratos. Note that the UI charm should run behind a proxy.
 
 This charm offers integration with [identity-platform-login-ui-operator](https://github.com/canonical/identity-platform-login-ui-operator). In order to integrate them, run:
 

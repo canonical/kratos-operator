@@ -8,7 +8,7 @@ This library provides a Python API for both requesting and providing a public en
 To get started using the library, you need to fetch the library using `charmcraft`.
 ```shell
 cd some-charm
-charmcraft fetch-lib charms.identity_platform_login_ui.v0.login_ui_endpoint
+charmcraft fetch-lib charms.identity_platform_login_ui.v0.login_ui_endpoints
 ```
 To use the library from the requirer side:
 In the `metadata.yaml` of the charm, add the following:
@@ -42,7 +42,6 @@ from typing import Dict, Optional
 
 from ops.charm import CharmBase, RelationCreatedEvent
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
-from ops.model import Application
 
 # The unique Charmhub library identifier, never change it
 LIBID = "460ab09e6b874d1c891b67f83586c9a7"
@@ -52,7 +51,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 3
 
 RELATION_NAME = "ui-endpoint-info"
 INTERFACE_NAME = "login_ui_endpoints"
@@ -140,6 +139,14 @@ class LoginUIEndpointsRelationDataMissingError(LoginUIEndpointsRelationError):
         super().__init__(self.message)
 
 
+class LoginUIEndpointsRelationUnavailableError(LoginUIEndpointsRelationError):
+    """Raised when Login UI cannot be accessed."""
+
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__(self.message)
+
+
 class LoginUIEndpointsRequirer(Object):
     """Requirer side of the ui-endpoint-info relation."""
 
@@ -157,17 +164,15 @@ class LoginUIEndpointsRequirer(Object):
             raise LoginUIEndpointsRelationMissingError()
 
         data = endpoints[0].data[endpoints[0].app]
-        return_dict = {}
+                
+        if any(not data.get(k := key) for key in RELATION_KEYS):
+            raise LoginUIEndpointsRelationDataMissingError(
+                f"Missing endpoint {k} in ui-endpoint-info relation data"
+            )
 
-        for k in RELATION_KEYS:
-            if k not in data:
-                raise LoginUIEndpointsRelationDataMissingError(
-                    "Missing endpoints in ui-endpoint-info relation data"
-                )
-            if data[k] == "":
-                raise LoginUIEndpointsRelationDataMissingError(
-                    "Missing endpoints in ui-endpoint-info relation data"
-                )
-            return_dict[k] = data[k]
+        if data["default_url"] == "":
+            raise LoginUIEndpointsRelationUnavailableError(
+                "Endpoints in ui-endpoint-info are unavailable"
+            )
 
-        return return_dict
+        return dict(data)
