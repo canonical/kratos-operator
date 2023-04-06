@@ -10,6 +10,7 @@ selfservice:
     default_browser_return_url:
         {{ default_browser_return_url }}
     {%- endif %}
+    {%- if error_ui_url or login_ui_url or registration_ui_url %}
     flows:
         {%- if error_ui_url %}
         error:
@@ -30,6 +31,7 @@ selfservice:
                     - hook: session
             {%- endif %}
         {%- endif %}
+    {%- endif %}
     {%- if oidc_providers %}
     methods:
         password:
