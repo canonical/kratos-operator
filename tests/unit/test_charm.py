@@ -779,3 +779,86 @@ def test_kratos_endpoint_info_relation_data_with_ingress_relation_data(harness) 
     }
 
     assert harness.get_relation_data(endpoint_info_relation_id, "kratos") == expected_data
+
+
+def test_on_client_config_changed_without_login_ui_endpoints(harness) -> None:
+    setup_postgres_relation(harness)
+
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    setup_hydra_relation(harness)
+
+    login_ui_relation_id = harness.add_relation(
+        "ui-endpoint-info", "identity-platform-login-ui-operator"
+    )
+    harness.add_relation_unit(login_ui_relation_id, "identity-platform-login-ui-operator/0")
+
+    expected_config = {
+        "log": {"level": "trace"},
+        "identity": {
+            "default_schema_id": "default",
+            "schemas": [
+                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
+            ],
+        },
+        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "base_url": "None",
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+        "oauth2_provider": {
+            "url": "http://hydra-admin-url:80/testing-hydra",
+        },
+    }
+
+    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
+    assert yaml.load(container_config.read(), yaml.Loader) == expected_config
+
+
+def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(harness) -> None:
+    setup_postgres_relation(harness)
+    setup_peer_relation(harness)
+
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    relation_id = harness.add_relation("endpoint-info", "hydra")
+    harness.add_relation_unit(relation_id, "hydra/0")
+
+    login_ui_relation_id = harness.add_relation(
+        "ui-endpoint-info", "identity-platform-login-ui-operator"
+    )
+    harness.add_relation_unit(login_ui_relation_id, "identity-platform-login-ui-operator/0")
+
+    expected_config = {
+        "log": {"level": "trace"},
+        "identity": {
+            "default_schema_id": "default",
+            "schemas": [
+                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
+            ],
+        },
+        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "base_url": "None",
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+    }
+
+    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
+    assert yaml.load(container_config.read(), yaml.Loader) == expected_config
