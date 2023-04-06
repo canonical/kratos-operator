@@ -119,7 +119,7 @@ This action can be used to create an admin account:
 juju run kratos/0 create-admin-account username=admin123 password=abc123456 email=admin@example.com
 ```
 
-NOTE: The email registered for an admin account must not be used from any other user (admin or not).
+NOTE: The email registered for an admin account must not be used for any other user (admin or not).
 
 ### get-identity
 
