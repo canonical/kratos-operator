@@ -28,7 +28,7 @@ async def get_unit_address(ops_test: OpsTest, app_name: str, unit_num: int) -> s
 
 
 @pytest.mark.abort_on_fail
-async def test_build_and_deploy(ops_test: OpsTest):
+async def test_build_and_deploy(ops_test: OpsTest) -> None:
     """Build the charm-under-test and deploy it.
 
     Assert on the unit status before any relations/configurations take place.
@@ -55,7 +55,7 @@ async def test_build_and_deploy(ops_test: OpsTest):
         assert ops_test.model.applications[APP_NAME].units[0].workload_status == "active"
 
 
-async def test_ingress_relation(ops_test: OpsTest):
+async def test_ingress_relation(ops_test: OpsTest) -> None:
     await ops_test.model.deploy(
         TRAEFIK,
         application_name=TRAEFIK_PUBLIC_APP,
@@ -79,7 +79,7 @@ async def test_ingress_relation(ops_test: OpsTest):
     )
 
 
-async def test_has_public_ingress(ops_test: OpsTest):
+async def test_has_public_ingress(ops_test: OpsTest) -> None:
     # Get the traefik address and try to reach kratos
     public_address = await get_unit_address(ops_test, TRAEFIK_PUBLIC_APP, 0)
 
@@ -90,7 +90,7 @@ async def test_has_public_ingress(ops_test: OpsTest):
     assert resp.status_code == 200
 
 
-async def test_has_admin_ingress(ops_test: OpsTest):
+async def test_has_admin_ingress(ops_test: OpsTest) -> None:
     # Get the traefik address and try to reach kratos
     admin_address = await get_unit_address(ops_test, TRAEFIK_ADMIN_APP, 0)
 

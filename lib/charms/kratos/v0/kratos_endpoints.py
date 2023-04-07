@@ -139,7 +139,10 @@ class KratosEndpointsRequirer(Object):
         if len(endpoints) == 0:
             raise KratosEndpointsRelationMissingError()
 
-        data = endpoints[0].data[endpoints[0].app]
+        if not (app := endpoints[0].app):
+            raise KratosEndpointsRelationMissingError()
+
+        data = endpoints[0].data[app]
 
         if "public_endpoint" not in data:
             raise KratosEndpointsRelationDataMissingError(

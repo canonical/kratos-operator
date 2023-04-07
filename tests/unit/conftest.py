@@ -6,6 +6,7 @@ from typing import Dict, Generator
 from unittest.mock import MagicMock
 
 import pytest
+from ops.model import Container
 from ops.pebble import ExecError
 from ops.testing import Harness
 from pytest_mock import MockerFixture
@@ -15,7 +16,7 @@ from kratos import KratosAPI
 
 
 @pytest.fixture()
-def harness(mocked_kubernetes_service_patcher) -> Harness:
+def harness(mocked_kubernetes_service_patcher: MagicMock) -> Harness:
     harness = Harness(KratosCharm)
     harness.set_model_name("kratos-model")
     harness.set_can_connect("kratos", True)
@@ -32,17 +33,17 @@ def mocked_kratos_process() -> MagicMock:
 
 
 @pytest.fixture()
-def kratos_api(mocked_kratos_process):
+def kratos_api(mocked_kratos_process: MagicMock) -> KratosAPI:
     container = MagicMock()
     container.exec = MagicMock(return_value=mocked_kratos_process)
     return KratosAPI("http://localhost:4434", container, "/etc/config/kratos.yaml")
 
 
 @pytest.fixture()
-def mocked_kubernetes_service_patcher(mocker):
+def mocked_kubernetes_service_patcher(mocker: MockerFixture) -> MagicMock:
     mocked_service_patcher = mocker.patch("charm.KubernetesServicePatch")
     mocked_service_patcher.return_value = lambda x, y: None
-    yield mocked_service_patcher
+    return mocked_service_patcher
 
 
 @pytest.fixture()
@@ -54,39 +55,39 @@ def mocked_kratos_service(harness: Harness, mocked_container: MagicMock) -> Gene
 
 
 @pytest.fixture()
-def mocked_fqdn(mocker):
+def mocked_fqdn(mocker: MockerFixture) -> MagicMock:
     mocked_fqdn = mocker.patch("socket.getfqdn")
     mocked_fqdn.return_value = "kratos"
     return mocked_fqdn
 
 
 @pytest.fixture()
-def mocked_container(harness, mocker):
+def mocked_container(harness: Harness, mocker: MockerFixture) -> Container:
     container = harness.model.unit.get_container("kratos")
-    container.restart = mocker.MagicMock()
+    setattr(container, "restart", mocker.MagicMock())
     return container
 
 
 @pytest.fixture()
-def mocked_pebble_exec(mocker):
+def mocked_pebble_exec(mocker: MockerFixture) -> MagicMock:
     mocked_pebble_exec = mocker.patch("ops.model.Container.exec")
-    yield mocked_pebble_exec
+    return mocked_pebble_exec
 
 
 @pytest.fixture()
-def mocked_pebble_exec_success(mocker, mocked_pebble_exec):
+def mocked_pebble_exec_success(mocker: MockerFixture, mocked_pebble_exec: MagicMock) -> MagicMock:
     mocked_process = mocker.patch("ops.pebble.ExecProcess")
     mocked_process.wait_output.return_value = ("Success", None)
     mocked_pebble_exec.return_value = mocked_process
-    yield mocked_pebble_exec
+    return mocked_pebble_exec
 
 
 @pytest.fixture()
-def mocked_pebble_exec_failed(mocked_pebble_exec):
+def mocked_pebble_exec_failed(mocked_pebble_exec: MagicMock) -> MagicMock:
     mocked_pebble_exec.side_effect = ExecError(
-        exit_code=400, stderr="Failed to execute", stdout="Failed", command="test command"
+        exit_code=400, stderr="Failed to execute", stdout="Failed", command=["test", "command"]
     )
-    yield
+    return mocked_pebble_exec
 
 
 @pytest.fixture()
