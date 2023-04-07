@@ -5,12 +5,9 @@ identity:
     schemas:
         - id: default
           url: 'file://{{ identity_schema_file_path }}'
-{%- if default_browser_return_url or oidc_providers %}
 selfservice:
-    {%- if default_browser_return_url %}
     default_browser_return_url:
         {{ default_browser_return_url }}
-    {%- endif %}
     {%- if error_ui_url or login_ui_url or registration_ui_url %}
     flows:
         {%- if error_ui_url %}
@@ -53,7 +50,6 @@ selfservice:
                 {%- endfor %}
             enabled: True
     {%- endif %}
-{%- endif %}
 dsn: postgres://{{ db_info.get('username') }}:{{ db_info.get('password') }}@{{ db_info.get('endpoints') }}/{{ db_info.get('database_name') }}
 courier:
     smtp:

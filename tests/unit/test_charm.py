@@ -13,6 +13,7 @@ CONTAINER_NAME = "kratos"
 DB_USERNAME = "fake_relation_id_1"
 DB_PASSWORD = "fake-password"
 DB_ENDPOINTS = "postgresql-k8s-primary.namespace.svc.cluster.local:5432"
+DEFAULT_BROWSER_RETURN_URL = "http://example-default-return-url.com"
 
 
 def setup_postgres_relation(harness):
@@ -802,6 +803,7 @@ def test_on_client_config_changed_without_login_ui_endpoints(harness) -> None:
                 {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
             ],
         },
+        "selfservice": {"default_browser_return_url": DEFAULT_BROWSER_RETURN_URL},
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
@@ -846,6 +848,7 @@ def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
                 {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
             ],
         },
+        "selfservice": {"default_browser_return_url": DEFAULT_BROWSER_RETURN_URL},
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
