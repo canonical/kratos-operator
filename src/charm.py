@@ -297,11 +297,12 @@ class KratosCharm(CharmBase):
             return
 
         path = storage[0].location
-        if Path(path).glob("*.json") != []:
+        if list(Path(path).glob("*.json")) != []:
             raise NotImplementedError()
         return None
 
     def _get_default_identity_schema_config(self) -> Tuple[Optional[str], Optional[Dict]]:
+        logger.info("Pushing default identity schemas to container")
         # We order the glob to make sure the dict is ordered always has the same order
         returned_schemas = {
             schema_file.stem: f"file://{self._identity_schemas_default_dir_path / schema_file.name}"
@@ -402,6 +403,7 @@ class KratosCharm(CharmBase):
 
         self.unit.status = MaintenanceStatus("Configuring/deploying resources")
 
+        self._push_default_files()
         self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
         logger.info("Pebble plan updated with new configuration, replanning")
         self._container.replan()
@@ -414,7 +416,6 @@ class KratosCharm(CharmBase):
             == DB_MIGRATE_VERSION
         ):
             self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
-            self._push_default_files()
             self._container.start(self._container_name)
             self.unit.status = ActiveStatus()
             return
