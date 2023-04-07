@@ -10,7 +10,7 @@ import logging
 from functools import cached_property
 from os.path import join
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import requests
 from charms.data_platform_libs.v0.data_interfaces import (
@@ -37,9 +37,13 @@ from jinja2 import Template
 from ops.charm import ActionEvent, CharmBase, HookEvent, RelationEvent, ConfigChangedEvent, PebbleReadyEvent
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
-from ops.pebble import Error, ExecError, Layer, LayerDict
+from ops.pebble import Error, ExecError, Layer
 
 from kratos import KratosAPI
+
+if TYPE_CHECKING:
+    from ops.pebble import LayerDict
+
 
 logger = logging.getLogger(__name__)
 KRATOS_ADMIN_PORT = 4434
