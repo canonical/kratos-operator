@@ -135,8 +135,6 @@ class KratosEndpointsRequirer(Object):
 
     def get_kratos_endpoints(self) -> Optional[Dict]:
         """Get the kratos endpoints."""
-        if not self.model.unit.is_leader():
-            return None
         endpoints = self.model.relations[self.relation_name]
         if len(endpoints) == 0:
             raise KratosEndpointsRelationMissingError()
