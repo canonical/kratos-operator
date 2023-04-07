@@ -133,7 +133,7 @@ class KratosEndpointsRequirer(Object):
         self.charm = charm
         self.relation_name = relation_name
 
-    def get_kratos_endpoints(self) -> Optional[Dict]:
+    def get_kratos_endpoints(self) -> Dict:
         """Get the kratos endpoints."""
         endpoints = self.model.relations[self.relation_name]
         if len(endpoints) == 0:
