@@ -52,7 +52,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 1
+LIBPATCH = 2
 
 RELATION_NAME = "kratos-endpoint-info"
 INTERFACE_NAME = "kratos_endpoints"
@@ -133,10 +133,8 @@ class KratosEndpointsRequirer(Object):
         self.charm = charm
         self.relation_name = relation_name
 
-    def get_kratos_endpoints(self) -> Optional[Dict]:
+    def get_kratos_endpoints(self) -> Dict:
         """Get the kratos endpoints."""
-        if not self.model.unit.is_leader():
-            return None
         endpoints = self.model.relations[self.relation_name]
         if len(endpoints) == 0:
             raise KratosEndpointsRelationMissingError()
