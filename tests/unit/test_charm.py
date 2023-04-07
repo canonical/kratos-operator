@@ -19,25 +19,19 @@ DB_USERNAME = "fake_relation_id_1"
 DB_PASSWORD = "fake-password"
 DB_ENDPOINTS = "postgresql-k8s-primary.namespace.svc.cluster.local:5432"
 IDENTITY_SCHEMA = {
-  "$id": "https://schemas.ory.sh/presets/kratos/quickstart/email-password/identity.schema.json",
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Person",
-  "type": "object",
-  "properties": {
-    "traits": {
-      "type": "object",
-      "properties": {
-        "email": {
-          "type": "string",
-          "format": "email",
-          "title": "E-Mail"
-          },
-        "name": {
-          "type": "string"
+    "$id": "https://schemas.ory.sh/presets/kratos/quickstart/email-password/identity.schema.json",
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Person",
+    "type": "object",
+    "properties": {
+        "traits": {
+            "type": "object",
+            "properties": {
+                "email": {"type": "string", "format": "email", "title": "E-Mail"},
+                "name": {"type": "string"},
+            },
         }
-      }
-    }
-  }
+    },
 }
 
 
@@ -208,7 +202,10 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness: Ha
             "default_schema_id": "social_user_v0",
             "schemas": [
                 {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
-                {"id": "social_user_v0", "url": "file:///etc/config/schemas/default/social_user_v0.json"},
+                {
+                    "id": "social_user_v0",
+                    "url": "file:///etc/config/schemas/default/social_user_v0.json",
+                },
             ],
         },
         "selfservice": {
@@ -266,8 +263,8 @@ def test_on_config_changed_when_identity_schemas_config(harness: Harness) -> Non
     schema_id = "user_v0"
     harness.update_config(
         dict(
-            identity_schemas=json.dumps({ "user_v1": IDENTITY_SCHEMA, schema_id: IDENTITY_SCHEMA}),
-            default_identity_schema=schema_id
+            identity_schemas=json.dumps({"user_v1": IDENTITY_SCHEMA, schema_id: IDENTITY_SCHEMA}),
+            default_identity_schema=schema_id,
         )
     )
 
@@ -276,8 +273,14 @@ def test_on_config_changed_when_identity_schemas_config(harness: Harness) -> Non
         "identity": {
             "default_schema_id": schema_id,
             "schemas": [
-                {"id": "user_v0", "url": f"base64://{base64.b64encode(json.dumps(IDENTITY_SCHEMA).encode()).decode()}"},
-                {"id": "user_v1", "url": f"base64://{base64.b64encode(json.dumps(IDENTITY_SCHEMA).encode()).decode()}"},
+                {
+                    "id": "user_v0",
+                    "url": f"base64://{base64.b64encode(json.dumps(IDENTITY_SCHEMA).encode()).decode()}",
+                },
+                {
+                    "id": "user_v1",
+                    "url": f"base64://{base64.b64encode(json.dumps(IDENTITY_SCHEMA).encode()).decode()}",
+                },
             ],
         },
         "selfservice": {
@@ -317,8 +320,8 @@ def test_on_config_changed_when_identity_schemas_config_unset(harness: Harness) 
     schema_id = "user_v0"
     harness.update_config(
         dict(
-            identity_schemas=json.dumps({ "user_v1": IDENTITY_SCHEMA, schema_id: IDENTITY_SCHEMA}),
-            default_identity_schema=schema_id
+            identity_schemas=json.dumps({"user_v1": IDENTITY_SCHEMA, schema_id: IDENTITY_SCHEMA}),
+            default_identity_schema=schema_id,
         )
     )
     harness.update_config(unset=["identity_schemas", "default_identity_schema"])
@@ -329,7 +332,10 @@ def test_on_config_changed_when_identity_schemas_config_unset(harness: Harness) 
             "default_schema_id": "social_user_v0",
             "schemas": [
                 {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
-                {"id": "social_user_v0", "url": "file:///etc/config/schemas/default/social_user_v0.json"},
+                {
+                    "id": "social_user_v0",
+                    "url": "file:///etc/config/schemas/default/social_user_v0.json",
+                },
             ],
         },
         "selfservice": {
@@ -580,7 +586,10 @@ def test_on_client_config_changed_with_ingress(
             "default_schema_id": "social_user_v0",
             "schemas": [
                 {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
-                {"id": "social_user_v0", "url": "file:///etc/config/schemas/default/social_user_v0.json"},
+                {
+                    "id": "social_user_v0",
+                    "url": "file:///etc/config/schemas/default/social_user_v0.json",
+                },
             ],
         },
         "selfservice": {
@@ -657,7 +666,10 @@ def test_on_client_config_changed_with_external_url_config(
             "default_schema_id": "social_user_v0",
             "schemas": [
                 {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
-                {"id": "social_user_v0", "url": "file:///etc/config/schemas/default/social_user_v0.json"},
+                {
+                    "id": "social_user_v0",
+                    "url": "file:///etc/config/schemas/default/social_user_v0.json",
+                },
             ],
         },
         "selfservice": {
@@ -737,7 +749,10 @@ def test_on_client_config_changed_with_hydra(harness: Harness) -> None:
             "default_schema_id": "social_user_v0",
             "schemas": [
                 {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
-                {"id": "social_user_v0", "url": "file:///etc/config/schemas/default/social_user_v0.json"},
+                {
+                    "id": "social_user_v0",
+                    "url": "file:///etc/config/schemas/default/social_user_v0.json",
+                },
             ],
         },
         "selfservice": {
@@ -792,7 +807,10 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harn
             "default_schema_id": "social_user_v0",
             "schemas": [
                 {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
-                {"id": "social_user_v0", "url": "file:///etc/config/schemas/default/social_user_v0.json"},
+                {
+                    "id": "social_user_v0",
+                    "url": "file:///etc/config/schemas/default/social_user_v0.json",
+                },
             ],
         },
         "selfservice": {

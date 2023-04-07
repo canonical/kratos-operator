@@ -249,7 +249,9 @@ class KratosCharm(CharmBase):
             self._push_file(self._mappers_dir_path / schema_file.name, src=schema_file)
 
         for schema_file in self._identity_schemas_local_dir_path.iterdir():
-            self._push_file(self._identity_schemas_default_dir_path / schema_file.name, src=schema_file)
+            self._push_file(
+                self._identity_schemas_default_dir_path / schema_file.name, src=schema_file
+            )
 
     def _get_hydra_endpoint_info(self) -> Optional[str]:
         oauth2_provider_url = None
@@ -264,10 +266,12 @@ class KratosCharm(CharmBase):
         return oauth2_provider_url
 
     def _get_juju_config_identity_schema_config_(self) -> Optional[Tuple[str, Dict]]:
-        if (identity_schemas := self.config.get("identity_schemas")):
+        if identity_schemas := self.config.get("identity_schemas"):
             default_schema = self.config.get("default_identity_schema")
             if not default_schema:
-                logger.error("`identity_schemas` configuration was set, but no `default_identity_schema` was found")
+                logger.error(
+                    "`identity_schemas` configuration was set, but no `default_identity_schema` was found"
+                )
                 logger.warning("Ignoring `identity_schemas` configuration")
                 return None
 
@@ -303,7 +307,9 @@ class KratosCharm(CharmBase):
             schema_file.stem: f"file://{self._identity_schemas_default_dir_path / schema_file.name}"
             for schema_file in sorted(self._identity_schemas_local_dir_path.glob("*.json"))
         }
-        default_schema_id_file = self._identity_schemas_local_dir_path / DEFAULT_SCHEMA_ID_FILE_NAME
+        default_schema_id_file = (
+            self._identity_schemas_local_dir_path / DEFAULT_SCHEMA_ID_FILE_NAME
+        )
         with open(default_schema_id_file) as f:
             default_schema = f.read()
         if default_schema not in returned_schemas:
@@ -312,9 +318,9 @@ class KratosCharm(CharmBase):
         return default_schema, returned_schemas
 
     def _get_identity_schema_config(self) -> Optional[Tuple[str, Dict]]:
-        if (config_schemas := self._get_juju_config_identity_schema_config_()):
+        if config_schemas := self._get_juju_config_identity_schema_config_():
             default_schema, returned_schemas = config_schemas
-        elif (shared_schemas := self._get_shared_identity_schema_config()):
+        elif shared_schemas := self._get_shared_identity_schema_config():
             default_schema, returned_schemas = shared_schemas
         else:
             default_schema, returned_schemas = self._get_default_identity_schema_config()
