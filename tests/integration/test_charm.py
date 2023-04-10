@@ -18,6 +18,7 @@ POSTGRES = "postgresql-k8s"
 TRAEFIK = "traefik-k8s"
 TRAEFIK_ADMIN_APP = "traefik-admin"
 TRAEFIK_PUBLIC_APP = "traefik-public"
+ADMIN_MAIL = "admin@adminmail.com"
 
 
 async def get_unit_address(ops_test: OpsTest, app_name: str, unit_num: int) -> str:
@@ -98,3 +99,96 @@ async def test_has_admin_ingress(ops_test: OpsTest):
     )
 
     assert resp.status_code == 200
+
+
+@pytest.mark.abort_on_fail
+async def test_create_admin_account(ops_test: OpsTest) -> None:
+    action = (
+        await ops_test.model.applications[APP_NAME]
+        .units[0]
+        .run_action(
+            "create-admin-account",
+            **{
+                "username": "admin",
+                "email": ADMIN_MAIL,
+                "name": "Admin Admin",
+                "phone_number": "6912345678",
+                "password": "123456",
+            },
+        )
+    )
+
+    res = await action.wait()
+
+    assert "identity-id" in res.results
+
+
+async def test_get_identity(ops_test: OpsTest) -> None:
+    action = (
+        await ops_test.model.applications[APP_NAME]
+        .units[0]
+        .run_action(
+            "get-identity",
+            email=ADMIN_MAIL,
+        )
+    )
+
+    res = (await action.wait()).results
+
+    assert res["id"]
+
+
+@pytest.mark.skip(
+    reason=("the recovery and settings UI page must be provided to kratos for this test to work")
+)
+async def test_reset_password(ops_test: OpsTest) -> None:
+    action = (
+        await ops_test.model.applications[APP_NAME]
+        .units[0]
+        .run_action(
+            "reset-password",
+            email=ADMIN_MAIL,
+        )
+    )
+
+    res = (await action.wait()).results
+
+    assert "recovery_link" in res
+
+
+async def test_delete_identity(ops_test: OpsTest) -> None:
+    action = (
+        await ops_test.model.applications[APP_NAME]
+        .units[0]
+        .run_action(
+            "get-identity",
+            email=ADMIN_MAIL,
+        )
+    )
+
+    res = (await action.wait()).results
+
+    action = (
+        await ops_test.model.applications[APP_NAME]
+        .units[0]
+        .run_action(
+            "delete-identity",
+            **{
+                "identity-id": res["id"],
+            },
+        )
+    )
+
+    res = (await action.wait()).results
+
+    action = (
+        await ops_test.model.applications[APP_NAME]
+        .units[0]
+        .run_action(
+            "get-identity",
+            email=ADMIN_MAIL,
+        )
+    )
+    res = await action.wait()
+
+    assert res.message == "Couldn't retrieve identity_id from email."

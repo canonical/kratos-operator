@@ -10,8 +10,9 @@ import logging
 from functools import cached_property
 from os.path import join
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
+import requests
 from charms.data_platform_libs.v0.data_interfaces import (
     DatabaseEndpointsChangedEvent,
     DatabaseRequires,
@@ -32,10 +33,12 @@ from charms.traefik_k8s.v1.ingress import (
     IngressPerAppRevokedEvent,
 )
 from jinja2 import Template
-from ops.charm import CharmBase, HookEvent, RelationEvent
+from ops.charm import ActionEvent, CharmBase, HookEvent, RelationEvent
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
-from ops.pebble import ExecError, Layer
+from ops.pebble import Error, ExecError, Layer
+
+from kratos import KratosAPI
 
 logger = logging.getLogger(__name__)
 KRATOS_ADMIN_PORT = 4434
@@ -43,6 +46,17 @@ KRATOS_PUBLIC_PORT = 4433
 PEER_RELATION_NAME = "kratos-peers"
 PEER_KEY_DB_MIGRATE_VERSION = "db_migrate_version"
 DB_MIGRATE_VERSION = "0.11.1"
+
+
+def dict_to_action_output(d: Dict) -> Dict:
+    """Convert all keys in a dict to the format of a juju action output."""
+    ret = {}
+    for k, v in d.items():
+        k = k.replace("_", "-")
+        if isinstance(v, dict):
+            v = dict_to_action_output(v)
+        ret[k] = v
+    return ret
 
 
 class KratosCharm(CharmBase):
@@ -55,12 +69,18 @@ class KratosCharm(CharmBase):
         self._config_dir_path = Path("/etc/config")
         self._config_file_path = self._config_dir_path / "kratos.yaml"
         self._identity_schema_file_path = self._config_dir_path / "identity.default.schema.json"
+        self._admin_identity_schema_file_path = (
+            self._config_dir_path / "identity.admin.schema.json"
+        )
         self._mappers_dir_path = self._config_dir_path / "claim_mappers"
         self._mappers_local_dir_path = Path("claim_mappers")
         self._db_name = f"{self.model.name}_{self.app.name}"
         self._db_relation_name = "pg-database"
         self._hydra_relation_name = "endpoint-info"
 
+        self.kratos = KratosAPI(
+            f"http://127.0.0.1:{KRATOS_ADMIN_PORT}", self._container, str(self._config_file_path)
+        )
         self.service_patcher = KubernetesServicePatch(
             self, [("admin", KRATOS_ADMIN_PORT), ("public", KRATOS_PUBLIC_PORT)]
         )
@@ -110,6 +130,15 @@ class KratosCharm(CharmBase):
             self.external_provider.on.client_config_changed, self._on_client_config_changed
         )
 
+        self.framework.observe(self.on.get_identity_action, self._on_get_identity_action)
+        self.framework.observe(self.on.delete_identity_action, self._on_delete_identity_action)
+        # TODO: Uncomment this line after we have implemented the recovery endpoint
+        # self.framework.observe(self.on.reset_password_action, self._on_reset_password_action)
+        self.framework.observe(
+            self.on.create_admin_account_action, self._on_create_admin_account_action
+        )
+        self.framework.observe(self.on.run_migration_action, self._on_run_migration_action)
+
     @property
     def _kratos_service_params(self):
         ret = ["--config", str(self._config_file_path)]
@@ -118,6 +147,17 @@ class KratosCharm(CharmBase):
             ret.append("--dev")
 
         return " ".join(ret)
+
+    @property
+    def _kratos_service_is_running(self) -> bool:
+        if not self._container.can_connect():
+            return False
+
+        try:
+            service = self._container.get_service(self._container_name)
+        except (ModelError, RuntimeError):
+            return False
+        return service.is_running()
 
     @property
     def _pebble_layer(self) -> Layer:
@@ -165,6 +205,7 @@ class KratosCharm(CharmBase):
         rendered = template.render(
             mappers_path=str(self._mappers_dir_path),
             identity_schema_file_path=self._identity_schema_file_path,
+            admin_identity_schema_file_path=self._admin_identity_schema_file_path,
             default_browser_return_url=self.config.get("login_ui_url"),
             public_base_url=self._domain_url,
             login_ui_url=join(self.config.get("login_ui_url"), "login"),
@@ -277,6 +318,11 @@ class KratosCharm(CharmBase):
         with open("src/identity.default.schema.json", encoding="utf-8") as schema_file:
             schema = schema_file.read()
             self._container.push(self._identity_schema_file_path, schema, make_dirs=True)
+
+        with open("src/identity.admin.schema.json", encoding="utf-8") as schema_file:
+            schema = schema_file.read()
+            self._container.push(self._admin_identity_schema_file_path, schema, make_dirs=True)
+
         self._push_schemas()
 
         self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
@@ -423,6 +469,167 @@ class KratosCharm(CharmBase):
         else:
             event.defer()
             logger.info("Database is not created. Deferring event.")
+
+    def _on_get_identity_action(self, event: ActionEvent) -> None:
+        if not self._kratos_service_is_running:
+            event.fail("Service is not ready. Please re-run the action when the charm is active")
+            return
+
+        identity_id = event.params.get("identity-id")
+        email = event.params.get("email")
+        if identity_id and email:
+            event.fail("Only one of identity-id and email can be provided.")
+            return
+        elif not identity_id and not email:
+            event.fail("One of identity-id and email must be provided.")
+            return
+
+        event.log("Fetching the identity.")
+        if email:
+            try:
+                identity = self.kratos.get_identity_from_email(email)
+            except Error as e:
+                event.fail(f"Something went wrong when trying to run the command: {e}")
+                return
+            if not identity:
+                event.fail("Couldn't retrieve identity_id from email.")
+                return
+        else:
+            try:
+                identity = self.kratos.get_identity(identity_id=identity_id)
+            except Error as e:
+                event.fail(f"Something went wrong when trying to run the command: {e}")
+                return
+
+        event.log("Successfully got the identity.")
+        event.set_results(dict_to_action_output(identity))
+
+    def _on_delete_identity_action(self, event: ActionEvent) -> None:
+        if not self._kratos_service_is_running:
+            event.fail("Service is not ready. Please re-run the action when the charm is active")
+            return
+
+        identity_id = event.params.get("identity-id")
+        email = event.params.get("email")
+        if identity_id and email:
+            event.fail("Only one of identity-id and email can be provided.")
+            return
+        elif not identity_id and not email:
+            event.fail("One of identity-id and email must be provided.")
+            return
+
+        if email:
+            identity = self.kratos.get_identity_from_email(email)
+            if not identity:
+                event.fail("Couldn't retrieve identity_id from email.")
+                return
+
+        event.log("Deleting the identity.")
+        try:
+            self.kratos.delete_identity(identity_id=identity_id)
+        except Error as e:
+            event.fail(f"Something went wrong when trying to run the command: {e}")
+            return
+
+        event.log(f"Successfully deleted the identity: {identity_id}.")
+        event.set_results({"idenity-id": identity_id})
+
+    def _on_reset_password_action(self, event: ActionEvent) -> None:
+        if not self._kratos_service_is_running:
+            event.fail("Service is not ready. Please re-run the action when the charm is active")
+            return
+
+        identity_id = event.params.get("identity-id")
+        email = event.params.get("email")
+        recovery_method = event.params.get("recovery-method")
+        if identity_id and email:
+            event.fail("Only one of identity-id and email can be provided.")
+            return
+        elif not identity_id and not email:
+            event.fail("One of identity-id and email must be provided.")
+            return
+
+        if email:
+            identity = self.kratos.get_identity_from_email(email)
+            if not identity:
+                event.fail("Couldn't retrieve identity_id from email.")
+                return
+            identity_id = identity["id"]
+
+        if recovery_method == "code":
+            fun = self.kratos.recover_password_with_code
+        elif recovery_method == "link":
+            fun = self.kratos.recover_password_with_link
+        else:
+            event.fail(
+                f"Unsupported recovery method {recovery_method}, "
+                "allowed methods are: `code` and `link`"
+            )
+            return
+
+        event.log("Resetting password.")
+        try:
+            ret = fun(identity_id=identity_id)
+        except requests.exceptions.RequestException as e:
+            event.fail(f"Failed to request Kratos API: {e}")
+            return
+
+        event.log("Follow the link to reset the user's password")
+        event.set_results(dict_to_action_output(ret))
+
+    def _on_create_admin_account_action(self, event: ActionEvent) -> None:
+        if not self._kratos_service_is_running:
+            event.fail("Service is not ready. Please re-run the action when the charm is active")
+            return
+
+        traits = {
+            "username": event.params["username"],
+            "name": event.params.get("name"),
+            "email": event.params.get("email"),
+            "phone_number": event.params.get("phone_number"),
+        }
+        traits = {k: v for k, v in traits.items() if v is not None}
+        password = event.params.get("password")
+
+        event.log("Creating admin account.")
+        try:
+            identity = self.kratos.create_identity(traits, "admin", password=password)
+        except Error as e:
+            event.fail(f"Something went wrong when trying to run the command: {e}")
+            return
+
+        identity_id = identity["id"]
+        res = {"identity-id": identity_id}
+        event.log(f"Successfully created admin account: {identity_id}.")
+        if not password:
+            event.log("Creating magic link for resetting admin password.")
+            try:
+                link = self.kratos.recover_password_with_link(identity_id)
+            except requests.exceptions.RequestException as e:
+                event.fail(f"Failed to request Kratos API: {e}")
+                return
+            res["password-reset-link"] = link["recovery_link"]
+            res["expires-at"] = link["expires_at"]
+
+        event.set_results(res)
+
+    def _on_run_migration_action(self, event: ActionEvent) -> None:
+        if not self._kratos_service_is_running:
+            event.fail("Service is not ready. Please re-run the action when the charm is active")
+            return
+
+        timeout = float(event.params.get("timeout", 120))
+        event.log("Migrating database.")
+        try:
+            _, err = self.kratos.run_migration(timeout=timeout)
+        except Error as e:
+            event.fail(f"Something went wrong when trying to run the command: {e}")
+            return
+
+        if err:
+            event.fail(f"Something went wrong when running the migration: {err}")
+            return
+        event.log("Successfully migrated the database.")
 
 
 if __name__ == "__main__":
