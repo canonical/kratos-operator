@@ -236,8 +236,13 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness: Ha
             },
         },
     }
+    expected_schemas = expected_config["identity"].pop("schemas")
 
-    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
+    config = yaml.safe_load(harness.charm._render_conf_file())
+    schemas = config["identity"].pop("schemas")
+    assert all(schema in schemas for schema in expected_schemas)
+    assert len(expected_schemas) == len(schemas)
+    assert config == expected_config
 
 
 def test_on_pebble_ready_when_missing_database_relation(harness: Harness) -> None:
@@ -311,8 +316,13 @@ def test_on_config_changed_when_identity_schemas_config(harness: Harness) -> Non
             },
         },
     }
+    expected_schemas = expected_config["identity"].pop("schemas")
 
-    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
+    config = yaml.safe_load(harness.charm._render_conf_file())
+    schemas = config["identity"].pop("schemas")
+    assert all(schema in schemas for schema in expected_schemas)
+    assert len(expected_schemas) == len(schemas)
+    assert config == expected_config
 
 
 def test_on_config_changed_when_identity_schemas_config_unset(harness: Harness) -> None:
@@ -366,8 +376,13 @@ def test_on_config_changed_when_identity_schemas_config_unset(harness: Harness) 
             },
         },
     }
+    expected_schemas = expected_config["identity"].pop("schemas")
 
-    assert yaml.safe_load(harness.charm._render_conf_file()) == expected_config
+    config = yaml.safe_load(harness.charm._render_conf_file())
+    schemas = config["identity"].pop("schemas")
+    assert all(schema in schemas for schema in expected_schemas)
+    assert len(expected_schemas) == len(schemas)
+    assert config == expected_config
 
 
 def test_on_database_created_cannot_connect_container(harness: Harness) -> None:
@@ -642,11 +657,16 @@ def test_on_client_config_changed_with_ingress(
             },
         },
     }
+    expected_schemas = expected_config["identity"].pop("schemas")
 
     app_data = json.loads(harness.get_relation_data(relation_id, harness.charm.app)["providers"])
 
     container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
-    assert yaml.load(container_config.read(), yaml.Loader) == expected_config
+    config = yaml.load(container_config.read(), yaml.Loader)
+    schemas = config["identity"].pop("schemas")
+    assert all(schema in schemas for schema in expected_schemas)
+    assert len(expected_schemas) == len(schemas)
+    assert config == expected_config
     assert app_data[0]["redirect_uri"].startswith(harness.charm.public_ingress.url)
 
 
@@ -722,11 +742,16 @@ def test_on_client_config_changed_with_external_url_config(
             },
         },
     }
+    expected_schemas = expected_config["identity"].pop("schemas")
 
     app_data = json.loads(harness.get_relation_data(relation_id, harness.charm.app)["providers"])
 
     container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
-    assert yaml.load(container_config.read(), yaml.Loader) == expected_config
+    config = yaml.load(container_config.read(), yaml.Loader)
+    schemas = config["identity"].pop("schemas")
+    assert all(schema in schemas for schema in expected_schemas)
+    assert len(expected_schemas) == len(schemas)
+    assert config == expected_config
     assert app_data == [
         {
             "provider_id": provider_id,
@@ -786,9 +811,14 @@ def test_on_client_config_changed_with_hydra(harness: Harness) -> None:
             "url": "http://hydra-admin-url:80/testing-hydra",
         },
     }
+    expected_schemas = expected_config["identity"].pop("schemas")
 
     container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
-    assert yaml.load(container_config.read(), yaml.Loader) == expected_config
+    config = yaml.load(container_config.read(), yaml.Loader)
+    schemas = config["identity"].pop("schemas")
+    assert all(schema in schemas for schema in expected_schemas)
+    assert len(expected_schemas) == len(schemas)
+    assert config == expected_config
 
 
 def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harness) -> None:
@@ -841,9 +871,14 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harn
             },
         },
     }
+    expected_schemas = expected_config["identity"].pop("schemas")
 
     container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
-    assert yaml.load(container_config.read(), yaml.Loader) == expected_config
+    config = yaml.load(container_config.read(), yaml.Loader)
+    schemas = config["identity"].pop("schemas")
+    assert all(schema in schemas for schema in expected_schemas)
+    assert len(expected_schemas) == len(schemas)
+    assert config == expected_config
 
 
 def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(

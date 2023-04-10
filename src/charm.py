@@ -265,7 +265,7 @@ class KratosCharm(CharmBase):
 
         return oauth2_provider_url
 
-    def _get_juju_config_identity_schema_config_(self) -> Optional[Tuple[str, Dict]]:
+    def _get_juju_config_identity_schema_config(self) -> Optional[Tuple[str, Dict]]:
         if identity_schemas := self.config.get("identity_schemas"):
             default_schema = self.config.get("default_identity_schema")
             if not default_schema:
@@ -282,12 +282,11 @@ class KratosCharm(CharmBase):
                 logger.warning("Ignoring `identity_schemas` configuration")
                 return None
 
-            # We order the dict items to make sure the dict is ordered always has the same order
-            returned_schemas = {
+            schemas = {
                 schema_id: f"base64://{base64.b64encode(json.dumps(schema).encode()).decode()}"
-                for schema_id, schema in sorted(schemas.items())
+                for schema_id, schema in schemas.items()
             }
-            return default_schema, returned_schemas
+            return default_schema, schemas
         return None
 
     def _get_shared_identity_schema_config(self) -> Optional[Tuple[str, Dict]]:
@@ -297,35 +296,51 @@ class KratosCharm(CharmBase):
             return
 
         path = storage[0].location
-        if list(Path(path).glob("*.json")) != []:
-            raise NotImplementedError()
-        return None
+        schemas = {
+            schema_file.stem: f"file://{self._identity_schemas_shared_dir_path / schema_file.name}"
+            for schema_file in path.glob("*.json")
+        }
+        if not schemas:
+            return None
+        default_schema_id_file = (
+            self._identity_schemas_local_dir_path / DEFAULT_SCHEMA_ID_FILE_NAME
+        )
+        with open(default_schema_id_file) as f:
+            default_schema = f.read()
+        if default_schema not in schemas:
+            return None
+        return default_schema, schemas
 
     def _get_default_identity_schema_config(self) -> Tuple[Optional[str], Optional[Dict]]:
-        logger.info("Pushing default identity schemas to container")
-        # We order the glob to make sure the dict is ordered always has the same order
-        returned_schemas = {
+        schemas = {
             schema_file.stem: f"file://{self._identity_schemas_default_dir_path / schema_file.name}"
-            for schema_file in sorted(self._identity_schemas_local_dir_path.glob("*.json"))
+            for schema_file in self._identity_schemas_local_dir_path.glob("*.json")
         }
         default_schema_id_file = (
             self._identity_schemas_local_dir_path / DEFAULT_SCHEMA_ID_FILE_NAME
         )
         with open(default_schema_id_file) as f:
             default_schema = f.read()
-        if default_schema not in returned_schemas:
-            self.unit.status = BlockedStatus(f"Default schema `{default_schema}` can't be found")
-            return None, None
-        return default_schema, returned_schemas
+        if default_schema not in schemas:
+            raise RuntimeError(f"Default schema `{default_schema}` can't be found")
+        return default_schema, schemas
 
     def _get_identity_schema_config(self) -> Optional[Tuple[str, Dict]]:
-        if config_schemas := self._get_juju_config_identity_schema_config_():
-            default_schema, returned_schemas = config_schemas
+        """Get the the default schema id and the identity schemas.
+
+        The identity schemas can come from various sources. We chose them in this order:
+        1) If the user has defined some schemas in the juju config, return those
+        2) Else if there are identity schemas in the shared folder that were
+        created from the admin UI, return those
+        3) Else return the default identity schemas that come with this operator
+        """
+        if config_schemas := self._get_juju_config_identity_schema_config():
+            default_schema, schemas = config_schemas
         elif shared_schemas := self._get_shared_identity_schema_config():
-            default_schema, returned_schemas = shared_schemas
+            default_schema, schemas = shared_schemas
         else:
-            default_schema, returned_schemas = self._get_default_identity_schema_config()
-        return default_schema, returned_schemas
+            default_schema, schemas = self._get_default_identity_schema_config()
+        return default_schema, schemas
 
     def _get_database_relation_info(self) -> dict:
         """Get database info from relation data bag."""
