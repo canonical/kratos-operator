@@ -218,11 +218,11 @@ class KratosCharm(CharmBase):
         with open("templates/kratos.yaml.j2", "r") as file:
             template = Template(file.read())
 
-        default_schema, schemas = self._get_identity_schema_config()
+        default_schema_id, schemas = self._get_identity_schema_config()
         rendered = template.render(
             mappers_path=str(self._mappers_dir_path),
             identity_schemas=schemas,
-            default_identity_schema_id=default_schema,
+            default_identity_schema_id=default_schema_id,
             default_browser_return_url=self.config.get("login_ui_url"),
             public_base_url=self._domain_url,
             login_ui_url=join(self.config.get("login_ui_url"), "login"),
@@ -267,8 +267,8 @@ class KratosCharm(CharmBase):
 
     def _get_juju_config_identity_schema_config(self) -> Optional[Tuple[str, Dict]]:
         if identity_schemas := self.config.get("identity_schemas"):
-            default_schema = self.config.get("default_identity_schema")
-            if not default_schema:
+            default_schema_id = self.config.get("default_identity_schema")
+            if not default_schema_id:
                 logger.error(
                     "`identity_schemas` configuration was set, but no `default_identity_schema` was found"
                 )
@@ -286,7 +286,7 @@ class KratosCharm(CharmBase):
                 schema_id: f"base64://{base64.b64encode(json.dumps(schema).encode()).decode()}"
                 for schema_id, schema in schemas.items()
             }
-            return default_schema, schemas
+            return default_schema_id, schemas
         return None
 
     def _get_shared_identity_schema_config(self) -> Optional[Tuple[str, Dict]]:
@@ -306,10 +306,10 @@ class KratosCharm(CharmBase):
             self._identity_schemas_local_dir_path / DEFAULT_SCHEMA_ID_FILE_NAME
         )
         with open(default_schema_id_file) as f:
-            default_schema = f.read()
-        if default_schema not in schemas:
+            default_schema_id = f.read()
+        if default_schema_id not in schemas:
             return None
-        return default_schema, schemas
+        return default_schema_id, schemas
 
     def _get_default_identity_schema_config(self) -> Tuple[Optional[str], Optional[Dict]]:
         schemas = {
@@ -320,10 +320,10 @@ class KratosCharm(CharmBase):
             self._identity_schemas_local_dir_path / DEFAULT_SCHEMA_ID_FILE_NAME
         )
         with open(default_schema_id_file) as f:
-            default_schema = f.read()
-        if default_schema not in schemas:
-            raise RuntimeError(f"Default schema `{default_schema}` can't be found")
-        return default_schema, schemas
+            default_schema_id = f.read()
+        if default_schema_id not in schemas:
+            raise RuntimeError(f"Default schema `{default_schema_id}` can't be found")
+        return default_schema_id, schemas
 
     def _get_identity_schema_config(self) -> Optional[Tuple[str, Dict]]:
         """Get the the default schema id and the identity schemas.
@@ -335,12 +335,12 @@ class KratosCharm(CharmBase):
         3) Else return the default identity schemas that come with this operator
         """
         if config_schemas := self._get_juju_config_identity_schema_config():
-            default_schema, schemas = config_schemas
+            default_schema_id, schemas = config_schemas
         elif shared_schemas := self._get_shared_identity_schema_config():
-            default_schema, schemas = shared_schemas
+            default_schema_id, schemas = shared_schemas
         else:
-            default_schema, schemas = self._get_default_identity_schema_config()
-        return default_schema, schemas
+            default_schema_id, schemas = self._get_default_identity_schema_config()
+        return default_schema_id, schemas
 
     def _get_database_relation_info(self) -> dict:
         """Get database info from relation data bag."""
