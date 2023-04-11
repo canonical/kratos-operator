@@ -34,7 +34,14 @@ from charms.traefik_k8s.v1.ingress import (
     IngressPerAppRevokedEvent,
 )
 from jinja2 import Template
-from ops.charm import ActionEvent, CharmBase, HookEvent, RelationEvent, ConfigChangedEvent, PebbleReadyEvent
+from ops.charm import (
+    ActionEvent,
+    CharmBase,
+    ConfigChangedEvent,
+    HookEvent,
+    PebbleReadyEvent,
+    RelationEvent,
+)
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
 from ops.pebble import Error, ExecError, Layer
