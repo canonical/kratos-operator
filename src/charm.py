@@ -10,10 +10,11 @@ import logging
 from functools import cached_property
 from os.path import join
 from pathlib import Path
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import requests
 from charms.data_platform_libs.v0.data_interfaces import (
+    DatabaseCreatedEvent,
     DatabaseEndpointsChangedEvent,
     DatabaseRequires,
 )
@@ -33,12 +34,23 @@ from charms.traefik_k8s.v1.ingress import (
     IngressPerAppRevokedEvent,
 )
 from jinja2 import Template
-from ops.charm import ActionEvent, CharmBase, HookEvent, RelationEvent
+from ops.charm import (
+    ActionEvent,
+    CharmBase,
+    ConfigChangedEvent,
+    HookEvent,
+    PebbleReadyEvent,
+    RelationEvent,
+)
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
 from ops.pebble import Error, ExecError, Layer
 
 from kratos import KratosAPI
+
+if TYPE_CHECKING:
+    from ops.pebble import LayerDict
+
 
 logger = logging.getLogger(__name__)
 KRATOS_ADMIN_PORT = 4434
@@ -62,7 +74,7 @@ def dict_to_action_output(d: Dict) -> Dict:
 class KratosCharm(CharmBase):
     """Charmed Ory Kratos."""
 
-    def __init__(self, *args):
+    def __init__(self, *args: Any) -> None:
         super().__init__(*args)
         self._container_name = "kratos"
         self._container = self.unit.get_container(self._container_name)
@@ -140,7 +152,7 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.on.run_migration_action, self._on_run_migration_action)
 
     @property
-    def _kratos_service_params(self):
+    def _kratos_service_params(self) -> str:
         ret = ["--config", str(self._config_file_path)]
         if self.config["dev"]:
             logger.warning("Running Kratos in dev mode, don't do this in production")
@@ -161,7 +173,7 @@ class KratosCharm(CharmBase):
 
     @property
     def _pebble_layer(self) -> Layer:
-        pebble_layer = {
+        pebble_layer: LayerDict = {
             "summary": "kratos layer",
             "description": "pebble config layer for kratos",
             "services": {
@@ -186,11 +198,11 @@ class KratosCharm(CharmBase):
         return Layer(pebble_layer)
 
     @property
-    def _domain_url(self):
+    def _domain_url(self) -> Optional[str]:
         return self.config["external_url"] or self.public_ingress.url
 
     @cached_property
-    def _get_available_mappers(self):
+    def _get_available_mappers(self) -> List[str]:
         return [
             schema_file.name[: -len("_schema.jsonnet")]
             for schema_file in self._mappers_local_dir_path.iterdir()
@@ -219,7 +231,7 @@ class KratosCharm(CharmBase):
         )
         return rendered
 
-    def _push_schemas(self):
+    def _push_schemas(self) -> None:
         for schema_file in self._mappers_local_dir_path.iterdir():
             with open(Path(schema_file)) as f:
                 schema = f.read()
@@ -271,7 +283,7 @@ class KratosCharm(CharmBase):
             stdout, _ = process.wait_output()
             logger.info(f"Successfully executed automigration: {stdout}")
         except ExecError as err:
-            logger.error(f"Exited with code {err.exit_code}. Stderr: {err.stderr}")
+            logger.error(f"Exited with code {err.exit_code}. Stderr: {err.stderr!r}")
             self.unit.status = BlockedStatus("Database migration job failed")
             return False
 
@@ -305,7 +317,7 @@ class KratosCharm(CharmBase):
         else:
             self.unit.status = BlockedStatus("Missing postgres database relation")
 
-    def _on_pebble_ready(self, event) -> None:
+    def _on_pebble_ready(self, event: PebbleReadyEvent) -> None:
         """Event Handler for pebble ready event."""
         if not self._container.can_connect():
             event.defer()
@@ -346,7 +358,7 @@ class KratosCharm(CharmBase):
         else:
             self.unit.status = BlockedStatus("Missing postgres database relation")
 
-    def _on_config_changed(self, event) -> None:
+    def _on_config_changed(self, event: ConfigChangedEvent) -> None:
         """Event Handler for config changed event."""
         self._handle_status_update_config(event)
 
@@ -368,7 +380,7 @@ class KratosCharm(CharmBase):
 
         self.endpoints_provider.send_endpoint_relation_data(admin_endpoint[0], public_endpoint[0])
 
-    def _on_database_created(self, event) -> None:
+    def _on_database_created(self, event: DatabaseCreatedEvent) -> None:
         """Event Handler for database created event."""
         if not self._container.can_connect():
             event.defer()

@@ -38,3 +38,25 @@ docstring-convention = "google"
 copyright-check = "True"
 copyright-author = "Canonical Ltd."
 copyright-regexp = "Copyright\\s\\d{4}([-,]\\d{4})*\\s+%(author)s"
+
+[tool.mypy]
+pretty = true
+mypy_path = "./src:./lib/:./tests"
+# Exclude non-kratos libraries
+exclude = 'lib/charms/((?!kratos/).)'
+follow_imports = "silent"
+warn_redundant_casts = true
+warn_unused_configs = true
+show_traceback = true
+show_error_codes = true
+namespace_packages = true
+explicit_package_bases = true
+check_untyped_defs = true
+allow_redefinition = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+
+# Ignore libraries that do not have type hint nor stubs
+[[tool.mypy.overrides]]
+module = ["ops.*", "pytest.*", "pytest_operator.*", "urllib3.*", "jinja2.*", "lightkube.*", "pytest_mock.*"]
+ignore_missing_imports = true

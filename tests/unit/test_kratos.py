@@ -27,7 +27,7 @@ def test_pebble_exec_error(
     kratos_api: KratosAPI,
     function_name: str,
     call_args: Tuple,
-):
+) -> None:
     kratos_api.container.exec.side_effect = ExecError(
         command=["some", "command"], exit_code=1, stdout="", stderr="Error"
     )
@@ -38,7 +38,7 @@ def test_pebble_exec_error(
 
 def test_create_identity(
     kratos_api: KratosAPI, kratos_identity_json: Dict, mocked_kratos_process: MagicMock
-):
+) -> None:
     mocked_kratos_process.wait_output.return_value = (json.dumps(kratos_identity_json), None)
     traits = {
         "email": kratos_identity_json["traits"]["email"],
@@ -62,7 +62,7 @@ def test_create_identity(
 
 def test_create_identity_with_password(
     kratos_api: KratosAPI, kratos_identity_json: Dict, mocked_kratos_process: MagicMock
-):
+) -> None:
     mocked_kratos_process.wait_output.return_value = (json.dumps(kratos_identity_json), None)
     traits = {
         "email": kratos_identity_json["traits"]["email"],
@@ -93,7 +93,7 @@ def test_create_identity_with_password(
 
 def test_get_identity(
     kratos_api: KratosAPI, kratos_identity_json: Dict, mocked_kratos_process: MagicMock
-):
+) -> None:
     mocked_kratos_process.wait_output.return_value = (json.dumps(kratos_identity_json), None)
 
     kratos_api.get_identity(identity_id := kratos_identity_json["id"])
@@ -112,7 +112,7 @@ def test_get_identity(
 
 def test_delete_identity(
     kratos_api: KratosAPI, kratos_identity_json: Dict, mocked_kratos_process: MagicMock
-):
+) -> None:
     mocked_kratos_process.wait_output.return_value = (json.dumps(kratos_identity_json), None)
 
     kratos_api.delete_identity(identity_id := kratos_identity_json["id"])
@@ -131,7 +131,7 @@ def test_delete_identity(
 
 def test_list_identities(
     kratos_api: KratosAPI, kratos_identity_json: Dict, mocked_kratos_process: MagicMock
-):
+) -> None:
     mocked_kratos_process.wait_output.return_value = (json.dumps([kratos_identity_json]), None)
 
     kratos_api.list_identities()
@@ -149,7 +149,7 @@ def test_list_identities(
 
 def test_get_identity_from_email(
     kratos_api: KratosAPI, kratos_identity_json: Dict, mocked_kratos_process: MagicMock
-):
+) -> None:
     mocked_kratos_process.wait_output.return_value = (json.dumps([kratos_identity_json]), None)
 
     identity = kratos_api.get_identity_from_email(kratos_identity_json["traits"]["email"])
@@ -168,7 +168,7 @@ def test_get_identity_from_email(
 
 def test_get_identity_from_email_with_wrong_mail(
     kratos_api: KratosAPI, kratos_identity_json: Dict, mocked_kratos_process: MagicMock
-):
+) -> None:
     mocked_kratos_process.wait_output.return_value = (json.dumps([kratos_identity_json]), None)
 
     identity = kratos_api.get_identity_from_email("mail")
@@ -178,7 +178,7 @@ def test_get_identity_from_email_with_wrong_mail(
 
 def test_recover_password_with_code(
     kratos_api: KratosAPI, mocker: MockerFixture, recover_password_with_code_resp: Dict
-):
+) -> None:
     mocked_resp = MagicMock()
     mocked_resp.json.return_value = recover_password_with_code_resp
     mocker.patch("requests.post", return_value=mocked_resp)
@@ -190,7 +190,7 @@ def test_recover_password_with_code(
 
 def test_recover_password_with_link(
     kratos_api: KratosAPI, mocker: MockerFixture, recover_password_with_link_resp: Dict
-):
+) -> None:
     mocked_resp = MagicMock()
     mocked_resp.json.return_value = recover_password_with_link_resp
     mocker.patch("requests.post", return_value=mocked_resp)
@@ -202,7 +202,7 @@ def test_recover_password_with_link(
 
 def test_run_migration(
     kratos_api: KratosAPI, kratos_identity_json: Dict, mocked_kratos_process: MagicMock
-):
+) -> None:
     mocked_kratos_process.wait_output.return_value = (json.dumps([kratos_identity_json]), None)
 
     kratos_api.run_migration()

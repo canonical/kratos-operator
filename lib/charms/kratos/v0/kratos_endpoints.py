@@ -52,7 +52,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 3
 
 RELATION_NAME = "kratos-endpoint-info"
 INTERFACE_NAME = "kratos_endpoints"
@@ -139,7 +139,10 @@ class KratosEndpointsRequirer(Object):
         if len(endpoints) == 0:
             raise KratosEndpointsRelationMissingError()
 
-        data = endpoints[0].data[endpoints[0].app]
+        if not (app := endpoints[0].app):
+            raise KratosEndpointsRelationMissingError()
+
+        data = endpoints[0].data[app]
 
         if "public_endpoint" not in data:
             raise KratosEndpointsRelationDataMissingError(
