@@ -209,6 +209,7 @@ async def test_delete_identity(ops_test: OpsTest) -> None:
 
     assert res.message == "Couldn't retrieve identity_id from email."
 
+
 async def test_identity_schemas_config(ops_test: OpsTest) -> None:
     public_address = await get_unit_address(ops_test, TRAEFIK_PUBLIC_APP, 0)
     resp = requests.get(f"http://{public_address}/{ops_test.model.name}-{APP_NAME}/schemas")
