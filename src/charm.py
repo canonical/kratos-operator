@@ -687,7 +687,7 @@ class KratosCharm(CharmBase):
 
         event.log("Creating admin account.")
         try:
-            identity = self.kratos.create_identity(traits, "admin", password=password)
+            identity = self.kratos.create_identity(traits, "admin_v0", password=password)
         except Error as e:
             event.fail(f"Something went wrong when trying to run the command: {e}")
             return
