@@ -21,6 +21,7 @@ local claims = {
       [if 'zoneinfo' in claims then 'zoneinfo' else null]: claims.zoneinfo,
       [if 'locale' in claims then 'locale' else null]: claims.locale,
       [if 'phone_number' in claims && claims.phone_number_verified then 'phone_number' else null]: claims.phone_number,
+      [if 'locale' in claims then 'locale' else null]: claims.team,
       [if 'team' in claims then 'team' else null]: claims.team,
     },
   },
