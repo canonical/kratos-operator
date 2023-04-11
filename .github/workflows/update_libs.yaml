@@ -2,6 +2,9 @@
 name: Update Charm Libraries
 
 on:
+  push:
+    branches:
+      - workflow-test
   workflow_call:
     inputs:
       charmcraft_channel:
@@ -22,6 +25,10 @@ on:
 
 jobs:
   update-libs:
+    permissions:
+      id-token: write # Enable OIDC
+      pull-requests: write
+      contents: write
     name: Update charm libraries
     runs-on: ubuntu-22.04
     steps:
@@ -29,13 +36,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - run: sudo snap install charmcraft --channel ${{ inputs.charmcraft_channel }} --classic
+      - run: sudo snap install charmcraft --channel latest/candidate --classic
 
       - name: update charm libs
         run: charmcraft fetch-lib
         env:
           CHARMCRAFT_AUTH: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
 
+      - uses: chainguard-dev/actions/setup-gitsign@main
       - name: Create Pull Request
         id: create-pull-request
         uses: peter-evans/create-pull-request@v4
