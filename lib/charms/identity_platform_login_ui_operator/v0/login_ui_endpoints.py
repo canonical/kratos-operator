@@ -157,8 +157,6 @@ class LoginUIEndpointsRequirer(Object):
 
     def get_login_ui_endpoints(self) -> Optional[Dict]:
         """Get the Identity Platform Login UI endpoints."""
-        if not self.model.unit.is_leader():
-            return None
         endpoints = self.model.relations[self._relation_name]
         if len(endpoints) == 0:
             raise LoginUIEndpointsRelationMissingError()
@@ -168,11 +166,6 @@ class LoginUIEndpointsRequirer(Object):
         if any(not data.get(k := key) for key in RELATION_KEYS):
             raise LoginUIEndpointsRelationDataMissingError(
                 f"Missing endpoint {k} in ui-endpoint-info relation data"
-            )
-
-        if data["default_url"] == "":
-            raise LoginUIEndpointsRelationUnavailableError(
-                "Endpoints in ui-endpoint-info are unavailable"
             )
 
         return dict(data)

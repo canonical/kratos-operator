@@ -22,7 +22,6 @@ from charms.hydra.v0.hydra_endpoints import (
 )
 from charms.identity_platform_login_ui_operator.v0.login_ui_endpoints import (
     LoginUIEndpointsRelationDataMissingError,
-    LoginUIEndpointsRelationUnavailableError,
     LoginUIEndpointsRequirer,
 )
 from charms.kratos.v0.kratos_endpoints import KratosEndpointsProvider
@@ -220,11 +219,6 @@ class KratosCharm(CharmBase):
                 return login_ui_url
             except LoginUIEndpointsRelationDataMissingError:
                 logger.info("No login ui endpoint-info relation data found")
-                if key == "default_url":
-                    return DEFAULT_BROWSER_RETURN_URL
-                return None
-            except LoginUIEndpointsRelationUnavailableError:
-                logger.info("identity-platform-login-ui-operator endpoints are unavailable")
                 if key == "default_url":
                     return DEFAULT_BROWSER_RETURN_URL
                 return None
