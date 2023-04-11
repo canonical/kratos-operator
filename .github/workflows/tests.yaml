@@ -38,9 +38,20 @@ jobs:
         # set a predictable model name so it can be consumed by charm-logdump-action
         run: tox -e integration -- --model testing
 
-      - name: Dump logs
-        uses: canonical/charm-logdump-action@main
+      - name: Get contexts
+        run: kubectl config view
         if: failure()
-        with:
-          app: kratos
-          model: testing
+
+      - name: Get juju status
+        run: juju status --relations
+        if: failure()
+
+      - name: Get juju logs
+        run: juju debug-log --replay --include kratos/0
+        if: failure()
+
+      - name: Get kratos container logs
+        run: kubectl logs kratos-0 -c kratos -n testing
+
+      - name: Get kratos config file
+        run: kubectl exec -it kratos-0 -c kratos -n testing -- cat /etc/config/kratos.yaml
