@@ -22,6 +22,7 @@ from charms.hydra.v0.hydra_endpoints import (
 )
 from charms.identity_platform_login_ui_operator.v0.login_ui_endpoints import (
     LoginUIEndpointsRelationDataMissingError,
+    LoginUIEndpointsRelationMissingError,
     LoginUIEndpointsRequirer,
 )
 from charms.kratos.v0.kratos_endpoints import KratosEndpointsProvider
@@ -47,7 +48,6 @@ KRATOS_PUBLIC_PORT = 4433
 PEER_RELATION_NAME = "kratos-peers"
 PEER_KEY_DB_MIGRATE_VERSION = "db_migrate_version"
 DB_MIGRATE_VERSION = "0.11.1"
-DEFAULT_BROWSER_RETURN_URL = "http://example-default-return-url.com"
 
 
 class KratosCharm(CharmBase):
@@ -212,18 +212,13 @@ class KratosCharm(CharmBase):
         return oauth2_provider_url
 
     def _get_login_ui_endpoint_info(self, key: str) -> Optional[str]:
-        if self.model.relations[self._login_ui_relation_name]:
-            try:
-                login_ui_endpoints = self.login_ui_endpoints.get_login_ui_endpoints()
-                login_ui_url = login_ui_endpoints[key]
-                return login_ui_url
-            except LoginUIEndpointsRelationDataMissingError:
-                logger.info("No login ui endpoint-info relation data found")
-                if key == "default_url":
-                    return DEFAULT_BROWSER_RETURN_URL
-                return None
-        if key == "default_url":
-            return DEFAULT_BROWSER_RETURN_URL
+        try:
+            login_ui_endpoints = self.login_ui_endpoints.get_login_ui_endpoints()
+            return login_ui_endpoints[key]
+        except LoginUIEndpointsRelationDataMissingError:
+            logger.info("No login ui endpoint-info relation data found")
+        except LoginUIEndpointsRelationMissingError:
+            logger.info("No login ui-endpoint-info relation found")
         return None
 
     def _get_database_relation_info(self) -> dict:

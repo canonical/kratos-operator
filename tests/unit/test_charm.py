@@ -86,17 +86,6 @@ def setup_login_ui_relation(harness) -> int:
     return relation_id
 
 
-def login_ui_update_relation_data_closure(harness, relation_id: int):
-    def update_login_ui_relation_data(data):
-        harness.update_relation_data(
-            relation_id,
-            "identity-platform-login-ui-operator",
-            data,
-        )
-
-    return update_login_ui_relation_data
-
-
 def trigger_database_changed(harness) -> None:
     db_relation_id = harness.add_relation("pg-database", "postgresql-k8s")
     harness.add_relation_unit(db_relation_id, "postgresql-k8s/0")
@@ -203,8 +192,9 @@ def test_on_pebble_ready_service_started_when_database_is_created(harness) -> No
 def test_on_pebble_ready_has_correct_config_when_database_is_created(harness) -> None:
     setup_postgres_relation(harness)
     login_relation_id = setup_login_ui_relation(harness)
-    update_login_ui = login_ui_update_relation_data_closure(harness, login_relation_id)
-    update_login_ui(
+    harness.update_relation_data(
+        login_relation_id,
+        "identity-platform-login-ui-operator",
         {
             "default_url": "http://127.0.0.1:4455",
             "error_url": "http://127.0.0.1:4455/error",
@@ -213,7 +203,7 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness) ->
             "consent_url": "http://127.0.0.1:4455/consent",
             "oidc_error_url": "http://127.0.0.1:4455/oidc_error",
             "index_url": "http://127.0.0.1:4455/index",
-        }
+        },
     )
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
@@ -473,8 +463,9 @@ def test_on_client_config_changed_with_ingress(harness, mocked_container) -> Non
     setup_postgres_relation(harness)
     setup_ingress_relation(harness, "public")
     login_relation_id = setup_login_ui_relation(harness)
-    update_login_ui = login_ui_update_relation_data_closure(harness, login_relation_id)
-    update_login_ui(
+    harness.update_relation_data(
+        login_relation_id,
+        "identity-platform-login-ui-operator",
         {
             "default_url": "http://127.0.0.1:4455",
             "error_url": "http://127.0.0.1:4455/error",
@@ -483,7 +474,7 @@ def test_on_client_config_changed_with_ingress(harness, mocked_container) -> Non
             "consent_url": "http://127.0.0.1:4455/consent",
             "oidc_error_url": "http://127.0.0.1:4455/oidc_error",
             "index_url": "http://127.0.0.1:4455/index",
-        }
+        },
     )
 
     relation_id = setup_external_provider_relation(harness)
@@ -561,8 +552,9 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
     harness.update_config({"external_url": "https://example.com"})
     setup_postgres_relation(harness)
     login_relation_id = setup_login_ui_relation(harness)
-    update_login_ui = login_ui_update_relation_data_closure(harness, login_relation_id)
-    update_login_ui(
+    harness.update_relation_data(
+        login_relation_id,
+        "identity-platform-login-ui-operator",
         {
             "default_url": "http://127.0.0.1:4455",
             "error_url": "http://127.0.0.1:4455/error",
@@ -571,7 +563,7 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
             "consent_url": "http://127.0.0.1:4455/consent",
             "oidc_error_url": "http://127.0.0.1:4455/oidc_error",
             "index_url": "http://127.0.0.1:4455/index",
-        }
+        },
     )
 
     relation_id = setup_external_provider_relation(harness)
@@ -651,8 +643,9 @@ def test_on_client_config_changed_with_external_url_config(harness, mocked_conta
 def test_on_client_config_changed_with_hydra(harness) -> None:
     setup_postgres_relation(harness)
     login_relation_id = setup_login_ui_relation(harness)
-    update_login_ui = login_ui_update_relation_data_closure(harness, login_relation_id)
-    update_login_ui(
+    harness.update_relation_data(
+        login_relation_id,
+        "identity-platform-login-ui-operator",
         {
             "default_url": "http://127.0.0.1:4455",
             "error_url": "http://127.0.0.1:4455/error",
@@ -661,7 +654,7 @@ def test_on_client_config_changed_with_hydra(harness) -> None:
             "consent_url": "http://127.0.0.1:4455/consent",
             "oidc_error_url": "http://127.0.0.1:4455/oidc_error",
             "index_url": "http://127.0.0.1:4455/index",
-        }
+        },
     )
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
@@ -717,8 +710,9 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness) -> N
     setup_postgres_relation(harness)
     setup_peer_relation(harness)
     login_relation_id = setup_login_ui_relation(harness)
-    update_login_ui = login_ui_update_relation_data_closure(harness, login_relation_id)
-    update_login_ui(
+    harness.update_relation_data(
+        login_relation_id,
+        "identity-platform-login-ui-operator",
         {
             "default_url": "http://127.0.0.1:4455",
             "error_url": "http://127.0.0.1:4455/error",
@@ -727,7 +721,7 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness) -> N
             "consent_url": "http://127.0.0.1:4455/consent",
             "oidc_error_url": "http://127.0.0.1:4455/oidc_error",
             "index_url": "http://127.0.0.1:4455/index",
-        }
+        },
     )
 
     container = harness.model.unit.get_container(CONTAINER_NAME)

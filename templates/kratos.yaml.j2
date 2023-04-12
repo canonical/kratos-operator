@@ -7,7 +7,11 @@ identity:
           url: 'file://{{ identity_schema_file_path }}'
 selfservice:
     default_browser_return_url:
+        {%- if default_browser_return_url %}
         {{ default_browser_return_url }}
+        {% else %}
+        http://example-default-return-url.com
+        {% endif %}
     {%- if error_ui_url or login_ui_url or registration_ui_url %}
     flows:
         {%- if error_ui_url %}

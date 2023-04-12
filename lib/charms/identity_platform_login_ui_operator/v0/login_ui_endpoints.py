@@ -139,14 +139,6 @@ class LoginUIEndpointsRelationDataMissingError(LoginUIEndpointsRelationError):
         super().__init__(self.message)
 
 
-class LoginUIEndpointsRelationUnavailableError(LoginUIEndpointsRelationError):
-    """Raised when Login UI cannot be accessed."""
-
-    def __init__(self, message: str) -> None:
-        self.message = message
-        super().__init__(self.message)
-
-
 class LoginUIEndpointsRequirer(Object):
     """Requirer side of the ui-endpoint-info relation."""
 
@@ -161,8 +153,10 @@ class LoginUIEndpointsRequirer(Object):
         if len(endpoints) == 0:
             raise LoginUIEndpointsRelationMissingError()
 
+        if not (app := endpoints[0].app):
+            raise LoginUIEndpointsRelationMissingError()
         data = endpoints[0].data[endpoints[0].app]
-                
+
         if any(not data.get(k := key) for key in RELATION_KEYS):
             raise LoginUIEndpointsRelationDataMissingError(
                 f"Missing endpoint {k} in ui-endpoint-info relation data"
