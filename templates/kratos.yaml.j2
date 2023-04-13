@@ -9,11 +9,7 @@ identity:
           url: 'file://{{ admin_identity_schema_file_path }}'
 selfservice:
     default_browser_return_url:
-        {%- if default_browser_return_url %}
-        {{ default_browser_return_url }}
-        {% else %}
-        http://example-default-return-url.com
-        {% endif %}
+        {{ default_browser_return_url | d("http://example-default-return-url.com", true) }}
     {%- if error_ui_url or login_ui_url or registration_ui_url %}
     flows:
         {%- if error_ui_url %}

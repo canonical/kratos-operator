@@ -26,6 +26,7 @@ from charms.identity_platform_login_ui_operator.v0.login_ui_endpoints import (
     LoginUIEndpointsRelationDataMissingError,
     LoginUIEndpointsRelationMissingError,
     LoginUIEndpointsRequirer,
+    LoginUITooManyRelatedAppsError,
 )
 from charms.kratos.v0.kratos_endpoints import KratosEndpointsProvider
 from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
@@ -272,6 +273,8 @@ class KratosCharm(CharmBase):
             logger.info("No login ui endpoint-info relation data found")
         except LoginUIEndpointsRelationMissingError:
             logger.info("No login ui-endpoint-info relation found")
+        except LoginUITooManyRelatedAppsError:
+            logger.info("Too many ui-endpoint-info relation found")
         return None
 
     def _get_database_relation_info(self) -> dict:

@@ -38,10 +38,11 @@ Class SomeCharm(CharmBase):
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Dict
 
 from ops.charm import CharmBase, RelationCreatedEvent
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
+from ops.model import TooManyRelatedAppsError
 
 # The unique Charmhub library identifier, never change it
 LIBID = "460ab09e6b874d1c891b67f83586c9a7"
@@ -104,31 +105,34 @@ class LoginUIEndpointsProvider(Object):
 
         relations = self.model.relations[self._relation_name]
 
-        if endpoint == "":
-            endpoint_databag = {}
-            for k in RELATION_KEYS:
-                endpoint_databag[k] = ""
-            for relation in relations:
-                relation.data[self._charm.app].update(endpoint_databag)
+        if not endpoint:
+            endpoint_databag = {k: "" for k in RELATION_KEYS}
         else:
-            for relation in relations:
-                relation.data[self._charm.app].update(
-                    {
-                        "consent_url": f"{endpoint}/consent",
-                        "error_url": f"{endpoint}/error",
-                        "index_url": f"{endpoint}/index",
-                        "login_url": f"{endpoint}/login",
-                        "oidc_error_url": f"{endpoint}/oidc_error",
-                        "registration_url": f"{endpoint}/registration",
-                        "default_url": endpoint,
-                    }
-                )
+            endpoint_databag = {
+                "consent_url": f"{endpoint}/consent",
+                "error_url": f"{endpoint}/error",
+                "index_url": f"{endpoint}/index",
+                "login_url": f"{endpoint}/login",
+                "oidc_error_url": f"{endpoint}/oidc_error",
+                "registration_url": f"{endpoint}/registration",
+                "default_url": endpoint,
+            }
+        for relation in relations:
+            relation.data[self._charm.app].update(endpoint_databag)
 
 
 class LoginUIEndpointsRelationError(Exception):
     """Base class for the relation exceptions."""
 
     pass
+
+
+class LoginUITooManyRelatedAppsError(LoginUIEndpointsRelationError):
+    """Raised when there are more than one ui-endpoints-info relations between Identity Platform Login UI and another component."""
+
+    def __init__(self) -> None:
+        self.message = f"Too many applications on {RELATION_NAME}"
+        super().__init__(self.message)
 
 
 class LoginUINonLeaderOperationError(LoginUIEndpointsRelationError):
@@ -163,16 +167,21 @@ class LoginUIEndpointsRequirer(Object):
         self.charm = charm
         self._relation_name = relation_name
 
-    def get_login_ui_endpoints(self) -> Dict:
+    def get_login_ui_endpoints(self, relation_id=None) -> Dict:
         """Get the Identity Platform Login UI endpoints."""
-        ui_endpoint_relations = self.model.relations[self._relation_name]
-        if len(ui_endpoint_relations) == 0:
+
+        try:
+            ui_endpoint_relation = self.model.get_relation(self._relation_name, relation_id=relation_id)
+        except TooManyRelatedAppsError:
+            raise LoginUITooManyRelatedAppsError()
+
+        if ui_endpoint_relation is None:
             raise LoginUIEndpointsRelationMissingError()
 
-        if not (app := ui_endpoint_relations[0].app):
+        if not (app := ui_endpoint_relation.app):
             raise LoginUIEndpointsRelationMissingError()
 
-        ui_endpoint_relation_data = ui_endpoint_relations[0].data[ui_endpoint_relations[0].app]
+        ui_endpoint_relation_data = ui_endpoint_relation.data[ui_endpoint_relation.app]
 
         if any(not ui_endpoint_relation_data.get(k := key) for key in RELATION_KEYS):
             raise LoginUIEndpointsRelationDataMissingError(
