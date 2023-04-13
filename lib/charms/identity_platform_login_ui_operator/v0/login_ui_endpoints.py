@@ -100,27 +100,43 @@ class LoginUIEndpointsProvider(Object):
     def send_endpoints_relation_data(self, endpoint: str) -> None:
         """Updates relation with endpoint info."""
         if not self._charm.unit.is_leader():
-            return
+            raise LoginUINonLeaderOperationError()
 
         relations = self.model.relations[self._relation_name]
-        for relation in relations:
-            relation.data[self._charm.app].update(
-                {
-                    "consent_url": f"{endpoint}/consent",
-                    "error_url": f"{endpoint}/error",
-                    "index_url": f"{endpoint}/index",
-                    "login_url": f"{endpoint}/login",
-                    "oidc_error_url": f"{endpoint}/oidc_error",
-                    "registration_url": f"{endpoint}/registration",
-                    "default_url": endpoint,
-                }
-            )
+
+        if endpoint == "":
+            endpoint_databag = {}
+            for k in RELATION_KEYS:
+                endpoint_databag[k] = ""
+            for relation in relations:
+                relation.data[self._charm.app].update(endpoint_databag)
+        else:
+            for relation in relations:
+                relation.data[self._charm.app].update(
+                    {
+                        "consent_url": f"{endpoint}/consent",
+                        "error_url": f"{endpoint}/error",
+                        "index_url": f"{endpoint}/index",
+                        "login_url": f"{endpoint}/login",
+                        "oidc_error_url": f"{endpoint}/oidc_error",
+                        "registration_url": f"{endpoint}/registration",
+                        "default_url": endpoint,
+                    }
+                )
 
 
 class LoginUIEndpointsRelationError(Exception):
     """Base class for the relation exceptions."""
 
     pass
+
+
+class LoginUINonLeaderOperationError(LoginUIEndpointsRelationError):
+    """Raised when a non-leader unit wants to call a function intended for leader units."""
+
+    def __init__(self) -> None:
+        self.message = "Calling Identity Platform Login UI unit is not leader"
+        super().__init__(self.message)
 
 
 class LoginUIEndpointsRelationMissingError(LoginUIEndpointsRelationError):
@@ -147,19 +163,20 @@ class LoginUIEndpointsRequirer(Object):
         self.charm = charm
         self._relation_name = relation_name
 
-    def get_login_ui_endpoints(self) -> Optional[Dict]:
+    def get_login_ui_endpoints(self) -> Dict:
         """Get the Identity Platform Login UI endpoints."""
-        endpoints = self.model.relations[self._relation_name]
-        if len(endpoints) == 0:
+        ui_endpoint_relations = self.model.relations[self._relation_name]
+        if len(ui_endpoint_relations) == 0:
             raise LoginUIEndpointsRelationMissingError()
 
-        if not (app := endpoints[0].app):
+        if not (app := ui_endpoint_relations[0].app):
             raise LoginUIEndpointsRelationMissingError()
-        data = endpoints[0].data[endpoints[0].app]
 
-        if any(not data.get(k := key) for key in RELATION_KEYS):
+        ui_endpoint_relation_data = ui_endpoint_relations[0].data[ui_endpoint_relations[0].app]
+
+        if any(not ui_endpoint_relation_data.get(k := key) for key in RELATION_KEYS):
             raise LoginUIEndpointsRelationDataMissingError(
                 f"Missing endpoint {k} in ui-endpoint-info relation data"
             )
 
-        return dict(data)
+        return dict(ui_endpoint_relation_data)
