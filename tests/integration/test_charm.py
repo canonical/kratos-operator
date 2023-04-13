@@ -220,7 +220,7 @@ async def test_identity_schemas_config(ops_test: OpsTest) -> None:
     await ops_test.model.applications[APP_NAME].set_config(
         dict(
             identity_schemas=json.dumps({schema_id: IDENTITY_SCHEMA}),
-            default_identity_schema=schema_id,
+            default_identity_schema_id=schema_id,
         )
     )
 
@@ -239,7 +239,7 @@ async def test_identity_schemas_config(ops_test: OpsTest) -> None:
     await ops_test.model.applications[APP_NAME].set_config(
         dict(
             identity_schemas="",
-            default_identity_schema="",
+            default_identity_schema_id="",
         )
     )
 

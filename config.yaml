@@ -52,6 +52,6 @@ options:
         }
       }
     type: string
-  default_identity_schema:
+  default_identity_schema_id:
     description: The default identity schema id, this option only works when `identity_schemas` is defined
     type: string

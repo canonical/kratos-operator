@@ -269,7 +269,7 @@ def test_on_config_changed_when_identity_schemas_config(harness: Harness) -> Non
     harness.update_config(
         dict(
             identity_schemas=json.dumps({"user_v1": IDENTITY_SCHEMA, schema_id: IDENTITY_SCHEMA}),
-            default_identity_schema=schema_id,
+            default_identity_schema_id=schema_id,
         )
     )
 
@@ -331,10 +331,10 @@ def test_on_config_changed_when_identity_schemas_config_unset(harness: Harness) 
     harness.update_config(
         dict(
             identity_schemas=json.dumps({"user_v1": IDENTITY_SCHEMA, schema_id: IDENTITY_SCHEMA}),
-            default_identity_schema=schema_id,
+            default_identity_schema_id=schema_id,
         )
     )
-    harness.update_config(unset=["identity_schemas", "default_identity_schema"])
+    harness.update_config(unset=["identity_schemas", "default_identity_schema_id"])
 
     expected_config = {
         "log": {"level": "trace"},

@@ -267,10 +267,10 @@ class KratosCharm(CharmBase):
 
     def _get_juju_config_identity_schema_config(self) -> Optional[Tuple[str, Dict]]:
         if identity_schemas := self.config.get("identity_schemas"):
-            default_schema_id = self.config.get("default_identity_schema")
+            default_schema_id = self.config.get("default_identity_schema_id")
             if not default_schema_id:
                 logger.error(
-                    "`identity_schemas` configuration was set, but no `default_identity_schema` was found"
+                    "`identity_schemas` configuration was set, but no `default_identity_schema_id` was found"
                 )
                 logger.warning("Ignoring `identity_schemas` configuration")
                 return None
