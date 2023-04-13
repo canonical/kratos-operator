@@ -854,7 +854,8 @@ def test_on_client_config_changed_without_login_ui_endpoints(harness) -> None:
         "identity": {
             "default_schema_id": "default",
             "schemas": [
-                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
+                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"},
+                {"id": "admin", "url": "file:///etc/config/identity.admin.schema.json"},
             ],
         },
         "selfservice": {"default_browser_return_url": DEFAULT_BROWSER_RETURN_URL},
@@ -899,7 +900,8 @@ def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
         "identity": {
             "default_schema_id": "default",
             "schemas": [
-                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"}
+                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"},
+                {"id": "admin", "url": "file:///etc/config/identity.admin.schema.json"},
             ],
         },
         "selfservice": {"default_browser_return_url": DEFAULT_BROWSER_RETURN_URL},
