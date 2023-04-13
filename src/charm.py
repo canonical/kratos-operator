@@ -61,7 +61,6 @@ PEER_RELATION_NAME = "kratos-peers"
 PEER_KEY_DB_MIGRATE_VERSION = "db_migrate_version"
 DB_MIGRATE_VERSION = "0.11.1"
 DEFAULT_SCHEMA_ID_FILE_NAME = "default.schema"
-SHARED_IDENTITY_SCHEMA_STORAGE_NAME = "identity-schemas"
 
 
 def dict_to_action_output(d: Dict) -> Dict:
@@ -85,7 +84,6 @@ class KratosCharm(CharmBase):
         self._config_dir_path = Path("/etc/config")
         self._config_file_path = self._config_dir_path / "kratos.yaml"
         self._identity_schemas_default_dir_path = self._config_dir_path / "schemas" / "default"
-        self._identity_schemas_shared_dir_path = self._config_dir_path / "schemas" / "shared"
         self._identity_schemas_config_dir_path = self._config_dir_path / "schemas" / "juju"
         self._identity_schemas_local_dir_path = Path("identity_schemas")
         self._mappers_dir_path = self._config_dir_path / "claim_mappers"
@@ -289,28 +287,6 @@ class KratosCharm(CharmBase):
             return default_schema_id, schemas
         return None
 
-    def _get_shared_identity_schema_config(self) -> Optional[Tuple[str, Dict]]:
-        storage = self.model.storages[SHARED_IDENTITY_SCHEMA_STORAGE_NAME]
-        if not storage:
-            logger.info("No shared storage attached")
-            return
-
-        path = storage[0].location
-        schemas = {
-            schema_file.stem: f"file://{self._identity_schemas_shared_dir_path / schema_file.name}"
-            for schema_file in path.glob("*.json")
-        }
-        if not schemas:
-            return None
-        default_schema_id_file = (
-            self._identity_schemas_local_dir_path / DEFAULT_SCHEMA_ID_FILE_NAME
-        )
-        with open(default_schema_id_file) as f:
-            default_schema_id = f.read()
-        if default_schema_id not in schemas:
-            return None
-        return default_schema_id, schemas
-
     def _get_default_identity_schema_config(self) -> Tuple[Optional[str], Optional[Dict]]:
         schemas = {
             schema_file.stem: f"file://{self._identity_schemas_default_dir_path / schema_file.name}"
@@ -328,16 +304,12 @@ class KratosCharm(CharmBase):
     def _get_identity_schema_config(self) -> Optional[Tuple[str, Dict]]:
         """Get the the default schema id and the identity schemas.
 
-        The identity schemas can come from various sources. We chose them in this order:
+        The identity schemas can come from 2 different sources. We chose them in this order:
         1) If the user has defined some schemas in the juju config, return those
-        2) Else if there are identity schemas in the shared folder that were
-        created from the admin UI, return those
-        3) Else return the default identity schemas that come with this operator
+        2) Else return the default identity schemas that come with this operator
         """
         if config_schemas := self._get_juju_config_identity_schema_config():
             default_schema_id, schemas = config_schemas
-        elif shared_schemas := self._get_shared_identity_schema_config():
-            default_schema_id, schemas = shared_schemas
         else:
             default_schema_id, schemas = self._get_default_identity_schema_config()
         return default_schema_id, schemas

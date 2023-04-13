@@ -9,9 +9,6 @@ summary: |
 containers:
   kratos:
     resource: oci-image
-    mounts:
-      - storage: identity-schemas
-        location: /etc/config/schemas/shared
 resources:
   oci-image:
     type: oci-image
@@ -38,7 +35,3 @@ provides:
     interface: kratos_endpoints
     description: |
       Provides API endpoints to a related application
-storage:
-  identity-schemas:
-    type: filesystem
-    description: Identity schemas and jsonnet mappers storage
