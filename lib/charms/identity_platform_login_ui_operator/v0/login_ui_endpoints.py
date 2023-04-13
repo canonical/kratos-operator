@@ -178,7 +178,7 @@ class LoginUIEndpointsRequirer(Object):
         if ui_endpoint_relation is None:
             raise LoginUIEndpointsRelationMissingError()
 
-        if not (app := ui_endpoint_relation.app):
+        if not ui_endpoint_relation.app:
             raise LoginUIEndpointsRelationMissingError()
 
         ui_endpoint_relation_data = ui_endpoint_relation.data[ui_endpoint_relation.app]
@@ -188,4 +188,4 @@ class LoginUIEndpointsRequirer(Object):
                 f"Missing endpoint {k} in ui-endpoint-info relation data"
             )
 
-        return dict(ui_endpoint_relation_data)
+        return ui_endpoint_relation_data
