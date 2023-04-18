@@ -233,9 +233,7 @@ class KratosCharm(CharmBase):
         default_schema_id, schemas = self._get_identity_schema_config()
         rendered = template.render(
             mappers_path=str(self._mappers_dir_path),
-            identity_schema_file_path=self._identity_schema_file_path,
             default_browser_return_url=self._get_login_ui_endpoint_info("default_url"),
-            admin_identity_schema_file_path=self._admin_identity_schema_file_path,
             identity_schemas=schemas,
             default_identity_schema_id=default_schema_id,
             public_base_url=self._domain_url,
