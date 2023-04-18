@@ -312,19 +312,7 @@ def test_on_config_changed_when_identity_schemas_config(harness: Harness) -> Non
             ],
         },
         "selfservice": {
-            "default_browser_return_url": "http://127.0.0.1:4455/",
-            "flows": {
-                "error": {
-                    "ui_url": "http://127.0.0.1:4455/oidc_error",
-                },
-                "login": {
-                    "ui_url": "http://127.0.0.1:4455/login",
-                },
-                "registration": {
-                    "enabled": True,
-                    "ui_url": "http://127.0.0.1:4455/registration",
-                },
-            },
+            "default_browser_return_url": DEFAULT_BROWSER_RETURN_URL,
         },
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
         "courier": {
@@ -372,19 +360,7 @@ def test_on_config_changed_when_identity_schemas_config_unset(harness: Harness) 
             ],
         },
         "selfservice": {
-            "default_browser_return_url": "http://127.0.0.1:4455/",
-            "flows": {
-                "error": {
-                    "ui_url": "http://127.0.0.1:4455/oidc_error",
-                },
-                "login": {
-                    "ui_url": "http://127.0.0.1:4455/login",
-                },
-                "registration": {
-                    "enabled": True,
-                    "ui_url": "http://127.0.0.1:4455/registration",
-                },
-            },
+            "default_browser_return_url": DEFAULT_BROWSER_RETURN_URL,
         },
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
         "courier": {
@@ -966,10 +942,13 @@ def test_on_client_config_changed_without_login_ui_endpoints(harness: Harness) -
     expected_config = {
         "log": {"level": "trace"},
         "identity": {
-            "default_schema_id": "default",
+            "default_schema_id": "social_user_v0",
             "schemas": [
-                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"},
-                {"id": "admin", "url": "file:///etc/config/identity.admin.schema.json"},
+                {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
+                {
+                    "id": "social_user_v0",
+                    "url": "file:///etc/config/schemas/default/social_user_v0.json",
+                },
             ],
         },
         "selfservice": {"default_browser_return_url": DEFAULT_BROWSER_RETURN_URL},
@@ -1014,10 +993,13 @@ def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
     expected_config = {
         "log": {"level": "trace"},
         "identity": {
-            "default_schema_id": "default",
+            "default_schema_id": "social_user_v0",
             "schemas": [
-                {"id": "default", "url": "file:///etc/config/identity.default.schema.json"},
-                {"id": "admin", "url": "file:///etc/config/identity.admin.schema.json"},
+                {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
+                {
+                    "id": "social_user_v0",
+                    "url": "file:///etc/config/schemas/default/social_user_v0.json",
+                },
             ],
         },
         "selfservice": {"default_browser_return_url": DEFAULT_BROWSER_RETURN_URL},
