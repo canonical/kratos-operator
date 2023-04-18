@@ -2,6 +2,7 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import json
 import logging
 from pathlib import Path
 
@@ -19,6 +20,21 @@ TRAEFIK = "traefik-k8s"
 TRAEFIK_ADMIN_APP = "traefik-admin"
 TRAEFIK_PUBLIC_APP = "traefik-public"
 ADMIN_MAIL = "admin@adminmail.com"
+IDENTITY_SCHEMA = {
+    "$id": "https://schemas.ory.sh/presets/kratos/quickstart/email-password/identity.schema.json",
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Person",
+    "type": "object",
+    "properties": {
+        "traits": {
+            "type": "object",
+            "properties": {
+                "email": {"type": "string", "format": "email", "title": "E-Mail"},
+                "name": {"type": "string"},
+            },
+        }
+    },
+}
 
 
 async def get_unit_address(ops_test: OpsTest, app_name: str, unit_num: int) -> str:
@@ -192,3 +208,48 @@ async def test_delete_identity(ops_test: OpsTest) -> None:
     res = await action.wait()
 
     assert res.message == "Couldn't retrieve identity_id from email."
+
+
+async def test_identity_schemas_config(ops_test: OpsTest) -> None:
+    public_address = await get_unit_address(ops_test, TRAEFIK_PUBLIC_APP, 0)
+    resp = requests.get(f"http://{public_address}/{ops_test.model.name}-{APP_NAME}/schemas")
+
+    original_resp = resp.json()
+
+    schema_id = "user_v1"
+    await ops_test.model.applications[APP_NAME].set_config(
+        dict(
+            identity_schemas=json.dumps({schema_id: IDENTITY_SCHEMA}),
+            default_identity_schema_id=schema_id,
+        )
+    )
+
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME],
+        status="active",
+        raise_on_blocked=True,
+        timeout=1000,
+    )
+
+    resp = requests.get(f"http://{public_address}/{ops_test.model.name}-{APP_NAME}/schemas")
+
+    assert len(resp.json()) == 1
+    assert resp.json()[0]["id"] == schema_id
+
+    await ops_test.model.applications[APP_NAME].set_config(
+        dict(
+            identity_schemas="",
+            default_identity_schema_id="",
+        )
+    )
+
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME],
+        status="active",
+        raise_on_blocked=True,
+        timeout=1000,
+    )
+
+    resp = requests.get(f"http://{public_address}/{ops_test.model.name}-{APP_NAME}/schemas")
+
+    assert original_resp == resp.json()

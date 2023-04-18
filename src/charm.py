@@ -6,11 +6,13 @@
 
 """A Juju charm for Ory Kratos."""
 
+import base64
+import json
 import logging
 from functools import cached_property
 from os.path import join
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import requests
 from charms.data_platform_libs.v0.data_interfaces import (
@@ -64,6 +66,7 @@ KRATOS_PUBLIC_PORT = 4433
 PEER_RELATION_NAME = "kratos-peers"
 PEER_KEY_DB_MIGRATE_VERSION = "db_migrate_version"
 DB_MIGRATE_VERSION = "0.11.1"
+DEFAULT_SCHEMA_ID_FILE_NAME = "default.schema"
 
 
 def dict_to_action_output(d: Dict) -> Dict:
@@ -86,10 +89,9 @@ class KratosCharm(CharmBase):
         self._container = self.unit.get_container(self._container_name)
         self._config_dir_path = Path("/etc/config")
         self._config_file_path = self._config_dir_path / "kratos.yaml"
-        self._identity_schema_file_path = self._config_dir_path / "identity.default.schema.json"
-        self._admin_identity_schema_file_path = (
-            self._config_dir_path / "identity.admin.schema.json"
-        )
+        self._identity_schemas_default_dir_path = self._config_dir_path / "schemas" / "default"
+        self._identity_schemas_config_dir_path = self._config_dir_path / "schemas" / "juju"
+        self._identity_schemas_local_dir_path = Path("identity_schemas")
         self._mappers_dir_path = self._config_dir_path / "claim_mappers"
         self._mappers_local_dir_path = Path("claim_mappers")
         self._db_name = f"{self.model.name}_{self.app.name}"
@@ -228,11 +230,14 @@ class KratosCharm(CharmBase):
         with open("templates/kratos.yaml.j2", "r") as file:
             template = Template(file.read())
 
+        default_schema_id, schemas = self._get_identity_schema_config()
         rendered = template.render(
             mappers_path=str(self._mappers_dir_path),
             identity_schema_file_path=self._identity_schema_file_path,
             default_browser_return_url=self._get_login_ui_endpoint_info("default_url"),
             admin_identity_schema_file_path=self._admin_identity_schema_file_path,
+            identity_schemas=schemas,
+            default_identity_schema_id=default_schema_id,
             public_base_url=self._domain_url,
             login_ui_url=self._get_login_ui_endpoint_info("login_url"),
             error_ui_url=self._get_login_ui_endpoint_info("error_url"),
@@ -245,12 +250,21 @@ class KratosCharm(CharmBase):
         )
         return rendered
 
-    def _push_schemas(self) -> None:
+    def _push_file(self, dst: Path, src: Path = None, content: str = None) -> None:
+        if not content:
+            if not src:
+                raise ValueError("`src` or `content` must be provided.")
+            with open(src) as f:
+                content = f.read()
+        self._container.push(dst, content, make_dirs=True)
+
+    def _push_default_files(self) -> None:
         for schema_file in self._mappers_local_dir_path.iterdir():
-            with open(Path(schema_file)) as f:
-                schema = f.read()
-            self._container.push(
-                path=Path(self._config_dir_path, schema_file), source=schema, make_dirs=True
+            self._push_file(self._mappers_dir_path / schema_file.name, src=schema_file)
+
+        for schema_file in self._identity_schemas_local_dir_path.iterdir():
+            self._push_file(
+                self._identity_schemas_default_dir_path / schema_file.name, src=schema_file
             )
 
     def _get_hydra_endpoint_info(self) -> Optional[str]:
@@ -276,6 +290,57 @@ class KratosCharm(CharmBase):
         except LoginUITooManyRelatedAppsError:
             logger.info("Too many ui-endpoint-info relation found")
         return None
+
+    def _get_juju_config_identity_schema_config(self) -> Optional[Tuple[str, Dict]]:
+        if identity_schemas := self.config.get("identity_schemas"):
+            default_schema_id = self.config.get("default_identity_schema_id")
+            if not default_schema_id:
+                logger.error(
+                    "`identity_schemas` configuration was set, but no `default_identity_schema_id` was found"
+                )
+                logger.warning("Ignoring `identity_schemas` configuration")
+                return None
+
+            try:
+                schemas = json.loads(identity_schemas)
+            except json.JSONDecodeError as e:
+                logger.error(f"identity_schemas is not a valid json: {e}")
+                logger.warning("Ignoring `identity_schemas` configuration")
+                return None
+
+            schemas = {
+                schema_id: f"base64://{base64.b64encode(json.dumps(schema).encode()).decode()}"
+                for schema_id, schema in schemas.items()
+            }
+            return default_schema_id, schemas
+        return None
+
+    def _get_default_identity_schema_config(self) -> Tuple[Optional[str], Optional[Dict]]:
+        schemas = {
+            schema_file.stem: f"file://{self._identity_schemas_default_dir_path / schema_file.name}"
+            for schema_file in self._identity_schemas_local_dir_path.glob("*.json")
+        }
+        default_schema_id_file = (
+            self._identity_schemas_local_dir_path / DEFAULT_SCHEMA_ID_FILE_NAME
+        )
+        with open(default_schema_id_file) as f:
+            default_schema_id = f.read()
+        if default_schema_id not in schemas:
+            raise RuntimeError(f"Default schema `{default_schema_id}` can't be found")
+        return default_schema_id, schemas
+
+    def _get_identity_schema_config(self) -> Optional[Tuple[str, Dict]]:
+        """Get the the default schema id and the identity schemas.
+
+        The identity schemas can come from 2 different sources. We chose them in this order:
+        1) If the user has defined some schemas in the juju config, return those
+        2) Else return the default identity schemas that come with this operator
+        """
+        if config_schemas := self._get_juju_config_identity_schema_config():
+            default_schema_id, schemas = config_schemas
+        else:
+            default_schema_id, schemas = self._get_default_identity_schema_config()
+        return default_schema_id, schemas
 
     def _get_database_relation_info(self) -> dict:
         """Get database info from relation data bag."""
@@ -353,16 +418,7 @@ class KratosCharm(CharmBase):
 
         self.unit.status = MaintenanceStatus("Configuring/deploying resources")
 
-        with open("src/identity.default.schema.json", encoding="utf-8") as schema_file:
-            schema = schema_file.read()
-            self._container.push(self._identity_schema_file_path, schema, make_dirs=True)
-
-        with open("src/identity.admin.schema.json", encoding="utf-8") as schema_file:
-            schema = schema_file.read()
-            self._container.push(self._admin_identity_schema_file_path, schema, make_dirs=True)
-
-        self._push_schemas()
-
+        self._push_default_files()
         self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
         logger.info("Pebble plan updated with new configuration, replanning")
         self._container.replan()
@@ -631,7 +687,7 @@ class KratosCharm(CharmBase):
 
         event.log("Creating admin account.")
         try:
-            identity = self.kratos.create_identity(traits, "admin", password=password)
+            identity = self.kratos.create_identity(traits, "admin_v0", password=password)
         except Error as e:
             event.fail(f"Something went wrong when trying to run the command: {e}")
             return

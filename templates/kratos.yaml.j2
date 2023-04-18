@@ -1,12 +1,12 @@
 log:
     level: trace
 identity:
-    default_schema_id: default
+    default_schema_id: {{ default_identity_schema_id }}
     schemas:
-        - id: default
-          url: 'file://{{ identity_schema_file_path }}'
-        - id: admin
-          url: 'file://{{ admin_identity_schema_file_path }}'
+        {%- for schema_id, identity_schema in identity_schemas.items() %}
+        - id: {{ schema_id }}
+          url: '{{ identity_schema }}'
+        {%- endfor %}
 selfservice:
     default_browser_return_url:
         {{ default_browser_return_url | d("http://example-default-return-url.com", true) }}

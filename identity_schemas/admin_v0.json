@@ -1,0 +1,44 @@
+{
+  "$id": "https://schemas.canonical.com/presets/kratos/admin_v0.json",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Admin Account",
+  "type": "object",
+  "properties": {
+    "traits": {
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string",
+          "title": "Username",
+          "ory.sh/kratos": {
+            "credentials": {
+              "password": {
+                "identifier": true
+              }
+            }
+          }
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "title": "E-Mail",
+          "minLength": 3,
+          "ory.sh/kratos": {
+            "verification": {
+              "via": "email"
+            }
+          }
+        },
+        "name": {
+          "type": "string",
+          "title": "Name"
+        },
+        "phone_number": {
+          "type": "string",
+          "title": "Phone Number"
+        }
+      }
+    },
+    "additionalProperties": true
+  }
+}
