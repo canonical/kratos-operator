@@ -969,8 +969,14 @@ def test_on_client_config_changed_without_login_ui_endpoints(harness: Harness) -
         },
     }
 
+    expected_schemas = expected_config["identity"].pop("schemas")
+
     container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
-    assert yaml.load(container_config.read(), yaml.Loader) == expected_config
+    config = yaml.load(container_config.read(), yaml.Loader)
+    schemas = config["identity"].pop("schemas")
+    assert all(schema in schemas for schema in expected_schemas)
+    assert len(expected_schemas) == len(schemas)
+    assert config == expected_config
 
 
 def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
@@ -1017,8 +1023,14 @@ def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
         },
     }
 
+    expected_schemas = expected_config["identity"].pop("schemas")
+
     container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
-    assert yaml.load(container_config.read(), yaml.Loader) == expected_config
+    config = yaml.load(container_config.read(), yaml.Loader)
+    schemas = config["identity"].pop("schemas")
+    assert all(schema in schemas for schema in expected_schemas)
+    assert len(expected_schemas) == len(schemas)
+    assert config == expected_config
 
 
 @pytest.mark.parametrize(
