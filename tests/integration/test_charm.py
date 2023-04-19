@@ -9,9 +9,9 @@ from pathlib import Path
 import pytest
 import requests
 import yaml
-from pytest_operator.plugin import OpsTest
 from lightkube import Client
 from lightkube.resources.networking_v1 import NetworkPolicy
+from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
 

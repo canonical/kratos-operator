@@ -1,7 +1,10 @@
+#!/usr/bin/env python3
+# Copyright 2022 Canonical Ltd.
+
 import os
 
-from lightkube import Client, KubeConfig
 import pytest
+from lightkube import Client, KubeConfig
 
 KUBECONFIG = os.environ.get("TESTING_KUBECONFIG", "~/.kube/config")
 
