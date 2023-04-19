@@ -15,6 +15,11 @@ from charm import KratosCharm
 from kratos import KratosAPI
 
 
+@pytest.fixture(autouse=True)
+def lk_client(mocker):
+    return mocker.patch("charm.Client", autospec=True)
+
+
 @pytest.fixture()
 def harness(mocked_kubernetes_service_patcher: MagicMock) -> Harness:
     harness = Harness(KratosCharm)

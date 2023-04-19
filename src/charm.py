@@ -54,6 +54,7 @@ from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
 from ops.pebble import Error, ExecError, Layer
 
+from k8s_network_policies import K8sNetworkPoliciesHandler, NetworkPoliciesHandlerError
 from kratos import KratosAPI
 
 if TYPE_CHECKING:
@@ -117,6 +118,7 @@ class KratosCharm(CharmBase):
             port=KRATOS_PUBLIC_PORT,
             strip_prefix=True,
         )
+        self.network_policy_handler = K8sNetworkPoliciesHandler(self)
 
         self.database = DatabaseRequires(
             self,
@@ -151,9 +153,13 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.database.on.database_created, self._on_database_created)
         self.framework.observe(self.database.on.endpoints_changed, self._on_database_changed)
         self.framework.observe(self.admin_ingress.on.ready, self._on_admin_ingress_ready)
+        self.framework.observe(self.admin_ingress.on.ready, self._apply_network_policies)
         self.framework.observe(self.admin_ingress.on.revoked, self._on_ingress_revoked)
+        self.framework.observe(self.admin_ingress.on.revoked, self._apply_network_policies)
         self.framework.observe(self.public_ingress.on.ready, self._on_public_ingress_ready)
+        self.framework.observe(self.public_ingress.on.ready, self._apply_network_policies)
         self.framework.observe(self.public_ingress.on.revoked, self._on_ingress_revoked)
+        self.framework.observe(self.public_ingress.on.revoked, self._apply_network_policies)
         self.framework.observe(
             self.external_provider.on.client_config_changed, self._on_client_config_changed
         )
@@ -521,6 +527,20 @@ class KratosCharm(CharmBase):
 
         self._handle_status_update_config(event)
         self._update_kratos_endpoints_relation_data(event)
+
+    def _apply_network_policies(self, event: HookEvent) -> None:
+        if not self.unit.is_leader():
+            return
+
+        try:
+            self.network_policy_handler.apply_ingress_policy(
+                [
+                    ("admin", [self.admin_ingress.relation]),
+                    ("public", [self.public_ingress.relation]),
+                ]
+            )
+        except NetworkPoliciesHandlerError:
+            event.defer()
 
     def _on_public_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
         if self.unit.is_leader():

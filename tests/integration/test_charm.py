@@ -10,6 +10,8 @@ import pytest
 import requests
 import yaml
 from pytest_operator.plugin import OpsTest
+from lightkube import Client
+from lightkube.resources.networking_v1 import NetworkPolicy
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +73,7 @@ async def test_build_and_deploy(ops_test: OpsTest) -> None:
         assert ops_test.model.applications[APP_NAME].units[0].workload_status == "active"
 
 
-async def test_ingress_relation(ops_test: OpsTest) -> None:
+async def test_ingress_relation(ops_test: OpsTest, client: Client) -> None:
     await ops_test.model.deploy(
         TRAEFIK,
         application_name=TRAEFIK_PUBLIC_APP,
@@ -93,6 +95,10 @@ async def test_ingress_relation(ops_test: OpsTest) -> None:
         raise_on_blocked=True,
         timeout=1000,
     )
+
+    # Validate network policies are created when ingress is provided
+    policy = client.get(NetworkPolicy, "kratos-network-policy")
+    assert policy
 
 
 async def test_has_public_ingress(ops_test: OpsTest) -> None:
