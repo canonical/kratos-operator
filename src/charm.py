@@ -24,6 +24,12 @@ from charms.hydra.v0.hydra_endpoints import (
     HydraEndpointsRelationDataMissingError,
     HydraEndpointsRequirer,
 )
+from charms.identity_platform_login_ui_operator.v0.login_ui_endpoints import (
+    LoginUIEndpointsRelationDataMissingError,
+    LoginUIEndpointsRelationMissingError,
+    LoginUIEndpointsRequirer,
+    LoginUITooManyRelatedAppsError,
+)
 from charms.kratos.v0.kratos_endpoints import KratosEndpointsProvider
 from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ClientConfigChangedEvent,
@@ -91,6 +97,7 @@ class KratosCharm(CharmBase):
         self._db_name = f"{self.model.name}_{self.app.name}"
         self._db_relation_name = "pg-database"
         self._hydra_relation_name = "endpoint-info"
+        self._login_ui_relation_name = "ui-endpoint-info"
 
         self.kratos = KratosAPI(
             f"http://127.0.0.1:{KRATOS_ADMIN_PORT}", self._container, str(self._config_file_path)
@@ -124,6 +131,10 @@ class KratosCharm(CharmBase):
             self, relation_name=self._hydra_relation_name
         )
 
+        self.login_ui_endpoints = LoginUIEndpointsRequirer(
+            self, relation_name=self._login_ui_relation_name
+        )
+
         self.endpoints_provider = KratosEndpointsProvider(self)
 
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
@@ -133,6 +144,9 @@ class KratosCharm(CharmBase):
         )
         self.framework.observe(
             self.on[self._hydra_relation_name].relation_changed, self._on_config_changed
+        )
+        self.framework.observe(
+            self.on[self._login_ui_relation_name].relation_changed, self._on_config_changed
         )
         self.framework.observe(self.database.on.database_created, self._on_database_created)
         self.framework.observe(self.database.on.endpoints_changed, self._on_database_changed)
@@ -219,15 +233,15 @@ class KratosCharm(CharmBase):
         default_schema_id, schemas = self._get_identity_schema_config()
         rendered = template.render(
             mappers_path=str(self._mappers_dir_path),
+            default_browser_return_url=self._get_login_ui_endpoint_info("default_url"),
             identity_schemas=schemas,
             default_identity_schema_id=default_schema_id,
-            default_browser_return_url=self.config.get("login_ui_url"),
             public_base_url=self._domain_url,
-            login_ui_url=join(self.config.get("login_ui_url"), "login"),
-            error_ui_url=join(self.config.get("login_ui_url"), "oidc_error"),
+            login_ui_url=self._get_login_ui_endpoint_info("login_url"),
+            error_ui_url=self._get_login_ui_endpoint_info("error_url"),
             oidc_providers=self.external_provider.get_providers(),
             available_mappers=self._get_available_mappers,
-            registration_ui_url=join(self.config.get("login_ui_url"), "registration"),
+            registration_ui_url=self._get_login_ui_endpoint_info("registration_url"),
             db_info=self._get_database_relation_info(),
             oauth2_provider_url=self._get_hydra_endpoint_info(),
             smtp_connection_uri=self.config.get("smtp_connection_uri"),
@@ -262,6 +276,18 @@ class KratosCharm(CharmBase):
                 return None
 
         return oauth2_provider_url
+
+    def _get_login_ui_endpoint_info(self, key: str) -> Optional[str]:
+        try:
+            login_ui_endpoints = self.login_ui_endpoints.get_login_ui_endpoints()
+            return login_ui_endpoints[key]
+        except LoginUIEndpointsRelationDataMissingError:
+            logger.info("No login ui endpoint-info relation data found")
+        except LoginUIEndpointsRelationMissingError:
+            logger.info("No login ui-endpoint-info relation found")
+        except LoginUITooManyRelatedAppsError:
+            logger.info("Too many ui-endpoint-info relation found")
+        return None
 
     def _get_juju_config_identity_schema_config(self) -> Optional[Tuple[str, Dict]]:
         if identity_schemas := self.config.get("identity_schemas"):
