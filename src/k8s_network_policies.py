@@ -81,10 +81,14 @@ class K8sNetworkPoliciesHandler:
             metadata=ObjectMeta(name=name),
             spec=NetworkPolicySpec(
                 podSelector=LabelSelector(
-                    matchLabels={"app.kubernetes.io/name": self._charm.app.name}
+                    matchLabels={
+                        "app.kubernetes.io/name": self._charm.app.name,
+                        "kubernetes.io/metadata.name": self._charm.model.name,
+                    }
                 ),
-                policyTypes=["Ingress"],
+                policyTypes=["Ingress", "Egress"],
                 ingress=ingress,
+                egress=[{}]
             ),
         )
 
