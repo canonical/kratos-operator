@@ -54,7 +54,11 @@ from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
 from ops.pebble import Error, ExecError, Layer
 
-from k8s_network_policies import K8sNetworkPoliciesHandler, NetworkPoliciesHandlerError
+from k8s_network_policies import (
+    K8sNetworkPoliciesHandler,
+    NetworkPoliciesHandlerError,
+    PortDefinition,
+)
 from kratos import KratosAPI
 
 if TYPE_CHECKING:
@@ -535,8 +539,10 @@ class KratosCharm(CharmBase):
         try:
             self.network_policy_handler.apply_ingress_policy(
                 [
-                    ("admin", [self.admin_ingress.relation]),
-                    ("public", [self.public_ingress.relation]),
+                    (PortDefinition(1, KRATOS_PUBLIC_PORT - 1), ()),
+                    (PortDefinition(KRATOS_PUBLIC_PORT), [self.public_ingress.relation]),
+                    (PortDefinition(KRATOS_ADMIN_PORT), [self.admin_ingress.relation]),
+                    (PortDefinition(KRATOS_ADMIN_PORT + 1, 65535), ()),
                 ]
             )
         except NetworkPoliciesHandlerError:

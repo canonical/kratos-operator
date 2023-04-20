@@ -97,7 +97,7 @@ async def test_ingress_relation(ops_test: OpsTest, client: Client) -> None:
     )
 
     # Validate network policies are created when ingress is provided
-    policy = client.get(NetworkPolicy, "kratos-network-policy")
+    policy = client.get(NetworkPolicy, "kratos-network-policy", namespace=ops_test.model.name)
     assert policy
 
 

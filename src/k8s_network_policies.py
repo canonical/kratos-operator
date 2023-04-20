@@ -5,6 +5,7 @@
 """A helper class for managing kubernetes network policies."""
 
 import logging
+from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
 
 from lightkube import ApiError, Client
@@ -26,7 +27,22 @@ class NetworkPoliciesHandlerError(Exception):
     """Applying the network policies failed."""
 
 
-IngressPolicyDefinition = Tuple[Union[str, int], List[Relation]]
+@dataclass
+class PortDefinition:
+    """Network Policy port definition."""
+
+    port: Union[str, int]
+    end_port: Optional[int] = None
+    protocol: Optional[str] = "TCP"
+
+    def to_resource(self):
+        """Convert class to NetworkPolicyPort."""
+        if not self.end_port:
+            return NetworkPolicyPort(port=self.port, protocol=self.protocol)
+        return NetworkPolicyPort(port=self.port, endPort=self.end_port, protocol=self.protocol)
+
+
+IngressPolicyDefinition = Tuple[PortDefinition, List[Relation]]
 
 
 class K8sNetworkPoliciesHandler:
@@ -73,7 +89,7 @@ class K8sNetworkPoliciesHandler:
             ingress.append(
                 NetworkPolicyIngressRule(
                     from_=selectors,
-                    ports=[NetworkPolicyPort(port=port)],
+                    ports=[port.to_resource()],
                 ),
             )
 
@@ -86,9 +102,8 @@ class K8sNetworkPoliciesHandler:
                         "kubernetes.io/metadata.name": self._charm.model.name,
                     }
                 ),
-                policyTypes=["Ingress", "Egress"],
+                policyTypes=["Ingress"],
                 ingress=ingress,
-                egress=[{}]
             ),
         )
 
