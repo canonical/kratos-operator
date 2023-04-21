@@ -38,6 +38,8 @@ tox -e integration   # integration tests
 tox                  # runs 'fmt', 'lint', and 'unit' environments
 ```
 
+Running the integration tests requires that you have a valid kubeconfig file at `~/.kube/config`.
+
 ## Build charm
 
 Build the charm in this git repository using:
