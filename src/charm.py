@@ -31,6 +31,11 @@ from charms.identity_platform_login_ui_operator.v0.login_ui_endpoints import (
     LoginUITooManyRelatedAppsError,
 )
 from charms.kratos.v0.kratos_endpoints import KratosEndpointsProvider
+from charms.kratos.v0.kubernetes_network_policies import (
+    K8sNetworkPoliciesHandler,
+    NetworkPoliciesHandlerError,
+    PortDefinition,
+)
 from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ClientConfigChangedEvent,
     ExternalIdpRequirer,
@@ -54,11 +59,6 @@ from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
 from ops.pebble import Error, ExecError, Layer
 
-from k8s_network_policies import (
-    K8sNetworkPoliciesHandler,
-    NetworkPoliciesHandlerError,
-    PortDefinition,
-)
 from kratos import KratosAPI
 
 if TYPE_CHECKING:
@@ -539,10 +539,10 @@ class KratosCharm(CharmBase):
         try:
             self.network_policy_handler.apply_ingress_policy(
                 [
-                    (PortDefinition(1, KRATOS_PUBLIC_PORT - 1), ()),
+                    (PortDefinition(1, KRATOS_PUBLIC_PORT - 1), []),
                     (PortDefinition(KRATOS_PUBLIC_PORT), [self.public_ingress.relation]),
                     (PortDefinition(KRATOS_ADMIN_PORT), [self.admin_ingress.relation]),
-                    (PortDefinition(KRATOS_ADMIN_PORT + 1, 65535), ()),
+                    (PortDefinition(KRATOS_ADMIN_PORT + 1, 65535), []),
                 ]
             )
         except NetworkPoliciesHandlerError:

@@ -1,8 +1,35 @@
 #!/usr/bin/env python3
-# Copyright 2022 Canonical Ltd.
+# Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""A helper class for managing kubernetes network policies."""
+"""Interface library for creating network policies.
+This library provides a Python API for creating kubernetes network policies.
+## Getting Started
+To get started using the library, you need to fetch the library using `charmcraft`.
+```shell
+cd some-charm
+charmcraft fetch-lib charms.kratos.v0.kubernetes_network_policies
+```
+Then, to initialise the library:
+```python
+from charms.kratos.v0.kubernetes_network_policies import (
+    K8sNetworkPoliciesHandler,
+    NetworkPoliciesHandlerError,
+    PortDefinition,
+)
+Class SomeCharm(CharmBase):
+    def __init__(self, *args):
+        self.network_policy_handler = K8sNetworkPoliciesHandler(self)
+
+    def some_event_function():
+        policies = [(PortDefinition("admin"), [self.admin_ingress_relation]), (PortDefinition(8080), [])]
+        self.network_policy_handler.apply_ingress_policy(policies)
+```
+
+The function in this example will only allow traffic to the charm pod to the "admin" port from the app on the
+other side of the `admin_ingress_relation` and all traffic to the "8080" port. Ingress traffic to all other ports
+will be denied.
+"""
 
 import logging
 from dataclasses import dataclass
@@ -19,6 +46,17 @@ from lightkube.models.networking_v1 import (
 from lightkube.resources.networking_v1 import NetworkPolicy
 from ops.charm import CharmBase
 from ops.model import Relation
+
+
+# The unique Charmhub library identifier, never change it
+LIBID = "f0a1c7a9bc084be09b1052810651b7ed"
+
+# Increment this major API version when introducing breaking changes
+LIBAPI = 0
+
+# Increment this PATCH version before using `charmcraft publish-lib` or reset
+# to 0 if you are raising the major API version
+LIBPATCH = 1
 
 logger = logging.getLogger(__name__)
 
