@@ -80,10 +80,12 @@ class PortDefinition:
         return NetworkPolicyPort(port=self.port, endPort=self.end_port, protocol=self.protocol)
 
 
+Port = Union[str, int]
+IngressPolicyDefinition = Union[Tuple[Port], Tuple[int, str], Tuple[int, str, int]]
 IngressPolicyDefinition = Tuple[PortDefinition, List[Relation]]
 
 
-class K8sNetworkPoliciesHandler:
+class KubernetesNetworkPoliciesHandler:
     """A helper class for managing kubernetes network policies."""
 
     def __init__(self, charm: CharmBase) -> None:

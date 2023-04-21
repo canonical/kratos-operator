@@ -17,7 +17,7 @@ from kratos import KratosAPI
 
 @pytest.fixture(autouse=True)
 def lk_client(mocker):
-    return mocker.patch("charm.K8sNetworkPoliciesHandler")
+    return mocker.patch("charm.KubernetesNetworkPoliciesHandler")
 
 
 @pytest.fixture()

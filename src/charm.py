@@ -32,7 +32,7 @@ from charms.identity_platform_login_ui_operator.v0.login_ui_endpoints import (
 )
 from charms.kratos.v0.kratos_endpoints import KratosEndpointsProvider
 from charms.kratos.v0.kubernetes_network_policies import (
-    K8sNetworkPoliciesHandler,
+    KubernetesNetworkPoliciesHandler,
     NetworkPoliciesHandlerError,
     PortDefinition,
 )
@@ -54,6 +54,7 @@ from ops.charm import (
     HookEvent,
     PebbleReadyEvent,
     RelationEvent,
+    RemoveEvent,
 )
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
@@ -122,7 +123,7 @@ class KratosCharm(CharmBase):
             port=KRATOS_PUBLIC_PORT,
             strip_prefix=True,
         )
-        self.network_policy_handler = K8sNetworkPoliciesHandler(self)
+        self.network_policy_handler = KubernetesNetworkPoliciesHandler(self)
 
         self.database = DatabaseRequires(
             self,
@@ -145,6 +146,7 @@ class KratosCharm(CharmBase):
 
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
+        self.framework.observe(self.on.remove, self._cleanup)
         self.framework.observe(
             self.endpoints_provider.on.ready, self._update_kratos_endpoints_relation_data
         )
@@ -451,6 +453,9 @@ class KratosCharm(CharmBase):
     def _on_config_changed(self, event: ConfigChangedEvent) -> None:
         """Event Handler for config changed event."""
         self._handle_status_update_config(event)
+
+    def _cleanup(self, event: RemoveEvent) -> None:
+        self.network_policy_handler.delete_network_policy()
 
     def _update_kratos_endpoints_relation_data(self, event: RelationEvent) -> None:
         admin_endpoint = (
