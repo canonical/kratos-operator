@@ -34,7 +34,6 @@ from charms.kratos.v0.kratos_endpoints import KratosEndpointsProvider
 from charms.kratos.v0.kubernetes_network_policies import (
     KubernetesNetworkPoliciesHandler,
     NetworkPoliciesHandlerError,
-    PortDefinition,
 )
 from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ClientConfigChangedEvent,
@@ -544,12 +543,10 @@ class KratosCharm(CharmBase):
         try:
             self.network_policy_handler.apply_ingress_policy(
                 [
-                    # (PortDefinition(1, KRATOS_PUBLIC_PORT - 1), []),
-                    (PortDefinition(KRATOS_PUBLIC_PORT), [self.public_ingress.relation]),
-                    (PortDefinition(KRATOS_ADMIN_PORT), [self.admin_ingress.relation]),
-                    (PortDefinition(38812), []),
-                    (PortDefinition(38813), []),
-                    # (PortDefinition(KRATOS_ADMIN_PORT + 1, 65535), []),
+                    (KRATOS_PUBLIC_PORT, [self.public_ingress.relation]),
+                    (KRATOS_ADMIN_PORT, [self.admin_ingress.relation]),
+                    (38812, []),
+                    (38813, []),
                 ]
             )
         except NetworkPoliciesHandlerError:

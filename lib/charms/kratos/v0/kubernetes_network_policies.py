@@ -66,24 +66,8 @@ class NetworkPoliciesHandlerError(Exception):
     """Applying the network policies failed."""
 
 
-@dataclass
-class PortDefinition:
-    """Network Policy port definition."""
-
-    port: Union[str, int]
-    end_port: Optional[int] = None
-    protocol: Optional[str] = "TCP"
-
-    def to_resource(self):
-        """Convert class to NetworkPolicyPort."""
-        if not self.end_port:
-            return NetworkPolicyPort(port=self.port, protocol=self.protocol)
-        return NetworkPolicyPort(port=self.port, endPort=self.end_port, protocol=self.protocol)
-
-
 Port = Union[str, int]
-IngressPolicyDefinition = Union[Tuple[Port], Tuple[int, str], Tuple[int, str, int]]
-IngressPolicyDefinition = Tuple[PortDefinition, List[Relation]]
+IngressPolicyDefinition = Tuple[Port, List[Relation]]
 
 
 class KubernetesNetworkPoliciesHandler:
@@ -130,7 +114,7 @@ class KubernetesNetworkPoliciesHandler:
             ingress.append(
                 NetworkPolicyIngressRule(
                     from_=selectors,
-                    ports=[port.to_resource()],
+                    ports=[NetworkPolicyPort(port=port, protocol="TCP")],
                 ),
             )
 
@@ -144,7 +128,6 @@ class KubernetesNetworkPoliciesHandler:
                 ),
                 policyTypes=["Ingress", "Egress"],
                 ingress=ingress,
-                egress=[NetworkPolicyEgressRule()],
             ),
         )
 
