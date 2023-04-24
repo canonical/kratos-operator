@@ -39,11 +39,10 @@ Class SomeCharm(CharmBase):
 """
 
 import logging
-from typing import Dict, Optional
+from typing import Dict
 
 from ops.charm import CharmBase, RelationCreatedEvent
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
-from ops.model import Application
 
 # The unique Charmhub library identifier, never change it
 LIBID = "a9dbc14576874a508dc3b7f717c72f73"
@@ -53,7 +52,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 4
 
 RELATION_NAME = "endpoint-info"
 INTERFACE_NAME = "hydra_endpoints"
@@ -129,26 +128,18 @@ class HydraEndpointsRelationDataMissingError(HydraEndpointsRelationError):
 class HydraEndpointsRequirer(Object):
     """Requirer side of the endpoint-info relation."""
 
-    def __init__(self, charm: CharmBase, relation_name: str = RELATION_NAME):
+    def __init__(self, charm: CharmBase, relation_name: str = RELATION_NAME) -> None:
         super().__init__(charm, relation_name)
         self.charm = charm
         self.relation_name = relation_name
 
-    def get_hydra_endpoints(self) -> Optional[Dict]:
+    def get_hydra_endpoints(self) -> Dict:
         """Get the hydra endpoints."""
-        if not self.model.unit.is_leader():
-            return None
         endpoints = self.model.relations[self.relation_name]
         if len(endpoints) == 0:
             raise HydraEndpointsRelationMissingError()
 
-        remote_app = [
-            app
-            for app in endpoints[0].data.keys()
-            if isinstance(app, Application) and not app._is_our_app
-        ][0]
-
-        data = endpoints[0].data[remote_app]
+        data = endpoints[0].data[endpoints[0].app]
 
         if "admin_endpoint" not in data:
             raise HydraEndpointsRelationDataMissingError(
