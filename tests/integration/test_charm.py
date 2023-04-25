@@ -59,6 +59,8 @@ async def test_build_and_deploy(ops_test: OpsTest) -> None:
 
 
 async def test_ingress_relation(ops_test: OpsTest, client: Client) -> None:
+    # We deploy ingress before running the database migrations to make sure that
+    # we don't break migrations by applying the network policies (e.g. by breaking dns).
     await ops_test.model.deploy(
         TRAEFIK,
         application_name=TRAEFIK_PUBLIC_APP,
