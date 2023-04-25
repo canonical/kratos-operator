@@ -2,8 +2,9 @@
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Interface library for creating network policies.
-This library provides a Python API for creating kubernetes network policies.
+"""Library for creating network policies.
+This library provides a Python API for creating kubernetes ingress network policies.
+
 ## Getting Started
 To get started using the library, you need to fetch the library using `charmcraft`.
 ```shell
@@ -15,7 +16,6 @@ Then, to initialise the library:
 from charms.kratos.v0.kubernetes_network_policies import (
     K8sNetworkPoliciesHandler,
     NetworkPoliciesHandlerError,
-    PortDefinition,
 )
 Class SomeCharm(CharmBase):
     def __init__(self, *args):
@@ -38,7 +38,6 @@ from typing import List, Optional, Tuple, Union
 from lightkube import ApiError, Client
 from lightkube.models.meta_v1 import LabelSelector, ObjectMeta
 from lightkube.models.networking_v1 import (
-    NetworkPolicyEgressRule,
     NetworkPolicyIngressRule,
     NetworkPolicyPeer,
     NetworkPolicyPort,
@@ -82,8 +81,8 @@ class KubernetesNetworkPoliciesHandler:
         """The default policy name that will be created."""
         return f"{self._charm.app.name}-network-policy"
 
-    def apply_ingress_policy(
-        self, policies: IngressPolicyDefinition, name: Optional[str] = None
+    def apply_ingress_policies(
+        self, policies: List[IngressPolicyDefinition], name: Optional[str] = None
     ) -> None:
         """Apply an ingress network policy about a related application.
 
@@ -126,7 +125,7 @@ class KubernetesNetworkPoliciesHandler:
                         "app.kubernetes.io/name": self._charm.app.name,
                     }
                 ),
-                policyTypes=["Ingress", "Egress"],
+                policyTypes=["Ingress"],
                 ingress=ingress,
             ),
         )
@@ -144,13 +143,13 @@ class KubernetesNetworkPoliciesHandler:
             logger.error(msg)
             raise NetworkPoliciesHandlerError()
 
-    def delete_network_policy(self, name: Optional[str] = None) -> None:
+    def delete_ingress_policies(self, name: Optional[str] = None) -> None:
         """Delete a network policy rule."""
         if not name:
             name = self.policy_name
 
         try:
-            self.client.delete(name, namespace=self._charm.model.name)
+            self.client.delete(NetworkPolicy, name, namespace=self._charm.model.name)
         except ApiError as e:
             if e.status.code == 403:
                 msg = f"Kubernetes resources patch failed: `juju trust` this application. {e}"

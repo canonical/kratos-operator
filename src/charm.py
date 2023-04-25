@@ -454,7 +454,7 @@ class KratosCharm(CharmBase):
         self._handle_status_update_config(event)
 
     def _cleanup(self, event: RemoveEvent) -> None:
-        self.network_policy_handler.delete_network_policy()
+        self.network_policy_handler.delete_ingress_policies()
 
     def _update_kratos_endpoints_relation_data(self, event: RelationEvent) -> None:
         admin_endpoint = (
@@ -541,10 +541,10 @@ class KratosCharm(CharmBase):
             return
 
         try:
-            self.network_policy_handler.apply_ingress_policy(
+            self.network_policy_handler.apply_ingress_policies(
                 [
-                    (KRATOS_PUBLIC_PORT, [self.public_ingress.relation]),
-                    (KRATOS_ADMIN_PORT, [self.admin_ingress.relation]),
+                    ("public", [self.public_ingress.relation]),
+                    ("admin", [self.admin_ingress.relation]),
                     (38812, []),
                     (38813, []),
                 ]
