@@ -158,13 +158,9 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.database.on.database_created, self._on_database_created)
         self.framework.observe(self.database.on.endpoints_changed, self._on_database_changed)
         self.framework.observe(self.admin_ingress.on.ready, self._on_admin_ingress_ready)
-        self.framework.observe(self.admin_ingress.on.ready, self._apply_network_policies)
         self.framework.observe(self.admin_ingress.on.revoked, self._on_ingress_revoked)
-        self.framework.observe(self.admin_ingress.on.revoked, self._apply_network_policies)
         self.framework.observe(self.public_ingress.on.ready, self._on_public_ingress_ready)
-        self.framework.observe(self.public_ingress.on.ready, self._apply_network_policies)
         self.framework.observe(self.public_ingress.on.revoked, self._on_ingress_revoked)
-        self.framework.observe(self.public_ingress.on.revoked, self._apply_network_policies)
         self.framework.observe(
             self.external_provider.on.client_config_changed, self._on_client_config_changed
         )
@@ -535,8 +531,9 @@ class KratosCharm(CharmBase):
 
         self._handle_status_update_config(event)
         self._update_kratos_endpoints_relation_data(event)
+        self._apply_network_policies()
 
-    def _apply_network_policies(self, event: HookEvent) -> None:
+    def _apply_network_policies(self) -> None:
         if not self.unit.is_leader():
             return
 
@@ -550,7 +547,7 @@ class KratosCharm(CharmBase):
                 ]
             )
         except NetworkPoliciesHandlerError:
-            event.defer()
+            self.unit.status = BlockedStatus("Failed to apply network policies")
 
     def _on_public_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
         if self.unit.is_leader():
@@ -558,6 +555,7 @@ class KratosCharm(CharmBase):
 
         self._handle_status_update_config(event)
         self._update_kratos_endpoints_relation_data(event)
+        self._apply_network_policies()
 
     def _on_ingress_revoked(self, event: IngressPerAppRevokedEvent) -> None:
         if self.unit.is_leader():
@@ -565,6 +563,7 @@ class KratosCharm(CharmBase):
 
         self._handle_status_update_config(event)
         self._update_kratos_endpoints_relation_data(event)
+        self._apply_network_policies()
 
     def _on_client_config_changed(self, event: ClientConfigChangedEvent) -> None:
         domain_url = self._domain_url
