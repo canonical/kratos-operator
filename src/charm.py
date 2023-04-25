@@ -543,8 +543,8 @@ class KratosCharm(CharmBase):
         try:
             self.network_policy_handler.apply_ingress_policies(
                 [
-                    ("public", [self.public_ingress.relation]),
-                    ("admin", [self.admin_ingress.relation]),
+                    (KRATOS_PUBLIC_PORT, [self.public_ingress.relation]),
+                    (KRATOS_ADMIN_PORT, [self.admin_ingress.relation]),
                     (38812, []),
                     (38813, []),
                 ]
