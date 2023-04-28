@@ -548,7 +548,7 @@ class KratosCharm(CharmBase):
                 ]
             )
         except NetworkPoliciesHandlerError:
-            self.unit.status = BlockedStatus("Failed to apply network policies")
+            pass
 
     def _on_public_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
         if self.unit.is_leader():
