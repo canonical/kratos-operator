@@ -450,6 +450,7 @@ class KratosCharm(CharmBase):
         self._handle_status_update_config(event)
 
     def _cleanup(self, event: RemoveEvent) -> None:
+        logger.info("Removing charm")
         self.network_policy_handler.delete_ingress_policies()
 
     def _update_kratos_endpoints_relation_data(self, event: RelationEvent) -> None:
