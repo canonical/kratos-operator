@@ -16,7 +16,7 @@ from kratos import KratosAPI
 
 
 @pytest.fixture()
-def mocked_kubernetes_policy_handler(mocker):
+def mocked_kubernetes_policy_handler(mocker: MockerFixture) -> None:
     return mocker.patch("charm.KubernetesNetworkPoliciesHandler")
 
 
