@@ -15,13 +15,15 @@ from charm import KratosCharm
 from kratos import KratosAPI
 
 
-@pytest.fixture(autouse=True)
-def lk_client(mocker):
+@pytest.fixture()
+def mocked_kubernetes_policy_handler(mocker):
     return mocker.patch("charm.KubernetesNetworkPoliciesHandler")
 
 
 @pytest.fixture()
-def harness(mocked_kubernetes_service_patcher: MagicMock) -> Harness:
+def harness(
+    mocked_kubernetes_service_patcher: MagicMock, mocked_kubernetes_policy_handler: MagicMock
+) -> Harness:
     harness = Harness(KratosCharm)
     harness.set_model_name("kratos-model")
     harness.set_can_connect("kratos", True)

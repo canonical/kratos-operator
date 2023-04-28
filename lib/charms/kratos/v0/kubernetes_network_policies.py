@@ -62,7 +62,7 @@ logger = logging.getLogger(__name__)
 
 
 class NetworkPoliciesHandlerError(Exception):
-    """Applying the network policies failed."""
+    """Raised when applying the network policies failed."""
 
 
 Port = Union[str, int]
@@ -84,7 +84,7 @@ class KubernetesNetworkPoliciesHandler:
     def apply_ingress_policies(
         self, policies: List[IngressPolicyDefinition], name: Optional[str] = None
     ) -> None:
-        """Apply an ingress network policy about a related application.
+        """Apply an ingress network policy for a related application.
 
         Policies can be defined for multiple ports at once to allow ingress traffic
         from related applications
@@ -129,6 +129,7 @@ class KubernetesNetworkPoliciesHandler:
                 ingress=ingress,
             ),
         )
+
 
         try:
             self.client.apply(
