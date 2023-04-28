@@ -4,12 +4,18 @@
 from unittest.mock import MagicMock
 
 import pytest
+from pytest_mock import MockerFixture
 from charms.kratos.v0.kubernetes_network_policies import (
     KubernetesNetworkPoliciesHandler,
     NetworkPoliciesHandlerError,
 )
 from httpx import Response
 from lightkube import ApiError, Client
+
+
+@pytest.fixture(autouse=True)
+def mock_lk_client(mocker: MockerFixture) -> None:
+    mocker.patch("charms.kratos.v0.kubernetes_network_policies.Client")
 
 
 @pytest.fixture()
