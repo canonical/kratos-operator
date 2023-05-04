@@ -106,11 +106,19 @@ import hashlib
 import inspect
 import json
 import logging
-from collections import defaultdict
 from dataclasses import dataclass
+from typing import Dict, List, Mapping, Optional, Type
 
 import jsonschema
-from ops.framework import EventBase, EventSource, Object, ObjectEvents
+from ops.charm import (
+    CharmBase,
+    RelationChangedEvent,
+    RelationDepartedEvent,
+    RelationEvent,
+    RelationJoinedEvent,
+)
+from ops.framework import EventBase, EventSource, Handle, Object, ObjectEvents
+from ops.model import Relation
 
 # The unique Charmhub library identifier, never change it
 LIBID = "33040051de7f43a8bb43349f2b037dfc"
@@ -120,7 +128,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 1
+LIBPATCH = 2
 
 DEFAULT_RELATION_NAME = "kratos-external-idp"
 logger = logging.getLogger(__name__)
@@ -207,7 +215,7 @@ class DataValidationError(RuntimeError):
     """Raised when data validation fails on relation data."""
 
 
-def _load_data(data, schema):
+def _load_data(data: Dict, schema: Dict) -> Dict:
     """Parses nested fields and checks whether `data` matches `schema`."""
     if "providers" not in data:
         return dict(providers=[])
@@ -222,7 +230,7 @@ def _load_data(data, schema):
     return data
 
 
-def _dump_data(data, schema):
+def _dump_data(data: Dict, schema: Dict) -> Dict:
     _validate_data(data, schema)
 
     data = dict(data)
@@ -233,7 +241,7 @@ def _dump_data(data, schema):
     return data
 
 
-def _validate_data(data, schema):
+def _validate_data(data: Dict, schema: Dict) -> None:
     """Checks whether `data` matches `schema`.
 
     Will raise DataValidationError if the data is not valid, else return None.
@@ -248,10 +256,10 @@ class BaseProviderConfigHandler:
     """The base class for parsing a provider's config."""
 
     mandatory_fields = {"provider", "client_id", "secret_backend"}
-    providers = []
+    providers: List[str] = []
 
     @classmethod
-    def validate_config(cls, config):
+    def validate_config(cls, config: Mapping) -> Dict:
         """Validate and sanitize the user provided config."""
         config_keys = set(config.keys())
         provider = config["provider"]
@@ -277,13 +285,13 @@ class BaseProviderConfigHandler:
         return {key: value for key, value in config.items() if key not in config_keys}
 
     @classmethod
-    def handle_config(cls, config):
+    def handle_config(cls, config: Mapping) -> List:
         """Validate the config and transform it in the relation databag expected format."""
         config = cls.validate_config(config)
         return cls.parse_config(config)
 
     @classmethod
-    def parse_config(cls, config):
+    def parse_config(cls, config: Dict) -> List:
         """Parse the user provided config into the relation databag expected format."""
         return [
             {
@@ -295,7 +303,7 @@ class BaseProviderConfigHandler:
         ]
 
     @classmethod
-    def _parse_provider_config(cls, config):
+    def _parse_provider_config(cls, config: Dict) -> Dict:
         """Create the provider specific config."""
         raise NotImplementedError()
 
@@ -307,7 +315,7 @@ class GenericConfigHandler(BaseProviderConfigHandler):
     providers = ["generic", "auth0"]
 
     @classmethod
-    def _parse_provider_config(cls, config):
+    def _parse_provider_config(cls, config: Dict) -> Dict:
         return {
             "client_secret": config["client_secret"],
             "issuer_url": config["issuer_url"],
@@ -334,7 +342,7 @@ class SocialConfigHandler(BaseProviderConfigHandler):
     ]
 
     @classmethod
-    def _parse_provider_config(cls, config):
+    def _parse_provider_config(cls, config: Dict) -> Dict:
         return {
             "client_secret": config["client_secret"],
         }
@@ -349,14 +357,14 @@ class MicrosoftConfigHandler(SocialConfigHandler):
     providers = ["microsoft"]
 
     @classmethod
-    def _parse_provider_config(cls, config):
+    def _parse_provider_config(cls, config: Dict) -> Dict:
         return {
             "client_secret": config["client_secret"],
             "tenant_id": config["microsoft_tenant_id"],
         }
 
     @classmethod
-    def _parse_relation_data(cls, data):
+    def _parse_relation_data(cls, data: Dict) -> Dict:
         return {
             "client_secret": data["client_secret"],
             "tenant_id": data["tenant_id"],
@@ -375,7 +383,7 @@ class AppleConfigHandler(BaseProviderConfigHandler):
     providers = ["apple"]
 
     @classmethod
-    def _parse_provider_config(cls, config):
+    def _parse_provider_config(cls, config: Dict) -> Dict:
         return {
             "team_id": config["apple_team_id"],
             "private_key_id": config["apple_private_key_id"],
@@ -394,7 +402,7 @@ allowed_providers = {
 }
 
 
-def get_provider_config_handler(config):
+def get_provider_config_handler(config: Mapping) -> Type[BaseProviderConfigHandler]:
     """Get the config handler for this provider."""
     provider = config.get("provider")
     if provider not in allowed_providers:
@@ -408,11 +416,11 @@ def get_provider_config_handler(config):
 class RelationReadyEvent(EventBase):
     """Event to notify the charm that the relation is ready."""
 
-    def snapshot(self):
+    def snapshot(self) -> Dict:
         """Save event."""
         return {}
 
-    def restore(self, snapshot):
+    def restore(self, snapshot: Dict) -> None:
         """Restore event."""
         pass
 
@@ -420,15 +428,15 @@ class RelationReadyEvent(EventBase):
 class RedirectURIChangedEvent(EventBase):
     """Event to notify the charm that the redirect_uri changed."""
 
-    def __init__(self, handle, redirect_uri):
+    def __init__(self, handle: Handle, redirect_uri: str) -> None:
         super().__init__(handle)
         self.redirect_uri = redirect_uri
 
-    def snapshot(self):
+    def snapshot(self) -> Dict:
         """Save redirect_uri."""
         return {"redirect_uri": self.redirect_uri}
 
-    def restore(self, snapshot):
+    def restore(self, snapshot: Dict) -> None:
         """Restore redirect_uri."""
         self.redirect_uri = snapshot["redirect_uri"]
 
@@ -445,7 +453,7 @@ class ExternalIdpProvider(Object):
 
     on = ExternalIdpProviderEvents()
 
-    def __init__(self, charm, relation_name=DEFAULT_RELATION_NAME):
+    def __init__(self, charm: CharmBase, relation_name: str = DEFAULT_RELATION_NAME) -> None:
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
@@ -459,10 +467,12 @@ class ExternalIdpProvider(Object):
             events.relation_departed, self._on_provider_endpoint_relation_departed
         )
 
-    def _on_provider_endpoint_relation_joined(self, event):
+    def _on_provider_endpoint_relation_joined(self, event: RelationJoinedEvent) -> None:
         self.on.ready.emit()
 
-    def _on_provider_endpoint_relation_changed(self, event):
+    def _on_provider_endpoint_relation_changed(self, event: RelationChangedEvent) -> None:
+        if not event.app:
+            return
         data = event.relation.data[event.app]
         data = _load_data(data, REQUIRER_JSON_SCHEMA)
         providers = data["providers"]
@@ -472,14 +482,14 @@ class ExternalIdpProvider(Object):
         redirect_uri = providers[0].get("redirect_uri")
         self.on.redirect_uri_changed.emit(redirect_uri=redirect_uri)
 
-    def _on_provider_endpoint_relation_departed(self, event):
+    def _on_provider_endpoint_relation_departed(self, event: RelationDepartedEvent) -> None:
         self.on.redirect_uri_changed.emit(redirect_uri="")
 
-    def is_ready(self):
+    def is_ready(self) -> bool:
         """Checks if the relation is ready."""
-        return self._charm.model.get_relation(self._relation_name)
+        return self._charm.model.get_relation(self._relation_name) is not None
 
-    def create_provider(self, config):
+    def create_provider(self, config: Mapping) -> None:
         """Use the configuration to create the relation databag."""
         if not self._charm.unit.is_leader():
             return
@@ -487,7 +497,7 @@ class ExternalIdpProvider(Object):
         config = self._handle_config(config)
         return self._set_provider_data(config)
 
-    def remove_provider(self):
+    def remove_provider(self) -> None:
         """Remove the provider config to the relation databag."""
         if not self._charm.unit.is_leader():
             return
@@ -497,29 +507,29 @@ class ExternalIdpProvider(Object):
         for relation in self._charm.model.relations[self._relation_name]:
             relation.data[self._charm.app].clear()
 
-    def validate_provider_config(self, config):
+    def validate_provider_config(self, config: Mapping) -> None:
         """Validate the provider config.
 
         Raises InvalidConfigError is config is invalid.
         """
         self._validate_config(config)
 
-    def _handle_config(self, config):
+    def _handle_config(self, config: Mapping) -> List:
         handler = get_provider_config_handler(config)
         return handler.handle_config(config)
 
-    def _validate_config(self, config):
+    def _validate_config(self, config: Mapping) -> None:
         handler = get_provider_config_handler(config)
         handler.validate_config(config)
 
-    def _set_provider_data(self, provider_config):
+    def _set_provider_data(self, provider_config: List) -> None:
         self._create_secrets(provider_config)
         # Do we need to iterate on the relations? There should never be more
         # than one
         for relation in self._charm.model.relations[self._relation_name]:
             relation.data[self._charm.app].update(providers=json.dumps(provider_config))
 
-    def _create_secrets(self, provider_config):
+    def _create_secrets(self, provider_config: List) -> None:
         for conf in provider_config:
             backend = conf["secret_backend"]
 
@@ -540,15 +550,15 @@ class Provider:
     client_id: str
     provider: str
     relation_id: str
-    client_secret: str = None
-    issuer_url: str = None
-    tenant_id: str = None
-    team_id: str = None
-    private_key_id: str = None
-    private_key: str = None
+    client_secret: Optional[str] = None
+    issuer_url: Optional[str] = None
+    tenant_id: Optional[str] = None
+    team_id: Optional[str] = None
+    private_key_id: Optional[str] = None
+    private_key: Optional[str] = None
 
     @property
-    def provider_id(self):
+    def provider_id(self) -> str:
         """Returns a unique ID for the client credentials of the provider."""
         if self.issuer_url:
             id = hashlib.sha1(f"{self.client_id}_{self.issuer_url}".encode()).hexdigest()
@@ -558,7 +568,7 @@ class Provider:
             id = hashlib.sha1(self.client_id.encode()).hexdigest()
         return f"{self.provider}_{id}"
 
-    def config(self):
+    def config(self) -> Dict:
         """Generate Kratos config for this provider."""
         ret = {
             "id": self.provider_id,
@@ -574,7 +584,7 @@ class Provider:
         return {k: v for k, v in ret.items() if v}
 
     @classmethod
-    def from_dict(cls, dic):
+    def from_dict(cls, dic: Dict) -> "Provider":
         """Generate Provider instance from dict."""
         return cls(**{k: v for k, v in dic.items() if k in inspect.signature(cls).parameters})
 
@@ -582,14 +592,14 @@ class Provider:
 class ClientConfigChangedEvent(EventBase):
     """Event to notify the charm that a provider's client config changed."""
 
-    def __init__(self, handle, provider):
+    def __init__(self, handle: Handle, provider: Provider) -> None:
         super().__init__(handle)
         self.client_id = provider.client_id
         self.provider = provider.provider
         self.provider_id = provider.provider_id
         self.relation_id = provider.relation_id
 
-    def snapshot(self):
+    def snapshot(self) -> Dict:
         """Save event."""
         return {
             "client_id": self.client_id,
@@ -598,7 +608,7 @@ class ClientConfigChangedEvent(EventBase):
             "relation_id": self.relation_id,
         }
 
-    def restore(self, snapshot):
+    def restore(self, snapshot: Dict) -> None:
         """Restore event."""
         self.client_id = snapshot["client_id"]
         self.provider = snapshot["provider"]
@@ -617,7 +627,7 @@ class ExternalIdpRequirer(Object):
 
     on = ExternalIdpRequirerEvents()
 
-    def __init__(self, charm, relation_name=DEFAULT_RELATION_NAME):
+    def __init__(self, charm: CharmBase, relation_name: str = DEFAULT_RELATION_NAME) -> None:
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
@@ -630,7 +640,10 @@ class ExternalIdpRequirer(Object):
             events.relation_departed, self._on_provider_endpoint_relation_changed
         )
 
-    def _on_provider_endpoint_relation_changed(self, event):
+    def _on_provider_endpoint_relation_changed(self, event: RelationEvent) -> None:
+        if not event.app:
+            return
+
         data = event.relation.data[event.app]
         data = _load_data(data, PROVIDER_JSON_SCHEMA)
         providers = data["providers"]
@@ -638,10 +651,12 @@ class ExternalIdpRequirer(Object):
         if len(providers) == 0:
             return
 
-        _, p = self._get_provider(providers[0], event.relation)
+        p = self._get_provider(providers[0], event.relation)
         self.on.client_config_changed.emit(p)
 
-    def set_relation_registered_provider(self, redirect_uri, provider_id, relation_id):
+    def set_relation_registered_provider(
+        self, redirect_uri: str, provider_id: str, relation_id: int
+    ) -> None:
         """Update the relation databag."""
         data = dict(
             providers=[
@@ -657,32 +672,34 @@ class ExternalIdpRequirer(Object):
         relation = self.model.get_relation(
             relation_name=self._relation_name, relation_id=relation_id
         )
+        if not relation:
+            return
         relation.data[self.model.app].update(data)
 
-    def get_providers(self):
+    def get_providers(self) -> List:
         """Iterate over the relations and fetch all providers."""
-        providers = defaultdict(list)
         providers = []
         # For each relation get the client credentials and compile them into a
         # single object
         for relation in self.model.relations[self._relation_name]:
+            if not relation.app:
+                continue
             data = relation.data[relation.app]
             data = _load_data(data, PROVIDER_JSON_SCHEMA)
             for p in data["providers"]:
-                provider_type, provider = self._get_provider(p, relation)
+                provider = self._get_provider(p, relation)
                 # providers[provider_type].append(provider)
                 providers.append(provider)
 
         return providers
 
-    def _get_provider(self, provider, relation):
+    def _get_provider(self, provider: Dict, relation: Relation) -> Provider:
         provider = self._extract_secrets(provider)
         provider["relation_id"] = relation.id
         provider = Provider.from_dict(provider)
-        provider_type = provider.provider
-        return provider_type, provider
+        return provider
 
-    def _extract_secrets(self, data):
+    def _extract_secrets(self, data: Dict) -> Dict:
         backend = data["secret_backend"]
 
         if backend == "relation":
