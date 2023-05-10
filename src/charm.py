@@ -35,7 +35,13 @@ from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ClientConfigChangedEvent,
     ExternalIdpRequirer,
 )
+from charms.loki_k8s.v0.loki_push_api import (
+    LokiPushApiConsumer,
+    LokiPushApiEndpointDeparted,
+    LokiPushApiEndpointJoined,
+)
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
+from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.traefik_k8s.v1.ingress import (
     IngressPerAppReadyEvent,
     IngressPerAppRequirer,
@@ -89,6 +95,8 @@ class KratosCharm(CharmBase):
         self._db_relation_name = "pg-database"
         self._hydra_relation_name = "endpoint-info"
         self._login_ui_relation_name = "ui-endpoint-info"
+        self._prometheus_scrape_relation_name = "metrics-endpoint"
+        self._loki_push_api_relation_name = "logging"
 
         self.kratos = KratosAPI(
             f"http://127.0.0.1:{KRATOS_ADMIN_PORT}", self._container, str(self._config_file_path)
@@ -129,6 +137,26 @@ class KratosCharm(CharmBase):
         self.endpoints_provider = KratosEndpointsProvider(self)
 
         self.framework.observe(self.on.install, self._on_install)
+
+        self.metrics_endpoint = MetricsEndpointProvider(
+            self,
+            relation_name=self._prometheus_scrape_relation_name,
+            jobs=[
+                {
+                    "metrics_path": "/metrics/prometheus",
+                    "static_configs": [
+                        {
+                            "targets": ["*:4434"],
+                        }
+                    ],
+                }
+            ],
+        )
+
+        self.loki_consumer = LokiPushApiConsumer(
+            self, relation_name=self._loki_push_api_relation_name
+        )
+
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(
@@ -158,6 +186,15 @@ class KratosCharm(CharmBase):
             self.on.create_admin_account_action, self._on_create_admin_account_action
         )
         self.framework.observe(self.on.run_migration_action, self._on_run_migration_action)
+
+        self.framework.observe(
+            self.loki_consumer.on.loki_push_api_endpoint_joined,
+            self._on_loki_push_api_endpoint_joined,
+        )
+        self.framework.observe(
+            self.loki_consumer.on.loki_push_api_endpoint_departed,
+            self._on_loki_push_api_endpoint_departed,
+        )
 
     @property
     def _kratos_service_params(self) -> str:
@@ -681,6 +718,12 @@ class KratosCharm(CharmBase):
             event.fail(f"Something went wrong when running the migration: {err}")
             return
         event.log("Successfully migrated the database.")
+
+    def _on_loki_push_api_endpoint_joined(self, event: LokiPushApiEndpointJoined) -> None:
+        logger.info("Loki Push API endpoint joined")
+
+    def _on_loki_push_api_endpoint_departed(self, event: LokiPushApiEndpointDeparted) -> None:
+        logger.info("Loki Push API endpoint departed")
 
 
 if __name__ == "__main__":

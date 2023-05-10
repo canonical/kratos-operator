@@ -1214,3 +1214,39 @@ def test_timeout_on_run_migration(
     harness.charm._on_run_migration_action(event)
 
     event.fail.assert_called()
+
+
+def test_metrics_endpoint_relation_data_with_ingress_relation_data(harness: Harness) -> None:
+    setup_ingress_relation(harness, "public")
+    setup_ingress_relation(harness, "admin")
+
+    metrics_info_relation_id = harness.add_relation(
+        "metrics-endpoint", "prometheus-k8s"
+    )
+    harness.add_relation_unit(metrics_info_relation_id, "prometheus-k8s/0")
+
+    expected_data = {
+        "place_holder": "place_holder",
+    }
+
+    assert harness.get_relation_data(metrics_info_relation_id, "kratos") == expected_data
+
+
+def test_metrics_endpoint_relation_data_without_ingress_relation_data(
+    harness: Harness,
+) -> None:
+    public_ingress_relation_id = harness.add_relation("public-ingress", "public-traefik")
+    harness.add_relation_unit(public_ingress_relation_id, "public-traefik/0")
+    admin_ingress_relation_id = harness.add_relation("admin-ingress", "admin-traefik")
+    harness.add_relation_unit(admin_ingress_relation_id, "admin-traefik/0")
+
+    metrics_info_relation_id = harness.add_relation(
+        "metrics-endpoint", "prometheus-k8s"
+    )
+    harness.add_relation_unit(metrics_info_relation_id, "prometheus-k8s/0")
+
+    expected_data = {
+        "place_holder": "place_holder",
+    }
+
+    assert harness.get_relation_data(metrics_info_relation_id, "kratos") == expected_data
