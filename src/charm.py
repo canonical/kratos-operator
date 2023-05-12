@@ -36,9 +36,10 @@ from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ExternalIdpRequirer,
 )
 from charms.loki_k8s.v0.loki_push_api import (
-    LokiPushApiConsumer,
-    LokiPushApiEndpointDeparted,
-    LokiPushApiEndpointJoined,
+    LogProxyConsumer,
+    LogProxyEndpointDeparted,
+    LogProxyEndpointJoined,
+    PromtailDigestError,
 )
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
@@ -97,6 +98,8 @@ class KratosCharm(CharmBase):
         self._login_ui_relation_name = "ui-endpoint-info"
         self._prometheus_scrape_relation_name = "metrics-endpoint"
         self._loki_push_api_relation_name = "logging"
+        self._kratos_service_command = "kratos serve all"
+        self._log_path = "/var/log/kratos.log"
 
         self.kratos = KratosAPI(
             f"http://127.0.0.1:{KRATOS_ADMIN_PORT}", self._container, str(self._config_file_path)
@@ -153,8 +156,11 @@ class KratosCharm(CharmBase):
             ],
         )
 
-        self.loki_consumer = LokiPushApiConsumer(
-            self, relation_name=self._loki_push_api_relation_name
+        self.loki_consumer = LogProxyConsumer(
+            self,
+            log_files=[self._log_path],
+            relation_name=self._loki_push_api_relation_name,
+            container_name=self._container_name,
         )
 
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
@@ -188,12 +194,18 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.on.run_migration_action, self._on_run_migration_action)
 
         self.framework.observe(
-            self.loki_consumer.on.loki_push_api_endpoint_joined,
-            self._on_loki_push_api_endpoint_joined,
+            self.loki_consumer.on.promtail_digest_error,
+            self._promtail_error,
         )
+
         self.framework.observe(
-            self.loki_consumer.on.loki_push_api_endpoint_departed,
-            self._on_loki_push_api_endpoint_departed,
+            self.loki_consumer.on.log_proxy_endpoint_joined,
+            self._on_loki_consumer_endpoint_joined,
+        )
+
+        self.framework.observe(
+            self.loki_consumer.on.log_proxy_endpoint_departed,
+            self._on_loki_consumer_endpoint_departed,
         )
 
     @property
@@ -226,7 +238,9 @@ class KratosCharm(CharmBase):
                     "override": "replace",
                     "summary": "Kratos Operator layer",
                     "startup": "disabled",
-                    "command": "kratos serve all " + self._kratos_service_params,
+                    "command": '/bin/sh -c "{} {} 2>&1 | tee -a {}"'.format(
+                        self._kratos_service_command, self._kratos_service_params, self._log_path
+                    ),
                 }
             },
             "checks": {
@@ -719,11 +733,15 @@ class KratosCharm(CharmBase):
             return
         event.log("Successfully migrated the database.")
 
-    def _on_loki_push_api_endpoint_joined(self, event: LokiPushApiEndpointJoined) -> None:
+    def _on_loki_consumer_endpoint_joined(self, event: LogProxyEndpointJoined) -> None:
         logger.info("Loki Push API endpoint joined")
 
-    def _on_loki_push_api_endpoint_departed(self, event: LokiPushApiEndpointDeparted) -> None:
+    def _on_loki_consumer_endpoint_departed(self, event: LogProxyEndpointDeparted) -> None:
         logger.info("Loki Push API endpoint departed")
+
+    def _promtail_error(self, event: PromtailDigestError):
+        logger.error(event.message)
+        self.unit.status = BlockedStatus(event.message)
 
 
 if __name__ == "__main__":

@@ -107,6 +107,97 @@ def setup_login_ui_relation(harness: Harness) -> tuple[int, dict]:
     return (relation_id, databag)
 
 
+def setup_loki_relation(harness: Harness) -> int:
+    relation_id = harness.add_relation("logging", "loki-k8s")
+    harness.add_relation_unit(relation_id, "loki-k8s/0")
+    databag = {
+        "promtail_binary_zip_url": json.dumps({
+            "amd64": {
+                "filename": "promtail-static-amd64",
+                "zipsha": "543e333b0184e14015a42c3c9e9e66d2464aaa66eca48b29e185a6a18f67ab6d",
+                "binsha": "17e2e271e65f793a9fbe81eab887b941e9d680abe82d5a0602888c50f5e0cac9",
+                "url": "https://github.com/canonical/loki-k8s-operator/releases/download/promtail-v2.5.0/promtail-static-amd64.gz",
+            }
+        }),
+    }
+    unit_databag = {
+        "endpoint": json.dumps({
+            "url": "http://loki-k8s-0.loki-k8s-endpoints.model0.svc.cluster.local:3100/loki/api/v1/push"
+        })
+    }
+    harness.update_relation_data(
+        relation_id,
+        "loki-k8s/0",
+        unit_databag,
+    )
+    harness.update_relation_data(
+        relation_id,
+        "loki-k8s",
+        databag,
+    )
+
+
+def setup_loki_relation_without_working_endpoint(harness: Harness) -> int:
+    relation_id = harness.add_relation("logging", "loki-k8s")
+    harness.add_relation_unit(relation_id, "loki-k8s/0")
+    databag = {
+        "promtail_binary_zip_url": json.dumps({
+            "amd64": {
+                "filename": "promtail-static-amd64",
+                "zipsha": "543e333b0184e14015a42c3c9e9e66d2464aaa66eca48b29e185a6a18f67ab6d",
+                "binsha": "17e2e271e65f793a9fbe81eab887b941e9d680abe82d5a0602888c50f5e0cac9",
+                "url": "https://github.com/canonical/loki-k8s-operator/releases/mock-release5555/promtail-static-amd64.gz",
+            }
+        })
+    }
+    unit_databag = {
+        "endpoint": json.dumps({
+            "url": "http://loki-k8s-0.loki-k8s-endpoints.model0.svc.cluster.local:3100/loki/api/v1/push"
+        })
+    }
+    harness.update_relation_data(
+        relation_id,
+        "loki-k8s/0",
+        unit_databag,
+    )
+    harness.update_relation_data(
+        relation_id,
+        "loki-k8s",
+        databag,
+    )
+
+
+def setup_loki_relation_without_hash(harness: Harness) -> int:
+    relation_id = harness.add_relation("logging", "loki-k8s")
+    harness.add_relation_unit(relation_id, "loki-k8s/0")
+    databag = {
+        "promtail_binary_zip_url": json.dumps({
+            "amd64": {
+                "filename": "promtail-static-amd64",
+                "zipsha": "wrong_value",
+                "binsha": "wrong_value",
+                "url": "https://github.com/canonical/loki-k8s-operator/releases/download/promtail-v2.5.0/promtail-static-amd64.gz",
+            }
+        }),
+        
+    }
+    unit_databag = {
+        "endpoint": json.dumps({
+            "url": "http://loki-k8s-0.loki-k8s-endpoints.model0.svc.cluster.local:3100/loki/api/v1/push"
+        })
+    }
+    harness.update_relation_data(
+        relation_id,
+        "loki-k8s/0",
+        unit_databag,
+    )
+    harness.update_relation_data(
+        relation_id,
+        "loki-k8s",
+        databag,
+    )
+
+
 def trigger_database_changed(harness: Harness) -> None:
     db_relation_id = harness.add_relation("pg-database", "postgresql-k8s")
     harness.add_relation_unit(db_relation_id, "postgresql-k8s/0")
@@ -161,7 +252,7 @@ def test_on_pebble_ready_correct_plan(harness: Harness) -> None:
                 "override": "replace",
                 "summary": "Kratos Operator layer",
                 "startup": "disabled",
-                "command": "kratos serve all --config /etc/config/kratos.yaml",
+                "command": '/bin/sh -c "kratos serve all --config /etc/config/kratos.yaml 2>&1 | tee -a /var/log/kratos.log"',
             }
         }
     }
@@ -182,7 +273,7 @@ def test_on_pebble_ready_correct_plan_with_dev_flag(
                 "override": "replace",
                 "summary": "Kratos Operator layer",
                 "startup": "disabled",
-                "command": "kratos serve all --config /etc/config/kratos.yaml --dev",
+                "command": '/bin/sh -c "kratos serve all --config /etc/config/kratos.yaml --dev 2>&1 | tee -a /var/log/kratos.log"',
             }
         }
     }
@@ -1216,37 +1307,33 @@ def test_timeout_on_run_migration(
     event.fail.assert_called()
 
 
-def test_metrics_endpoint_relation_data_with_ingress_relation_data(harness: Harness) -> None:
-    setup_ingress_relation(harness, "public")
-    setup_ingress_relation(harness, "admin")
+def test_on_pebble_ready_loki_(harness: Harness) -> None:
+    setup_postgres_relation(harness)
+    setup_peer_relation(harness)
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+    setup_loki_relation(harness)
 
-    metrics_info_relation_id = harness.add_relation(
-        "metrics-endpoint", "prometheus-k8s"
-    )
-    harness.add_relation_unit(metrics_info_relation_id, "prometheus-k8s/0")
-
-    expected_data = {
-        "place_holder": "place_holder",
-    }
-
-    assert harness.get_relation_data(metrics_info_relation_id, "kratos") == expected_data
+    assert harness.model.unit.status == ActiveStatus()
 
 
-def test_metrics_endpoint_relation_data_without_ingress_relation_data(
-    harness: Harness,
-) -> None:
-    public_ingress_relation_id = harness.add_relation("public-ingress", "public-traefik")
-    harness.add_relation_unit(public_ingress_relation_id, "public-traefik/0")
-    admin_ingress_relation_id = harness.add_relation("admin-ingress", "admin-traefik")
-    harness.add_relation_unit(admin_ingress_relation_id, "admin-traefik/0")
+def test_on_pebble_ready_loki_without_promtail_endpoint(harness: Harness) -> None:
+    setup_postgres_relation(harness)
+    setup_peer_relation(harness)
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+    setup_loki_relation_without_working_endpoint(harness)
 
-    metrics_info_relation_id = harness.add_relation(
-        "metrics-endpoint", "prometheus-k8s"
-    )
-    harness.add_relation_unit(metrics_info_relation_id, "prometheus-k8s/0")
+    assert isinstance(harness.model.unit.status, BlockedStatus)
+    assert "Promtail binary couldn't be downloaded - HTTP Error 404: Not Found" in harness.charm.unit.status.message
 
-    expected_data = {
-        "place_holder": "place_holder",
-    }
 
-    assert harness.get_relation_data(metrics_info_relation_id, "kratos") == expected_data
+def test_on_pebble_ready_loki_without_promtail_hash(harness: Harness) -> None:
+    setup_postgres_relation(harness)
+    setup_peer_relation(harness)
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+    setup_loki_relation_without_hash(harness)
+
+    assert isinstance(harness.model.unit.status, BlockedStatus)
+    assert "Hashes mismatch error message." in harness.charm.unit.status.message
