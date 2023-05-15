@@ -445,8 +445,12 @@ class KratosCharm(CharmBase):
     def _update_kratos_endpoints_relation_data(self, event: RelationEvent) -> None:
         logger.info("Sending endpoints info")
 
-        admin_endpoint = f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
-        public_endpoint = f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
+        admin_endpoint = (
+            f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
+        )
+        public_endpoint = (
+            f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
+        )
         self.endpoints_provider.send_endpoint_relation_data(admin_endpoint, public_endpoint)
 
     def _on_database_created(self, event: DatabaseCreatedEvent) -> None:
