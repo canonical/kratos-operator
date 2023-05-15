@@ -111,80 +111,23 @@ def setup_loki_relation(harness: Harness) -> int:
     relation_id = harness.add_relation("logging", "loki-k8s")
     harness.add_relation_unit(relation_id, "loki-k8s/0")
     databag = {
-        "promtail_binary_zip_url": json.dumps({
-            "amd64": {
-                "filename": "promtail-static-amd64",
-                "zipsha": "543e333b0184e14015a42c3c9e9e66d2464aaa66eca48b29e185a6a18f67ab6d",
-                "binsha": "17e2e271e65f793a9fbe81eab887b941e9d680abe82d5a0602888c50f5e0cac9",
-                "url": "https://github.com/canonical/loki-k8s-operator/releases/download/promtail-v2.5.0/promtail-static-amd64.gz",
+        "promtail_binary_zip_url": json.dumps(
+            {
+                "amd64": {
+                    "filename": "promtail-static-amd64",
+                    "zipsha": "543e333b0184e14015a42c3c9e9e66d2464aaa66eca48b29e185a6a18f67ab6d",
+                    "binsha": "17e2e271e65f793a9fbe81eab887b941e9d680abe82d5a0602888c50f5e0cac9",
+                    "url": "https://github.com/canonical/loki-k8s-operator/releases/download/promtail-v2.5.0/promtail-static-amd64.gz",
+                }
             }
-        }),
+        ),
     }
     unit_databag = {
-        "endpoint": json.dumps({
-            "url": "http://loki-k8s-0.loki-k8s-endpoints.model0.svc.cluster.local:3100/loki/api/v1/push"
-        })
-    }
-    harness.update_relation_data(
-        relation_id,
-        "loki-k8s/0",
-        unit_databag,
-    )
-    harness.update_relation_data(
-        relation_id,
-        "loki-k8s",
-        databag,
-    )
-
-
-def setup_loki_relation_without_working_endpoint(harness: Harness) -> int:
-    relation_id = harness.add_relation("logging", "loki-k8s")
-    harness.add_relation_unit(relation_id, "loki-k8s/0")
-    databag = {
-        "promtail_binary_zip_url": json.dumps({
-            "amd64": {
-                "filename": "promtail-static-amd64",
-                "zipsha": "543e333b0184e14015a42c3c9e9e66d2464aaa66eca48b29e185a6a18f67ab6d",
-                "binsha": "17e2e271e65f793a9fbe81eab887b941e9d680abe82d5a0602888c50f5e0cac9",
-                "url": "https://github.com/canonical/loki-k8s-operator/releases/mock-release5555/promtail-static-amd64.gz",
+        "endpoint": json.dumps(
+            {
+                "url": "http://loki-k8s-0.loki-k8s-endpoints.model0.svc.cluster.local:3100/loki/api/v1/push"
             }
-        })
-    }
-    unit_databag = {
-        "endpoint": json.dumps({
-            "url": "http://loki-k8s-0.loki-k8s-endpoints.model0.svc.cluster.local:3100/loki/api/v1/push"
-        })
-    }
-    harness.update_relation_data(
-        relation_id,
-        "loki-k8s/0",
-        unit_databag,
-    )
-    harness.update_relation_data(
-        relation_id,
-        "loki-k8s",
-        databag,
-    )
-
-
-def setup_loki_relation_without_hash(harness: Harness) -> int:
-    relation_id = harness.add_relation("logging", "loki-k8s")
-    harness.add_relation_unit(relation_id, "loki-k8s/0")
-    databag = {
-        "promtail_binary_zip_url": json.dumps({
-            "amd64": {
-                "filename": "promtail-static-amd64",
-                "zipsha": "wrong_value",
-                "binsha": "wrong_value",
-                "url": "https://github.com/canonical/loki-k8s-operator/releases/download/promtail-v2.5.0/promtail-static-amd64.gz",
-            }
-        }),
-        
-    }
-    unit_databag = {
-        "endpoint": json.dumps({
-            "url": "http://loki-k8s-0.loki-k8s-endpoints.model0.svc.cluster.local:3100/loki/api/v1/push"
-        })
+        )
     }
     harness.update_relation_data(
         relation_id,
@@ -1307,7 +1250,7 @@ def test_timeout_on_run_migration(
     event.fail.assert_called()
 
 
-def test_on_pebble_ready_loki_(harness: Harness) -> None:
+def test_on_pebble_ready_with_loki_(harness: Harness) -> None:
     setup_postgres_relation(harness)
     setup_peer_relation(harness)
     container = harness.model.unit.get_container(CONTAINER_NAME)
@@ -1317,23 +1260,34 @@ def test_on_pebble_ready_loki_(harness: Harness) -> None:
     assert harness.model.unit.status == ActiveStatus()
 
 
-def test_on_pebble_ready_loki_without_promtail_endpoint(harness: Harness) -> None:
+def test_on_pebble_ready_with_loki_without_promtail_endpoint(harness: Harness) -> None:
     setup_postgres_relation(harness)
     setup_peer_relation(harness)
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
-    setup_loki_relation_without_working_endpoint(harness)
+    setup_loki_relation(harness)
+
+    event = MagicMock()
+    event.message = "Promtail binary couldn't be downloaded - HTTP Error 404: Not Found"
+    harness.charm._promtail_error(event)
 
     assert isinstance(harness.model.unit.status, BlockedStatus)
-    assert "Promtail binary couldn't be downloaded - HTTP Error 404: Not Found" in harness.charm.unit.status.message
+    assert (
+        "Promtail binary couldn't be downloaded - HTTP Error 404: Not Found"
+        in harness.charm.unit.status.message
+    )
 
 
-def test_on_pebble_ready_loki_without_promtail_hash(harness: Harness) -> None:
+def test_on_update_status_handle_logging(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+) -> None:
     setup_postgres_relation(harness)
     setup_peer_relation(harness)
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
-    setup_loki_relation_without_hash(harness)
+    setup_loki_relation(harness)
 
-    assert isinstance(harness.model.unit.status, BlockedStatus)
-    assert "Hashes mismatch error message." in harness.charm.unit.status.message
+    event = MagicMock()
+    harness.charm._on_update_status_handle_logging(event)
+    event.log.assert_called_with("Log file greater than allowed size. Redeploying container.")
