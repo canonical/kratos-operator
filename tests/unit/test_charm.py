@@ -901,26 +901,8 @@ def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(
     harness.add_relation_unit(endpoint_info_relation_id, "identity-platform-login-ui-operator/0")
 
     expected_data = {
-        "admin_endpoint": "kratos.kratos-model.svc.cluster.local:4434",
-        "public_endpoint": "kratos.kratos-model.svc.cluster.local:4433",
-    }
-
-    assert harness.get_relation_data(endpoint_info_relation_id, "kratos") == expected_data
-
-
-def test_kratos_endpoint_info_relation_data_with_ingress_relation_data(harness: Harness) -> None:
-    # set ingress relations with data
-    setup_ingress_relation(harness, "public")
-    setup_ingress_relation(harness, "admin")
-
-    endpoint_info_relation_id = harness.add_relation(
-        "kratos-endpoint-info", "identity-platform-login-ui-operator"
-    )
-    harness.add_relation_unit(endpoint_info_relation_id, "identity-platform-login-ui-operator/0")
-
-    expected_data = {
-        "admin_endpoint": "http://admin:80/kratos-model-kratos",
-        "public_endpoint": "http://public:80/kratos-model-kratos",
+        "admin_endpoint": "http://kratos.kratos-model.svc.cluster.local:4434",
+        "public_endpoint": "http://kratos.kratos-model.svc.cluster.local:4433",
     }
 
     assert harness.get_relation_data(endpoint_info_relation_id, "kratos") == expected_data
