@@ -53,16 +53,18 @@ def mocked_kratos_service(harness: Harness, mocked_container: MagicMock) -> Gene
     mocked_container.get_service = MagicMock(return_value=service)
     mocked_container.can_connect = MagicMock(return_value=True)
     mocked_container.list_files = MagicMock(
-        return_value=FileInfo.from_dict(
-            {
-                "type": "file",
-                "name": "kratos.log",
-                "path": "/var/log/kratos.log",
-                "size": str(300 * 1000000),
-                "permissions": "774",
-                "last-modified": "2023-10-12T07:20:50.52Z",
-            }
-        )
+        return_value=[
+            FileInfo.from_dict(
+                {
+                    "type": "file",
+                    "name": "kratos.log",
+                    "path": "/var/log/kratos.log",
+                    "size": str(300 * 1000000),
+                    "permissions": "774",
+                    "last-modified": "2023-10-12T07:20:50.52Z",
+                }
+            )
+        ]
     )
     return service
 

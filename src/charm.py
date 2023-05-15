@@ -766,7 +766,7 @@ class KratosCharm(CharmBase):
             )
             return
 
-        if int(log_file_info_list.size) > self.config["log_max_size"] * 1000000:
+        if int(log_file_info_list[0].size) > self.config["log_max_size"] * 1000000:
             logger.info("Log file greater than allowed size. Redeploying container.")
             event.log("Log file greater than allowed size. Redeploying container.")
             self._handle_status_update_config(event)
