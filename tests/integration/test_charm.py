@@ -51,7 +51,7 @@ async def test_build_and_deploy(ops_test: OpsTest) -> None:
     """
     await ops_test.model.deploy(
         POSTGRES,
-        channel="latest/edge",
+        channel="14/stable",
         trust=True,
     )
     charm = await ops_test.build_charm(".")
