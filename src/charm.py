@@ -35,12 +35,7 @@ from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ClientConfigChangedEvent,
     ExternalIdpRequirer,
 )
-from charms.loki_k8s.v0.loki_push_api import (
-    LogProxyConsumer,
-    LogProxyEndpointDeparted,
-    LogProxyEndpointJoined,
-    PromtailDigestError,
-)
+from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer, PromtailDigestError
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.traefik_k8s.v1.ingress import (
