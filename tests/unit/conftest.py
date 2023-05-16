@@ -84,6 +84,14 @@ def mocked_container(harness: Harness, mocker: MockerFixture) -> Container:
 
 
 @pytest.fixture()
+def mocked_handle_status_update_config(mocker: MockerFixture) -> MagicMock:
+    mocked_logger = mocker.patch(
+        "charm.KratosCharm._handle_status_update_config", return_value=None
+    )
+    return mocked_logger
+
+
+@pytest.fixture()
 def mocked_pebble_exec(mocker: MockerFixture) -> MagicMock:
     mocked_pebble_exec = mocker.patch("ops.model.Container.exec")
     return mocked_pebble_exec
