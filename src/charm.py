@@ -193,8 +193,6 @@ class KratosCharm(CharmBase):
             self._promtail_error,
         )
 
-        self.framework.observe(self.on.update_status, self._on_update_status_handle_logging)
-
     @property
     def _kratos_service_params(self) -> str:
         ret = ["--config", str(self._config_file_path)]
@@ -723,31 +721,6 @@ class KratosCharm(CharmBase):
     def _promtail_error(self, event: PromtailDigestError):
         logger.error(event.message)
         self.unit.status = BlockedStatus(event.message)
-
-    def _on_update_status_handle_logging(self, event: HookEvent) -> None:
-        if not self._container.can_connect():
-            logger.info(
-                "Cannot connect to Kratos container. Log file check delayed to next status update."
-            )
-            return
-
-        if not self.unit.status == ActiveStatus():
-            logger.info(
-                "Kratos unit currently inactive. Log file check delayed to next status update."
-            )
-            return
-
-        log_file_info_list = self._container.list_files(path=self._log_path)
-
-        if not log_file_info_list:
-            logger.info(
-                "Log file has not been created. Log file check delayed to next status update."
-            )
-            return
-
-        if int(log_file_info_list[0].size) > int(self.config["log_max_size"]) * 1000000:
-            logger.info("Log file greater than allowed size. Restarting container.")
-            self._handle_status_update_config(event)
 
 
 if __name__ == "__main__":

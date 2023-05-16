@@ -1276,19 +1276,3 @@ def test_on_pebble_ready_with_loki_without_promtail_endpoint(harness: Harness) -
         "Promtail binary couldn't be downloaded - HTTP Error 404: Not Found"
         in harness.charm.unit.status.message
     )
-
-
-def test_on_update_status_handle_logging(
-    harness: Harness,
-    mocked_kratos_service: MagicMock,
-    mocked_handle_status_update_config: MagicMock,
-) -> None:
-    setup_postgres_relation(harness)
-    setup_peer_relation(harness)
-    container = harness.model.unit.get_container(CONTAINER_NAME)
-    harness.charm.on.kratos_pebble_ready.emit(container)
-    setup_loki_relation(harness)
-
-    event = MagicMock()
-    harness.charm._on_update_status_handle_logging(event)
-    mocked_handle_status_update_config.assert_called()
