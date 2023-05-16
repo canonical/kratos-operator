@@ -15,7 +15,7 @@ jobs:
         run: ls -la
 
       - name: Self-hosted Renovate
-        uses: renovatebot/github-action@v36.0.4
+        uses: renovatebot/github-action@v36.1.1
         with:
           configurationFile: renovate-config.js
           token: ${{ github.token }}
