@@ -1276,4 +1276,3 @@ def test_on_pebble_ready_with_loki_without_promtail_endpoint(harness: Harness) -
         "Promtail binary couldn't be downloaded - HTTP Error 404: Not Found"
         in harness.charm.unit.status.message
     )
-

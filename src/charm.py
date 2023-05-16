@@ -198,16 +198,6 @@ class KratosCharm(CharmBase):
             self._promtail_error,
         )
 
-        self.framework.observe(
-            self.loki_consumer.on.log_proxy_endpoint_joined,
-            self._on_loki_consumer_endpoint_joined,
-        )
-
-        self.framework.observe(
-            self.loki_consumer.on.log_proxy_endpoint_departed,
-            self._on_loki_consumer_endpoint_departed,
-        )
-
         self.framework.observe(self.on.update_status, self._on_update_status_handle_logging)
 
     @property
@@ -735,12 +725,6 @@ class KratosCharm(CharmBase):
             return
         event.log("Successfully migrated the database.")
 
-    def _on_loki_consumer_endpoint_joined(self, event: LogProxyEndpointJoined) -> None:
-        logger.info("Loki Push API endpoint joined")
-
-    def _on_loki_consumer_endpoint_departed(self, event: LogProxyEndpointDeparted) -> None:
-        logger.info("Loki Push API endpoint departed")
-
     def _promtail_error(self, event: PromtailDigestError):
         logger.error(event.message)
         self.unit.status = BlockedStatus(event.message)
@@ -766,8 +750,8 @@ class KratosCharm(CharmBase):
             )
             return
 
-        if int(log_file_info_list[0].size) > self.config["log_max_size"] * 1000000:
-            logger.info("Log file greater than allowed size. Redeploying container.")
+        if int(log_file_info_list[0].size) > int(self.config["log_max_size"]) * 1000000:
+            logger.info("Log file greater than allowed size. Restarting container.")
             self._handle_status_update_config(event)
 
 
