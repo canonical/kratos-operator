@@ -45,7 +45,3 @@ options:
   default_identity_schema_id:
     description: The default identity schema id, this option only works when `identity_schemas` is defined
     type: string
-  log_max_size:
-    description: The maximum size of log file in megabytes before charmed operator calls a maintenance cycle.
-    type: string
-    default: "200"

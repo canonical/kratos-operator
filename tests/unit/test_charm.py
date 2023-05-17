@@ -1250,7 +1250,7 @@ def test_timeout_on_run_migration(
     event.fail.assert_called()
 
 
-def test_on_pebble_ready_with_loki_(harness: Harness) -> None:
+def test_on_pebble_ready_with_loki(harness: Harness) -> None:
     setup_postgres_relation(harness)
     setup_peer_relation(harness)
     container = harness.model.unit.get_container(CONTAINER_NAME)
