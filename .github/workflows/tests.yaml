@@ -53,5 +53,12 @@ jobs:
       - name: Get kratos container logs
         run: kubectl logs kratos-0 -c kratos -n testing
 
+      # Hack to overcome lack of tools (cat, tar) in the workload container
       - name: Get kratos config file
-        run: kubectl exec -it kratos-0 -c kratos -n testing -- cat /etc/config/kratos.yaml
+        run: |
+          juju ssh kratos/0 "PYTHONPATH=agents/unit-kratos-0/charm/venv/ python3 -c '
+          from ops import pebble
+          p = pebble.Client(\"/charm/containers/kratos/pebble.socket\")
+          f = p.pull(\"/etc/config/kratos.yaml\")
+          print(f.read())
+          '"
