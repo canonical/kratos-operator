@@ -9,7 +9,7 @@
 import base64
 import json
 import logging
-from functools import cached_property
+from functools import cached_property, wraps
 from os.path import join
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
@@ -72,7 +72,6 @@ PEER_KEY_DB_MIGRATE_VERSION = "db_migrate_version"
 DB_MIGRATE_VERSION = "0.11.1"
 DEFAULT_SCHEMA_ID_FILE_NAME = "default.schema"
 LOG_LEVELS = ["panic", "fatal", "error", "warn", "info", "debug", "trace"]
-DEFAULT_LOG_LEVEL = "info"
 
 
 class KratosCharm(CharmBase):
@@ -146,7 +145,7 @@ class KratosCharm(CharmBase):
                     "metrics_path": "/metrics/prometheus",
                     "static_configs": [
                         {
-                            "targets": ["*:4434"],
+                            "targets": [f"*:{KRATOS_ADMIN_PORT}"],
                         }
                     ],
                 }
@@ -233,11 +232,11 @@ class KratosCharm(CharmBase):
             "checks": {
                 "kratos-ready": {
                     "override": "replace",
-                    "http": {"url": "http://localhost:4434/admin/health/ready"},
+                    "http": {"url": f"http://localhost:{KRATOS_ADMIN_PORT}/admin/health/ready"},
                 },
                 "kratos-alive": {
                     "override": "replace",
-                    "http": {"url": "http://localhost:4434/admin/health/alive"},
+                    "http": {"url": f"http://localhost:{KRATOS_ADMIN_PORT}/admin/health/alive"},
                 },
             },
         }
@@ -249,10 +248,11 @@ class KratosCharm(CharmBase):
 
     @property
     def _log_level(self) -> str:
-        level = self.config["log_level"]
-        if level not in LOG_LEVELS:
-            return DEFAULT_LOG_LEVEL
-        return level
+        return self.config["log_level"]
+
+    @property
+    def _log_level_valid(self) -> bool:
+        return self._log_level in LOG_LEVELS
 
     @cached_property
     def _get_available_mappers(self) -> List[str]:
@@ -416,6 +416,7 @@ class KratosCharm(CharmBase):
 
         return True
 
+    @config_check_decorator
     def _handle_status_update_config(self, event: HookEvent) -> None:
         if not self._container.can_connect():
             event.defer()
@@ -475,6 +476,7 @@ class KratosCharm(CharmBase):
         )
         self.endpoints_provider.send_endpoint_relation_data(admin_endpoint, public_endpoint)
 
+    @config_check_decorator
     def _on_database_created(self, event: DatabaseCreatedEvent) -> None:
         """Event Handler for database created event."""
         if not self._container.can_connect():
@@ -541,6 +543,7 @@ class KratosCharm(CharmBase):
 
         self._handle_status_update_config(event)
 
+    @config_check_decorator
     def _on_client_config_changed(self, event: ClientConfigChangedEvent) -> None:
         domain_url = self._domain_url
         if domain_url is None:
