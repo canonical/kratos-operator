@@ -45,3 +45,9 @@ options:
   default_identity_schema_id:
     description: The default identity schema id, this option only works when `identity_schemas` is defined
     type: string
+  log_level:
+    description: |
+      The value controlling the verbosity of logs produced by Kratos.
+      Available values are: panic, fatal, error, warn, info, debug, and trace.
+    type: string
+    default: "info"

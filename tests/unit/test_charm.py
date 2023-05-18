@@ -254,7 +254,7 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness: Ha
 
     expected_config = {
         "log": {
-            "level": "trace",
+            "level": "info",
             "format": "json",
         },
         "identity": {
@@ -334,7 +334,7 @@ def test_on_config_changed_when_identity_schemas_config(harness: Harness) -> Non
 
     expected_config = {
         "log": {
-            "level": "trace",
+            "level": "info",
             "format": "json",
         },
         "identity": {
@@ -388,7 +388,7 @@ def test_on_config_changed_when_identity_schemas_config_unset(harness: Harness) 
 
     expected_config = {
         "log": {
-            "level": "trace",
+            "level": "info",
             "format": "json",
         },
         "identity": {
@@ -616,7 +616,7 @@ def test_on_client_config_changed_with_ingress(
 
     expected_config = {
         "log": {
-            "level": "trace",
+            "level": "info",
             "format": "json",
         },
         "identity": {
@@ -709,7 +709,7 @@ def test_on_client_config_changed_with_external_url_config(
 
     expected_config = {
         "log": {
-            "level": "trace",
+            "level": "info",
             "format": "json",
         },
         "identity": {
@@ -801,7 +801,7 @@ def test_on_client_config_changed_with_hydra(harness: Harness) -> None:
 
     expected_config = {
         "log": {
-            "level": "trace",
+            "level": "info",
             "format": "json",
         },
         "identity": {
@@ -868,7 +868,7 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harn
 
     expected_config = {
         "log": {
-            "level": "trace",
+            "level": "info",
             "format": "json",
         },
         "identity": {
@@ -956,7 +956,7 @@ def test_on_client_config_changed_without_login_ui_endpoints(harness: Harness) -
 
     expected_config = {
         "log": {
-            "level": "trace",
+            "level": "info",
             "format": "json",
         },
         "identity": {
@@ -1016,7 +1016,7 @@ def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
 
     expected_config = {
         "log": {
-            "level": "trace",
+            "level": "info",
             "format": "json",
         },
         "identity": {

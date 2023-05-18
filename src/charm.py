@@ -71,6 +71,8 @@ PEER_RELATION_NAME = "kratos-peers"
 PEER_KEY_DB_MIGRATE_VERSION = "db_migrate_version"
 DB_MIGRATE_VERSION = "0.11.1"
 DEFAULT_SCHEMA_ID_FILE_NAME = "default.schema"
+LOG_LEVELS = ["panic", "fatal", "error", "warn", "info", "debug", "trace"]
+DEFAULT_LOG_LEVEL = "info"
 
 
 class KratosCharm(CharmBase):
@@ -245,6 +247,13 @@ class KratosCharm(CharmBase):
     def _domain_url(self) -> Optional[str]:
         return normalise_url(self.public_ingress.url) if self.public_ingress.is_ready() else None
 
+    @property
+    def _log_level(self) -> str:
+        level = self.config["log_level"]
+        if level not in LOG_LEVELS:
+            return DEFAULT_LOG_LEVEL
+        return level
+
     @cached_property
     def _get_available_mappers(self) -> List[str]:
         return [
@@ -260,6 +269,7 @@ class KratosCharm(CharmBase):
 
         default_schema_id, schemas = self._get_identity_schema_config()
         rendered = template.render(
+            log_level=self._log_level,
             mappers_path=str(self._mappers_dir_path),
             default_browser_return_url=self._get_login_ui_endpoint_info("default_url"),
             identity_schemas=schemas,
