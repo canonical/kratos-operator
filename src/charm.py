@@ -9,7 +9,7 @@
 import base64
 import json
 import logging
-from functools import cached_property, wraps
+from functools import cached_property
 from os.path import join
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
@@ -416,12 +416,16 @@ class KratosCharm(CharmBase):
 
         return True
 
-    @config_check_decorator
     def _handle_status_update_config(self, event: HookEvent) -> None:
         if not self._container.can_connect():
             event.defer()
             logger.info("Cannot connect to Kratos container. Deferring event.")
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
+            return
+        
+        if not self._log_level_valid:
+            logger.info(f"Invalid configuration value for log_level: {self._log_level}")
+            self.unit.status = BlockedStatus("Bad configuration value for log_level")
             return
 
         self.unit.status = MaintenanceStatus("Configuring resources")
@@ -476,7 +480,6 @@ class KratosCharm(CharmBase):
         )
         self.endpoints_provider.send_endpoint_relation_data(admin_endpoint, public_endpoint)
 
-    @config_check_decorator
     def _on_database_created(self, event: DatabaseCreatedEvent) -> None:
         """Event Handler for database created event."""
         if not self._container.can_connect():
@@ -488,6 +491,19 @@ class KratosCharm(CharmBase):
         self.unit.status = MaintenanceStatus(
             "Configuring container and resources for database connection"
         )
+
+        try:
+            self._container.get_service(self._container_name)
+        except (ModelError, RuntimeError):
+            event.defer()
+            self.unit.status = WaitingStatus("Waiting for Kratos service")
+            logger.info("Kratos service is absent. Deferring database created event.")
+            return
+
+        if not self._log_level_valid:
+            logger.info(f"Invalid configuration value for log_level: {self._log_level}")
+            self.unit.status = BlockedStatus("Bad configuration value for log_level")
+            return
 
         logger.info("Updating Kratos config and restarting service")
         self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
@@ -543,7 +559,6 @@ class KratosCharm(CharmBase):
 
         self._handle_status_update_config(event)
 
-    @config_check_decorator
     def _on_client_config_changed(self, event: ClientConfigChangedEvent) -> None:
         domain_url = self._domain_url
         if domain_url is None:
@@ -555,6 +570,11 @@ class KratosCharm(CharmBase):
             return
 
         self.unit.status = MaintenanceStatus(f"Adding external provider: {event.provider}")
+
+        if not self._log_level_valid:
+            logger.info(f"Invalid configuration value for log_level: {self._log_level}")
+            self.unit.status = BlockedStatus("Bad configuration value for log_level")
+            return
 
         if self.database.is_resource_created():
             self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
