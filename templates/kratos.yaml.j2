@@ -40,15 +40,15 @@ selfservice:
             config:
                 providers:
                 {%- for provider in oidc_providers %}
-                - {% for key, value in provider.config().items() -%}
-                  {{ key }}: "{{ value }}"
-                  {% endfor -%}
-                  {%- if provider.provider in available_mappers %}
-                  mapper_url: "file://{{ mappers_path }}/{{ provider.provider }}_schema.jsonnet"
-                  {%- else %}
-                  mapper_url: "file://{{ mappers_path }}/default_schema.jsonnet"
-                  {%- endif %}
-                  scope: ["profile", "email", "address", "phone"]
+                    {% set config = provider.config() %}
+                    - {% for key, value in config.items() -%}
+                      {{ key }}: {{ value }}
+                      {% endfor -%}
+                      {%- if not config["mapper_url"] and provider.provider in available_mappers %}
+                      mapper_url: "file://{{ mappers_path }}/{{ provider.provider }}_schema.jsonnet"
+                      {%- elif not config["mapper_url"] %}
+                      mapper_url: "file://{{ mappers_path }}/default_schema.jsonnet"
+                      {%- endif %}
                 {%- endfor %}
             enabled: True
     {%- endif %}

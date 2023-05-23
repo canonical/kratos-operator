@@ -121,26 +121,25 @@ def trigger_database_changed(harness: Harness) -> None:
 
 
 def setup_external_provider_relation(harness: Harness) -> int:
+    data = {
+        "client_id": "client_id",
+        "provider": "generic",
+        "secret_backend": "relation",
+        "client_secret": "client_secret",
+        "issuer_url": "https://example.com/oidc",
+        "provider_id": "Provider",
+        "scope": "profile email",
+    }
     relation_id = harness.add_relation("kratos-external-idp", "kratos-external-idp-integrator")
     harness.add_relation_unit(relation_id, "kratos-external-idp-integrator/0")
     harness.update_relation_data(
         relation_id,
         "kratos-external-idp-integrator",
         {
-            "providers": json.dumps(
-                [
-                    {
-                        "client_id": "client_id",
-                        "provider": "generic",
-                        "secret_backend": "relation",
-                        "client_secret": "client_secret",
-                        "issuer_url": "https://example.com/oidc",
-                    },
-                ],
-            ),
+            "providers": json.dumps([data]),
         },
     )
-    return relation_id
+    return relation_id, data
 
 
 def test_on_pebble_ready_cannot_connect_container(harness: Harness) -> None:
@@ -593,7 +592,7 @@ def test_on_client_config_changed_with_ingress(
     setup_ingress_relation(harness, "public")
     (login_relation_id, login_databag) = setup_login_ui_relation(harness)
 
-    relation_id = setup_external_provider_relation(harness)
+    relation_id, data = setup_external_provider_relation(harness)
     container = harness.model.unit.get_container(CONTAINER_NAME)
 
     expected_config = {
@@ -631,13 +630,13 @@ def test_on_client_config_changed_with_ingress(
                     "config": {
                         "providers": [
                             {
-                                "id": "generic_9d07bcc95549089d7f16120e8bed5396469a5426",
-                                "client_id": "client_id",
-                                "client_secret": "client_secret",
-                                "issuer_url": "https://example.com/oidc",
+                                "id": data["provider_id"],
+                                "client_id": data["client_id"],
+                                "client_secret": data["client_secret"],
+                                "issuer_url": data["issuer_url"],
                                 "mapper_url": "file:///etc/config/claim_mappers/default_schema.jsonnet",
-                                "provider": "generic",
-                                "scope": ["profile", "email", "address", "phone"],
+                                "provider": data["provider"],
+                                "scope": data["scope"].split(" "),
                             },
                         ],
                     },
