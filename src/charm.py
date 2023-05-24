@@ -250,16 +250,19 @@ class KratosCharm(CharmBase):
     def _log_level(self) -> str:
         return self.config["log_level"]
 
-    @property
-    def _log_level_valid(self) -> bool:
-        return self._log_level in LOG_LEVELS
-
     @cached_property
     def _get_available_mappers(self) -> List[str]:
         return [
             schema_file.name[: -len("_schema.jsonnet")]
             for schema_file in self._mappers_local_dir_path.iterdir()
         ]
+
+    def _validate_config_log_level(self) -> bool:
+        is_valid = self._log_level in LOG_LEVELS
+        if not is_valid:
+            logger.info(f"Invalid configuration value for log_level: {self._log_level}")
+            self.unit.status = BlockedStatus("Invalid configuration value for log_level")
+        return is_valid
 
     def _render_conf_file(self) -> str:
         """Render the Kratos configuration file."""
@@ -422,10 +425,8 @@ class KratosCharm(CharmBase):
             logger.info("Cannot connect to Kratos container. Deferring event.")
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
-        
-        if not self._log_level_valid:
-            logger.info(f"Invalid configuration value for log_level: {self._log_level}")
-            self.unit.status = BlockedStatus("Bad configuration value for log_level")
+
+        if not self._validate_config_log_level():
             return
 
         self.unit.status = MaintenanceStatus("Configuring resources")
@@ -451,6 +452,7 @@ class KratosCharm(CharmBase):
             return
 
         self.unit.status = ActiveStatus()
+
 
     def _on_install(self, event: InstallEvent) -> None:
         if not self._container.can_connect():
@@ -488,6 +490,10 @@ class KratosCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
 
+        if not self._validate_config_log_level():
+            event.defer()
+            return
+
         self.unit.status = MaintenanceStatus(
             "Configuring container and resources for database connection"
         )
@@ -498,11 +504,6 @@ class KratosCharm(CharmBase):
             event.defer()
             self.unit.status = WaitingStatus("Waiting for Kratos service")
             logger.info("Kratos service is absent. Deferring database created event.")
-            return
-
-        if not self._log_level_valid:
-            logger.info(f"Invalid configuration value for log_level: {self._log_level}")
-            self.unit.status = BlockedStatus("Bad configuration value for log_level")
             return
 
         logger.info("Updating Kratos config and restarting service")
@@ -569,12 +570,11 @@ class KratosCharm(CharmBase):
             event.defer()
             return
 
-        self.unit.status = MaintenanceStatus(f"Adding external provider: {event.provider}")
-
-        if not self._log_level_valid:
-            logger.info(f"Invalid configuration value for log_level: {self._log_level}")
-            self.unit.status = BlockedStatus("Bad configuration value for log_level")
+        if not self._validate_config_log_level():
+            event.defer()
             return
+
+        self.unit.status = MaintenanceStatus(f"Adding external provider: {event.provider}")
 
         if self.database.is_resource_created():
             self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
@@ -751,7 +751,7 @@ class KratosCharm(CharmBase):
             return
         event.log("Successfully migrated the database.")
 
-    def _promtail_error(self, event: PromtailDigestError):
+    def _promtail_error(self, event: PromtailDigestError) -> None:
         logger.error(event.message)
         self.unit.status = BlockedStatus(event.message)
 
