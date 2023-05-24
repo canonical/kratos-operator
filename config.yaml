@@ -3,12 +3,6 @@ options:
     description: SMTP connection URI
     type: string
     default: 'smtps://test:test@mailslurper:1025/?skip_ssl_verify=true'
-  external_url:
-    description:
-      The URL under which Kratos is externally reachable (for example,
-      if Kratos is served via a reverse proxy).
-    type: string
-    default: ""
   dev:
     description:
       Run Kratos on dev mode, it is needed if HTTPS is not set up. This should only be used for development purposes.
