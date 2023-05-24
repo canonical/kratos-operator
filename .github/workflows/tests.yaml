@@ -47,7 +47,7 @@ jobs:
         if: failure()
 
       - name: Get juju logs
-        run: juju debug-log --replay --include kratos/0
+        run: juju debug-log --replay --include unit-kratos-0
         if: failure()
 
       - name: Get kratos container logs
