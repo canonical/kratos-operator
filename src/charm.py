@@ -205,9 +205,7 @@ class KratosCharm(CharmBase):
 
     @property
     def _domain_url(self) -> Optional[str]:
-        return (
-            normalise_url(self.public_ingress.url) if self.public_ingress.is_ready() else None
-        )
+        return normalise_url(self.public_ingress.url) if self.public_ingress.is_ready() else None
 
     @cached_property
     def _get_available_mappers(self) -> List[str]:

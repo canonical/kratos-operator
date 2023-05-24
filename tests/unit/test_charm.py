@@ -659,7 +659,9 @@ def test_on_client_config_changed_with_ingress(
         },
     }
     expected_schemas = expected_config["identity"].pop("schemas")
-    expected_redirect_url = harness.charm.public_ingress.url.replace("http://", "https://").replace(":80", "")
+    expected_redirect_url = harness.charm.public_ingress.url.replace(
+        "http://", "https://"
+    ).replace(":80", "")
 
     app_data = json.loads(harness.get_relation_data(relation_id, harness.charm.app)["providers"])
 
