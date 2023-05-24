@@ -55,6 +55,7 @@ from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError
 from ops.pebble import Error, ExecError, Layer
 
 from kratos import KratosAPI
+from utils import dict_to_action_output, normalise_url
 
 if TYPE_CHECKING:
     from ops.pebble import LayerDict
@@ -67,17 +68,6 @@ PEER_RELATION_NAME = "kratos-peers"
 PEER_KEY_DB_MIGRATE_VERSION = "db_migrate_version"
 DB_MIGRATE_VERSION = "0.11.1"
 DEFAULT_SCHEMA_ID_FILE_NAME = "default.schema"
-
-
-def dict_to_action_output(d: Dict) -> Dict:
-    """Convert all keys in a dict to the format of a juju action output."""
-    ret = {}
-    for k, v in d.items():
-        k = k.replace("_", "-")
-        if isinstance(v, dict):
-            v = dict_to_action_output(v)
-        ret[k] = v
-    return ret
 
 
 class KratosCharm(CharmBase):
@@ -215,7 +205,9 @@ class KratosCharm(CharmBase):
 
     @property
     def _domain_url(self) -> Optional[str]:
-        return self.config["external_url"] or self.public_ingress.url
+        return (
+            normalise_url(self.public_ingress.url) if self.public_ingress.is_ready() else None
+        )
 
     @cached_property
     def _get_available_mappers(self) -> List[str]:
