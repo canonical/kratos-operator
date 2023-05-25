@@ -44,6 +44,7 @@ def normalise_url(url: str) -> str:
     1) The ingress will serve https under the 443 port, the user-agent will
        implicitly make the request on that port
     2) The provided URL is not a relative path
+    3) No user/password is provided in the netloc
 
     This is a hack and should be removed once traefik provides a way for us to
     request the https URL.
