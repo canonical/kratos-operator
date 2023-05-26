@@ -651,7 +651,7 @@ def test_on_client_config_changed_with_ingress(
         },
         "serve": {
             "public": {
-                "base_url": "http://public:80/kratos-model-kratos",
+                "base_url": "https://public/kratos-model-kratos",
                 "cors": {
                     "enabled": True,
                 },
@@ -659,6 +659,9 @@ def test_on_client_config_changed_with_ingress(
         },
     }
     expected_schemas = expected_config["identity"].pop("schemas")
+    expected_redirect_url = harness.charm.public_ingress.url.replace(
+        "http://", "https://"
+    ).replace(":80", "")
 
     app_data = json.loads(harness.get_relation_data(relation_id, harness.charm.app)["providers"])
 
@@ -668,99 +671,7 @@ def test_on_client_config_changed_with_ingress(
     assert all(schema in schemas for schema in expected_schemas)
     assert len(expected_schemas) == len(schemas)
     assert config == expected_config
-    assert app_data[0]["redirect_uri"].startswith(harness.charm.public_ingress.url)
-
-
-def test_on_client_config_changed_with_external_url_config(
-    harness: Harness, mocked_container: Container
-) -> None:
-    # This is the provider id that will be computed based on the provider config
-    provider_id = "generic_9d07bcc95549089d7f16120e8bed5396469a5426"
-    harness.update_config({"external_url": "https://example.com"})
-    setup_postgres_relation(harness)
-    (login_relation_id, login_databag) = setup_login_ui_relation(harness)
-
-    relation_id = setup_external_provider_relation(harness)
-    container = harness.model.unit.get_container(CONTAINER_NAME)
-
-    expected_config = {
-        "log": {"level": "trace"},
-        "identity": {
-            "default_schema_id": "social_user_v0",
-            "schemas": [
-                {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
-                {
-                    "id": "social_user_v0",
-                    "url": "file:///etc/config/schemas/default/social_user_v0.json",
-                },
-            ],
-        },
-        "selfservice": {
-            "default_browser_return_url": login_databag["default_url"],
-            "flows": {
-                "error": {
-                    "ui_url": login_databag["error_url"],
-                },
-                "login": {
-                    "ui_url": login_databag["login_url"],
-                },
-                "registration": {
-                    "enabled": True,
-                    "ui_url": login_databag["registration_url"],
-                    "after": {"oidc": {"hooks": [{"hook": "session"}]}},
-                },
-            },
-            "methods": {
-                "password": {
-                    "enabled": False,
-                },
-                "oidc": {
-                    "config": {
-                        "providers": [
-                            {
-                                "id": provider_id,
-                                "client_id": "client_id",
-                                "client_secret": "client_secret",
-                                "issuer_url": "https://example.com/oidc",
-                                "mapper_url": "file:///etc/config/claim_mappers/default_schema.jsonnet",
-                                "provider": "generic",
-                                "scope": ["profile", "email", "address", "phone"],
-                            },
-                        ],
-                    },
-                    "enabled": True,
-                },
-            },
-        },
-        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/kratos-model_kratos",
-        "courier": {
-            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
-        },
-        "serve": {
-            "public": {
-                "base_url": "https://example.com",
-                "cors": {
-                    "enabled": True,
-                },
-            },
-        },
-    }
-    expected_schemas = expected_config["identity"].pop("schemas")
-
-    app_data = json.loads(harness.get_relation_data(relation_id, harness.charm.app)["providers"])
-
-    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
-    config = yaml.load(container_config.read(), yaml.Loader)
-    schemas = config["identity"].pop("schemas")
-    assert all(schema in schemas for schema in expected_schemas)
-    assert len(expected_schemas) == len(schemas)
-    assert config == expected_config
-    assert app_data == [
-        {
-            "provider_id": provider_id,
-            "redirect_uri": f'{harness.charm.config["external_url"]}/self-service/methods/oidc/callback/{provider_id}',
-        }
-    ]
+    assert app_data[0]["redirect_uri"].startswith(expected_redirect_url)
 
 
 def test_on_client_config_changed_with_hydra(harness: Harness) -> None:
