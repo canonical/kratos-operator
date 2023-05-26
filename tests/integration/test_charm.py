@@ -275,7 +275,9 @@ async def test_kratos_scale_up(ops_test: OpsTest):
     )
 
     admin_address = await get_app_address(ops_test, TRAEFIK_ADMIN_APP)
-    health_check_url = f"http://{admin_address}/{ops_test.model.name}-{APP_NAME}/admin/health/ready"
+    health_check_url = (
+        f"http://{admin_address}/{ops_test.model.name}-{APP_NAME}/admin/health/ready"
+    )
     resp = requests.get(health_check_url)
 
     assert resp.status_code == 200
