@@ -120,7 +120,7 @@ def trigger_database_changed(harness: Harness) -> None:
     )
 
 
-def setup_external_provider_relation(harness: Harness) -> int:
+def setup_external_provider_relation(harness: Harness) -> tuple[int, dict]:
     data = {
         "client_id": "client_id",
         "provider": "generic",
