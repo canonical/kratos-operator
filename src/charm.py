@@ -377,10 +377,7 @@ class KratosCharm(CharmBase):
             return
 
         self.unit.status = MaintenanceStatus("Configuring resources")
-        try:
-            self._container.get_service(self._container_name)
-        except ModelError:
-            self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
+        self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
 
         if not self.model.relations[self._db_relation_name]:
             self.unit.status = BlockedStatus("Missing required relation with postgresql")
@@ -443,15 +440,8 @@ class KratosCharm(CharmBase):
             "Configuring container and resources for database connection"
         )
 
-        try:
-            self._container.get_service(self._container_name)
-        except (ModelError, RuntimeError):
-            event.defer()
-            self.unit.status = WaitingStatus("Waiting for Kratos service")
-            logger.info("Kratos service is absent. Deferring database created event.")
-            return
-
         logger.info("Updating Kratos config and restarting service")
+        self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
         self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
 
         peer_relation = self.model.relations[PEER_RELATION_NAME]
