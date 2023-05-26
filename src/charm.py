@@ -127,6 +127,7 @@ class KratosCharm(CharmBase):
 
         self.endpoints_provider = KratosEndpointsProvider(self)
 
+        self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(
@@ -387,6 +388,8 @@ class KratosCharm(CharmBase):
 
         if self.database.is_resource_created():
             self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
+            # We need to push the layer because this may run before _on_pebble_ready
+            self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
             self._container.restart(self._container_name)
             self.unit.status = ActiveStatus()
             return
@@ -395,6 +398,15 @@ class KratosCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting for database creation")
         else:
             self.unit.status = BlockedStatus("Missing postgres database relation")
+
+    def _on_install(self, event):
+        if not self._container.can_connect():
+            event.defer()
+            logger.info("Cannot connect to Kratos container. Deferring event.")
+            self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
+            return
+
+        self._push_default_files()
 
     def _on_pebble_ready(self, event: PebbleReadyEvent) -> None:
         """Event Handler for pebble ready event."""
@@ -406,7 +418,6 @@ class KratosCharm(CharmBase):
 
         self.unit.status = MaintenanceStatus("Configuring/deploying resources")
 
-        self._push_default_files()
         self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
         logger.info("Pebble plan updated with new configuration, replanning")
         self._container.replan()
