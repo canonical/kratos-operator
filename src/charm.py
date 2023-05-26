@@ -52,7 +52,7 @@ from ops.charm import (
 )
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
-from ops.pebble import Error, ExecError, Layer
+from ops.pebble import ChangeError, Error, ExecError, Layer
 
 from kratos import KratosAPI
 from utils import dict_to_action_output, normalise_url
@@ -376,28 +376,32 @@ class KratosCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
 
-        self.unit.status = MaintenanceStatus("Configuring/deploying resources")
-
+        self.unit.status = MaintenanceStatus("Configuring resources")
         try:
             self._container.get_service(self._container_name)
-        except (ModelError, RuntimeError):
-            event.defer()
-            self.unit.status = WaitingStatus("Waiting for Kratos service")
-            logger.info("Kratos service is absent. Deferring database created event.")
-            return
-
-        if self.database.is_resource_created():
-            self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
-            # We need to push the layer because this may run before _on_pebble_ready
+        except ModelError:
             self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
-            self._container.restart(self._container_name)
-            self.unit.status = ActiveStatus()
+
+        if not self.model.relations[self._db_relation_name]:
+            self.unit.status = BlockedStatus("Missing required relation with postgresql")
+            event.defer()
             return
 
-        if self.model.relations[self._db_relation_name]:
+        if not self.database.is_resource_created():
             self.unit.status = WaitingStatus("Waiting for database creation")
-        else:
-            self.unit.status = BlockedStatus("Missing postgres database relation")
+            event.defer()
+            return
+
+        self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
+        # We need to push the layer because this may run before _on_pebble_ready
+        try:
+            self._container.restart(self._container_name)
+        except ChangeError as err:
+            logger.error(str(err))
+            self.unit.status = BlockedStatus("Failed to replan, please consult the logs")
+            return
+
+        self.unit.status = ActiveStatus()
 
     def _on_install(self, event):
         if not self._container.can_connect():
@@ -410,34 +414,7 @@ class KratosCharm(CharmBase):
 
     def _on_pebble_ready(self, event: PebbleReadyEvent) -> None:
         """Event Handler for pebble ready event."""
-        if not self._container.can_connect():
-            event.defer()
-            logger.info("Cannot connect to Kratos container. Deferring event.")
-            self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
-            return
-
-        self.unit.status = MaintenanceStatus("Configuring/deploying resources")
-
-        self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
-        logger.info("Pebble plan updated with new configuration, replanning")
-        self._container.replan()
-
-        # in case container was terminated unexpectedly
-        peer_relation = self.model.relations[PEER_RELATION_NAME]
-        if (
-            peer_relation
-            and peer_relation[0].data[self.app].get(PEER_KEY_DB_MIGRATE_VERSION)
-            == DB_MIGRATE_VERSION
-        ):
-            self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
-            self._container.start(self._container_name)
-            self.unit.status = ActiveStatus()
-            return
-
-        if self.model.relations[self._db_relation_name]:
-            self.unit.status = WaitingStatus("Waiting for database creation")
-        else:
-            self.unit.status = BlockedStatus("Missing postgres database relation")
+        self._handle_status_update_config(event)
 
     def _on_config_changed(self, event: ConfigChangedEvent) -> None:
         """Event Handler for config changed event."""
