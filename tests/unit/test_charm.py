@@ -1369,7 +1369,9 @@ def test_timeout_on_run_migration(
     event.fail.assert_called()
 
 
-def test_on_pebble_ready_with_loki(harness: Harness) -> None:
+def test_on_pebble_ready_with_loki(
+    harness: Harness, mocked_log_proxy_consumer_setup_promtail: MagicMock
+) -> None:
     setup_postgres_relation(harness)
     setup_peer_relation(harness)
     container = harness.model.unit.get_container(CONTAINER_NAME)
@@ -1379,29 +1381,23 @@ def test_on_pebble_ready_with_loki(harness: Harness) -> None:
     assert harness.model.unit.status == ActiveStatus()
 
 
-def test_on_pebble_ready_with_loki_without_promtail_endpoint(harness: Harness) -> None:
+def test_on_pebble_ready_with_bad_config(
+    harness: Harness, mocked_log_proxy_consumer_setup_promtail: MagicMock
+) -> None:
     setup_postgres_relation(harness)
-    setup_peer_relation(harness)
+    harness.update_config({"log_level": "invalid_config"})
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
-    setup_loki_relation(harness)
-
-    event = MagicMock()
-    event.message = "Promtail binary couldn't be downloaded - HTTP Error 404: Not Found"
-    harness.charm._promtail_error(event)
 
     assert isinstance(harness.model.unit.status, BlockedStatus)
-    assert (
-        "Promtail binary couldn't be downloaded - HTTP Error 404: Not Found"
-        in harness.charm.unit.status.message
-    )
+    assert "Invalid configuration value for log_level" in harness.charm.unit.status.message
 
 
-def test_on_pebble_ready_with_bad_config(harness: Harness) -> None:
+def test_on_config_changed_with_invalid_log_level(
+    harness: Harness, mocked_log_proxy_consumer_setup_promtail: MagicMock
+) -> None:
     setup_postgres_relation(harness)
-    harness.update_config({"log_level": "bad_config"})
-    container = harness.model.unit.get_container(CONTAINER_NAME)
-    harness.charm.on.kratos_pebble_ready.emit(container)
+    harness.update_config({"log_level": "invalid_config"})
 
     assert isinstance(harness.model.unit.status, BlockedStatus)
     assert "Invalid configuration value for log_level" in harness.charm.unit.status.message

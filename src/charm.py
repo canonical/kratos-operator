@@ -490,10 +490,6 @@ class KratosCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
 
-        if not self._validate_config_log_level():
-            event.defer()
-            return
-
         self.unit.status = MaintenanceStatus(
             "Configuring container and resources for database connection"
         )
@@ -567,10 +563,6 @@ class KratosCharm(CharmBase):
                 "Cannot add external provider without an external hostname. Please "
                 "provide an ingress relation or an external_url config."
             )
-            event.defer()
-            return
-
-        if not self._validate_config_log_level():
             event.defer()
             return
 
@@ -753,7 +745,6 @@ class KratosCharm(CharmBase):
 
     def _promtail_error(self, event: PromtailDigestError) -> None:
         logger.error(event.message)
-        self.unit.status = BlockedStatus(event.message)
 
 
 if __name__ == "__main__":
