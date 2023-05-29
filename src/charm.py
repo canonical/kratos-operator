@@ -47,6 +47,7 @@ from ops.charm import (
     CharmBase,
     ConfigChangedEvent,
     HookEvent,
+    InstallEvent,
     PebbleReadyEvent,
     RelationEvent,
 )
