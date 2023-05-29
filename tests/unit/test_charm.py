@@ -272,7 +272,7 @@ def test_on_pebble_ready_when_missing_database_relation(harness: Harness) -> Non
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     assert isinstance(harness.model.unit.status, BlockedStatus)
-    assert "Missing postgres database relation" in harness.charm.unit.status.message
+    assert "Missing required relation with postgresql" in harness.charm.unit.status.message
 
 
 def test_on_pebble_ready_when_database_not_created_yet(harness: Harness) -> None:
@@ -392,16 +392,6 @@ def test_on_database_created_cannot_connect_container(harness: Harness) -> None:
     assert "Waiting to connect to Kratos container" in harness.charm.unit.status.message
 
 
-def test_on_database_created_when_pebble_is_not_ready(
-    harness: Harness, mocked_pebble_exec_success: MagicMock
-) -> None:
-    setup_postgres_relation(harness)
-
-    assert isinstance(harness.charm.unit.status, WaitingStatus)
-    assert "Waiting for Kratos service" in harness.charm.unit.status.message
-    mocked_pebble_exec_success.assert_not_called()
-
-
 def test_on_database_created_when_pebble_is_ready_in_leader_unit_missing_peer_relation(
     harness: Harness,
 ) -> None:
@@ -512,13 +502,6 @@ def test_on_database_changed_cannot_connect_container(harness: Harness) -> None:
     assert "Waiting to connect to Kratos container" in harness.charm.unit.status.message
 
 
-def test_on_database_changed_when_pebble_is_not_ready(harness: Harness) -> None:
-    trigger_database_changed(harness)
-
-    assert isinstance(harness.charm.unit.status, WaitingStatus)
-    assert "Waiting for Kratos service" in harness.charm.unit.status.message
-
-
 def test_on_database_changed_when_pebble_is_ready(
     harness: Harness, mocked_pebble_exec_success: MagicMock
 ) -> None:
@@ -539,13 +522,6 @@ def test_on_config_changed_cannot_connect_container(harness: Harness) -> None:
 
     assert isinstance(harness.charm.unit.status, WaitingStatus)
     assert "Waiting to connect to Kratos container" in harness.charm.unit.status.message
-
-
-def test_on_config_changed_when_pebble_is_not_ready(harness: Harness) -> None:
-    trigger_database_changed(harness)
-
-    assert isinstance(harness.charm.unit.status, WaitingStatus)
-    assert "Waiting for Kratos service" in harness.charm.unit.status.message
 
 
 def test_on_config_changed_when_pebble_is_ready(

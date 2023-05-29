@@ -47,12 +47,13 @@ from ops.charm import (
     CharmBase,
     ConfigChangedEvent,
     HookEvent,
+    InstallEvent,
     PebbleReadyEvent,
     RelationEvent,
 )
 from ops.main import main
 from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
-from ops.pebble import Error, ExecError, Layer
+from ops.pebble import ChangeError, Error, ExecError, Layer
 
 from kratos import KratosAPI
 from utils import dict_to_action_output, normalise_url
@@ -127,6 +128,7 @@ class KratosCharm(CharmBase):
 
         self.endpoints_provider = KratosEndpointsProvider(self)
 
+        self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(
@@ -375,58 +377,42 @@ class KratosCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
 
-        self.unit.status = MaintenanceStatus("Configuring/deploying resources")
+        self.unit.status = MaintenanceStatus("Configuring resources")
+        self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
 
-        try:
-            self._container.get_service(self._container_name)
-        except (ModelError, RuntimeError):
+        if not self.model.relations[self._db_relation_name]:
+            self.unit.status = BlockedStatus("Missing required relation with postgresql")
             event.defer()
-            self.unit.status = WaitingStatus("Waiting for Kratos service")
-            logger.info("Kratos service is absent. Deferring database created event.")
             return
 
-        if self.database.is_resource_created():
-            self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
-            self._container.restart(self._container_name)
-            self.unit.status = ActiveStatus()
-            return
-
-        if self.model.relations[self._db_relation_name]:
+        if not self.database.is_resource_created():
             self.unit.status = WaitingStatus("Waiting for database creation")
-        else:
-            self.unit.status = BlockedStatus("Missing postgres database relation")
+            event.defer()
+            return
 
-    def _on_pebble_ready(self, event: PebbleReadyEvent) -> None:
-        """Event Handler for pebble ready event."""
+        self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
+        # We need to push the layer because this may run before _on_pebble_ready
+        try:
+            self._container.restart(self._container_name)
+        except ChangeError as err:
+            logger.error(str(err))
+            self.unit.status = BlockedStatus("Failed to restart, please consult the logs")
+            return
+
+        self.unit.status = ActiveStatus()
+
+    def _on_install(self, event: InstallEvent) -> None:
         if not self._container.can_connect():
             event.defer()
             logger.info("Cannot connect to Kratos container. Deferring event.")
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
 
-        self.unit.status = MaintenanceStatus("Configuring/deploying resources")
-
         self._push_default_files()
-        self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
-        logger.info("Pebble plan updated with new configuration, replanning")
-        self._container.replan()
 
-        # in case container was terminated unexpectedly
-        peer_relation = self.model.relations[PEER_RELATION_NAME]
-        if (
-            peer_relation
-            and peer_relation[0].data[self.app].get(PEER_KEY_DB_MIGRATE_VERSION)
-            == DB_MIGRATE_VERSION
-        ):
-            self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
-            self._container.start(self._container_name)
-            self.unit.status = ActiveStatus()
-            return
-
-        if self.model.relations[self._db_relation_name]:
-            self.unit.status = WaitingStatus("Waiting for database creation")
-        else:
-            self.unit.status = BlockedStatus("Missing postgres database relation")
+    def _on_pebble_ready(self, event: PebbleReadyEvent) -> None:
+        """Event Handler for pebble ready event."""
+        self._handle_status_update_config(event)
 
     def _on_config_changed(self, event: ConfigChangedEvent) -> None:
         """Event Handler for config changed event."""
@@ -455,15 +441,8 @@ class KratosCharm(CharmBase):
             "Configuring container and resources for database connection"
         )
 
-        try:
-            self._container.get_service(self._container_name)
-        except (ModelError, RuntimeError):
-            event.defer()
-            self.unit.status = WaitingStatus("Waiting for Kratos service")
-            logger.info("Kratos service is absent. Deferring database created event.")
-            return
-
         logger.info("Updating Kratos config and restarting service")
+        self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
         self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
 
         peer_relation = self.model.relations[PEER_RELATION_NAME]

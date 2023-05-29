@@ -43,6 +43,12 @@ async def get_unit_address(ops_test: OpsTest, app_name: str, unit_num: int) -> s
     return status["applications"][app_name]["units"][f"{app_name}/{unit_num}"]["address"]
 
 
+async def get_app_address(ops_test: OpsTest, app_name: str) -> str:
+    """Get address of an app."""
+    status = await ops_test.model.get_status()  # noqa: F821
+    return status["applications"][app_name]["public-address"]
+
+
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy(ops_test: OpsTest) -> None:
     """Build the charm-under-test and deploy it.
@@ -253,3 +259,25 @@ async def test_identity_schemas_config(ops_test: OpsTest) -> None:
     resp = requests.get(f"http://{public_address}/{ops_test.model.name}-{APP_NAME}/schemas")
 
     assert original_resp == resp.json()
+
+
+async def test_kratos_scale_up(ops_test: OpsTest) -> None:
+    """Check that kratos works after it is scaled up."""
+    app = ops_test.model.applications[APP_NAME]
+
+    await app.scale(3)
+
+    await ops_test.model.wait_for_idle(
+        apps=[APP_NAME],
+        status="active",
+        raise_on_blocked=True,
+        timeout=1000,
+    )
+
+    admin_address = await get_app_address(ops_test, TRAEFIK_ADMIN_APP)
+    health_check_url = (
+        f"http://{admin_address}/{ops_test.model.name}-{APP_NAME}/admin/health/ready"
+    )
+    resp = requests.get(health_check_url)
+
+    assert resp.status_code == 200
