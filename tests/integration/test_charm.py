@@ -261,7 +261,7 @@ async def test_identity_schemas_config(ops_test: OpsTest) -> None:
     assert original_resp == resp.json()
 
 
-async def test_kratos_scale_up(ops_test: OpsTest):
+async def test_kratos_scale_up(ops_test: OpsTest) -> None:
     """Check that kratos works after it is scaled up."""
     app = ops_test.model.applications[APP_NAME]
 
