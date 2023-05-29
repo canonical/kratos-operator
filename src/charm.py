@@ -453,7 +453,6 @@ class KratosCharm(CharmBase):
 
         self.unit.status = ActiveStatus()
 
-
     def _on_install(self, event: InstallEvent) -> None:
         if not self._container.can_connect():
             event.defer()
