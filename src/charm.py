@@ -400,7 +400,7 @@ class KratosCharm(CharmBase):
 
         self.unit.status = ActiveStatus()
 
-    def _on_install(self, event):
+    def _on_install(self, event: InstallEvent) -> None:
         if not self._container.can_connect():
             event.defer()
             logger.info("Cannot connect to Kratos container. Deferring event.")
