@@ -395,7 +395,7 @@ class KratosCharm(CharmBase):
             self._container.restart(self._container_name)
         except ChangeError as err:
             logger.error(str(err))
-            self.unit.status = BlockedStatus("Failed to replan, please consult the logs")
+            self.unit.status = BlockedStatus("Failed to restart, please consult the logs")
             return
 
         self.unit.status = ActiveStatus()
