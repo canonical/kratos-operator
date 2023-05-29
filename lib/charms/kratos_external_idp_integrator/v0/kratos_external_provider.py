@@ -102,6 +102,7 @@ class KratosCharm(CharmBase):
 ```
 """
 
+import base64
 import hashlib
 import inspect
 import json
@@ -128,7 +129,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 4
 
 DEFAULT_RELATION_NAME = "kratos-external-idp"
 logger = logging.getLogger(__name__)
@@ -168,7 +169,10 @@ PROVIDER_PROVIDERS_JSON_SCHEMA = {
                     "tenant_id": {"type": "string"},
                     "private_key": {"type": "string"},
                     "private_key_id": {"type": "string"},
+                    "scope": {"type": "string"},
                     "team_id": {"type": "string"},
+                    "provider_id": {"type": "string"},
+                    "jsonnet_mapper": {"type": "string"},
                 },
                 "additionalProperties": True,
             },
@@ -255,7 +259,8 @@ def _validate_data(data: Dict, schema: Dict) -> None:
 class BaseProviderConfigHandler:
     """The base class for parsing a provider's config."""
 
-    mandatory_fields = {"provider", "client_id", "secret_backend"}
+    mandatory_fields = {"provider", "client_id", "secret_backend", "scope"}
+    optional_fields = {"provider_id", "jsonnet_mapper"}
     providers: List[str] = []
 
     @classmethod
@@ -272,6 +277,9 @@ class BaseProviderConfigHandler:
                     f"Missing required configuration '{key}' for provider '{config['provider']}'"
                 )
             config_keys.remove(key)
+
+        for key in cls.optional_fields:
+            config_keys.discard(key)
 
         if config["secret_backend"] not in ["relation", "secret", "vault"]:
             raise InvalidConfigError(
@@ -293,14 +301,15 @@ class BaseProviderConfigHandler:
     @classmethod
     def parse_config(cls, config: Dict) -> List:
         """Parse the user provided config into the relation databag expected format."""
-        return [
-            {
-                "client_id": config["client_id"],
-                "provider": config["provider"],
-                "secret_backend": config["secret_backend"],
-                **cls._parse_provider_config(config),
-            }
-        ]
+        ret = {
+            "client_id": config["client_id"],
+            "provider": config["provider"],
+            "secret_backend": config["secret_backend"],
+            "scope": config["scope"],
+        }
+        ret.update({k: config[k] for k in cls.optional_fields if k in config})
+        ret.update(cls._parse_provider_config(config))
+        return [ret]
 
     @classmethod
     def _parse_provider_config(cls, config: Dict) -> Dict:
@@ -510,7 +519,7 @@ class ExternalIdpProvider(Object):
     def validate_provider_config(self, config: Mapping) -> None:
         """Validate the provider config.
 
-        Raises InvalidConfigError is config is invalid.
+        Raises InvalidConfigError if config is invalid.
         """
         self._validate_config(config)
 
@@ -550,16 +559,22 @@ class Provider:
     client_id: str
     provider: str
     relation_id: str
+    scope: str = "profile email address phone"
     client_secret: Optional[str] = None
     issuer_url: Optional[str] = None
     tenant_id: Optional[str] = None
     team_id: Optional[str] = None
     private_key_id: Optional[str] = None
     private_key: Optional[str] = None
+    jsonnet_mapper: Optional[str] = None
+    id: Optional[str] = None
 
     @property
     def provider_id(self) -> str:
         """Returns a unique ID for the client credentials of the provider."""
+        if self.id:
+            return self.id
+
         if self.issuer_url:
             id = hashlib.sha1(f"{self.client_id}_{self.issuer_url}".encode()).hexdigest()
         elif self.tenant_id:
@@ -567,6 +582,10 @@ class Provider:
         else:
             id = hashlib.sha1(self.client_id.encode()).hexdigest()
         return f"{self.provider}_{id}"
+
+    @provider_id.setter
+    def provider_id(self, val) -> None:
+        self.id = val
 
     def config(self) -> Dict:
         """Generate Kratos config for this provider."""
@@ -576,6 +595,10 @@ class Provider:
             "provider": self.provider,
             "client_secret": self.client_secret,
             "issuer_url": self.issuer_url,
+            "scope": self.scope.split(" "),
+            "mapper_url": base64.b64encode(self.jsonnet_mapper.encode()).decode()
+            if self.jsonnet_mapper
+            else None,
             "microsoft_tenant": self.tenant_id,
             "apple_team_id": self.team_id,
             "apple_private_key_id": self.private_key_id,
@@ -586,6 +609,8 @@ class Provider:
     @classmethod
     def from_dict(cls, dic: Dict) -> "Provider":
         """Generate Provider instance from dict."""
+        if provider_id := dic.get("provider_id"):
+            dic["id"] = provider_id
         return cls(**{k: v for k, v in dic.items() if k in inspect.signature(cls).parameters})
 
 
@@ -688,7 +713,6 @@ class ExternalIdpRequirer(Object):
             data = _load_data(data, PROVIDER_JSON_SCHEMA)
             for p in data["providers"]:
                 provider = self._get_provider(p, relation)
-                # providers[provider_type].append(provider)
                 providers.append(provider)
 
         return providers
