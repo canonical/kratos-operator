@@ -107,6 +107,40 @@ def setup_login_ui_relation(harness: Harness) -> tuple[int, dict]:
     return (relation_id, databag)
 
 
+def setup_loki_relation(harness: Harness) -> int:
+    relation_id = harness.add_relation("logging", "loki-k8s")
+    harness.add_relation_unit(relation_id, "loki-k8s/0")
+    databag = {
+        "promtail_binary_zip_url": json.dumps(
+            {
+                "amd64": {
+                    "filename": "promtail-static-amd64",
+                    "zipsha": "543e333b0184e14015a42c3c9e9e66d2464aaa66eca48b29e185a6a18f67ab6d",
+                    "binsha": "17e2e271e65f793a9fbe81eab887b941e9d680abe82d5a0602888c50f5e0cac9",
+                    "url": "https://github.com/canonical/loki-k8s-operator/releases/download/promtail-v2.5.0/promtail-static-amd64.gz",
+                }
+            }
+        ),
+    }
+    unit_databag = {
+        "endpoint": json.dumps(
+            {
+                "url": "http://loki-k8s-0.loki-k8s-endpoints.model0.svc.cluster.local:3100/loki/api/v1/push"
+            }
+        )
+    }
+    harness.update_relation_data(
+        relation_id,
+        "loki-k8s/0",
+        unit_databag,
+    )
+    harness.update_relation_data(
+        relation_id,
+        "loki-k8s",
+        databag,
+    )
+
+
 def trigger_database_changed(harness: Harness) -> None:
     db_relation_id = harness.add_relation("pg-database", "postgresql-k8s")
     harness.add_relation_unit(db_relation_id, "postgresql-k8s/0")
@@ -161,7 +195,7 @@ def test_on_pebble_ready_correct_plan(harness: Harness) -> None:
                 "override": "replace",
                 "summary": "Kratos Operator layer",
                 "startup": "disabled",
-                "command": "kratos serve all --config /etc/config/kratos.yaml",
+                "command": '/bin/sh -c "kratos serve all --config /etc/config/kratos.yaml 2>&1 | tee -a /var/log/kratos.log"',
             }
         }
     }
@@ -182,7 +216,7 @@ def test_on_pebble_ready_correct_plan_with_dev_flag(
                 "override": "replace",
                 "summary": "Kratos Operator layer",
                 "startup": "disabled",
-                "command": "kratos serve all --config /etc/config/kratos.yaml --dev",
+                "command": '/bin/sh -c "kratos serve all --config /etc/config/kratos.yaml --dev 2>&1 | tee -a /var/log/kratos.log"',
             }
         }
     }
@@ -219,7 +253,10 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness: Ha
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     expected_config = {
-        "log": {"level": "trace"},
+        "log": {
+            "level": "info",
+            "format": "json",
+        },
         "identity": {
             "default_schema_id": "social_user_v0",
             "schemas": [
@@ -296,7 +333,10 @@ def test_on_config_changed_when_identity_schemas_config(harness: Harness) -> Non
     )
 
     expected_config = {
-        "log": {"level": "trace"},
+        "log": {
+            "level": "info",
+            "format": "json",
+        },
         "identity": {
             "default_schema_id": schema_id,
             "schemas": [
@@ -347,7 +387,10 @@ def test_on_config_changed_when_identity_schemas_config_unset(harness: Harness) 
     harness.update_config(unset=["identity_schemas", "default_identity_schema_id"])
 
     expected_config = {
-        "log": {"level": "trace"},
+        "log": {
+            "level": "info",
+            "format": "json",
+        },
         "identity": {
             "default_schema_id": "social_user_v0",
             "schemas": [
@@ -572,7 +615,10 @@ def test_on_client_config_changed_with_ingress(
     container = harness.model.unit.get_container(CONTAINER_NAME)
 
     expected_config = {
-        "log": {"level": "trace"},
+        "log": {
+            "level": "info",
+            "format": "json",
+        },
         "identity": {
             "default_schema_id": "social_user_v0",
             "schemas": [
@@ -659,7 +705,10 @@ def test_on_client_config_changed_with_hydra(harness: Harness) -> None:
     setup_hydra_relation(harness)
 
     expected_config = {
-        "log": {"level": "trace"},
+        "log": {
+            "level": "info",
+            "format": "json",
+        },
         "identity": {
             "default_schema_id": "social_user_v0",
             "schemas": [
@@ -723,7 +772,10 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harn
     harness.add_relation_unit(relation_id, "hydra/0")
 
     expected_config = {
-        "log": {"level": "trace"},
+        "log": {
+            "level": "info",
+            "format": "json",
+        },
         "identity": {
             "default_schema_id": "social_user_v0",
             "schemas": [
@@ -808,7 +860,10 @@ def test_on_client_config_changed_without_login_ui_endpoints(harness: Harness) -
     harness.add_relation_unit(login_ui_relation_id, "identity-platform-login-ui-operator/0")
 
     expected_config = {
-        "log": {"level": "trace"},
+        "log": {
+            "level": "info",
+            "format": "json",
+        },
         "identity": {
             "default_schema_id": "social_user_v0",
             "schemas": [
@@ -865,7 +920,10 @@ def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
     harness.add_relation_unit(login_ui_relation_id, "identity-platform-login-ui-operator/0")
 
     expected_config = {
-        "log": {"level": "trace"},
+        "log": {
+            "level": "info",
+            "format": "json",
+        },
         "identity": {
             "default_schema_id": "social_user_v0",
             "schemas": [
@@ -1214,3 +1272,31 @@ def test_timeout_on_run_migration(
     harness.charm._on_run_migration_action(event)
 
     event.fail.assert_called()
+
+
+def test_on_pebble_ready_with_loki(harness: Harness) -> None:
+    setup_postgres_relation(harness)
+    setup_peer_relation(harness)
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+    setup_loki_relation(harness)
+
+    assert harness.model.unit.status == ActiveStatus()
+
+
+def test_on_pebble_ready_with_bad_config(harness: Harness) -> None:
+    setup_postgres_relation(harness)
+    harness.update_config({"log_level": "invalid_config"})
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    assert isinstance(harness.model.unit.status, BlockedStatus)
+    assert "Invalid configuration value for log_level" in harness.charm.unit.status.message
+
+
+def test_on_config_changed_with_invalid_log_level(harness: Harness) -> None:
+    setup_postgres_relation(harness)
+    harness.update_config({"log_level": "invalid_config"})
+
+    assert isinstance(harness.model.unit.status, BlockedStatus)
+    assert "Invalid configuration value for log_level" in harness.charm.unit.status.message

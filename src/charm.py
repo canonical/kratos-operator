@@ -35,7 +35,9 @@ from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ClientConfigChangedEvent,
     ExternalIdpRequirer,
 )
+from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer, PromtailDigestError
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
+from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.traefik_k8s.v1.ingress import (
     IngressPerAppReadyEvent,
     IngressPerAppRequirer,
@@ -69,6 +71,7 @@ PEER_RELATION_NAME = "kratos-peers"
 PEER_KEY_DB_MIGRATE_VERSION = "db_migrate_version"
 DB_MIGRATE_VERSION = "0.11.1"
 DEFAULT_SCHEMA_ID_FILE_NAME = "default.schema"
+LOG_LEVELS = ["panic", "fatal", "error", "warn", "info", "debug", "trace"]
 
 
 class KratosCharm(CharmBase):
@@ -89,6 +92,10 @@ class KratosCharm(CharmBase):
         self._db_relation_name = "pg-database"
         self._hydra_relation_name = "endpoint-info"
         self._login_ui_relation_name = "ui-endpoint-info"
+        self._prometheus_scrape_relation_name = "metrics-endpoint"
+        self._loki_push_api_relation_name = "logging"
+        self._kratos_service_command = "kratos serve all"
+        self._log_path = "/var/log/kratos.log"
 
         self.kratos = KratosAPI(
             f"http://127.0.0.1:{KRATOS_ADMIN_PORT}", self._container, str(self._config_file_path)
@@ -129,6 +136,29 @@ class KratosCharm(CharmBase):
         self.endpoints_provider = KratosEndpointsProvider(self)
 
         self.framework.observe(self.on.install, self._on_install)
+
+        self.metrics_endpoint = MetricsEndpointProvider(
+            self,
+            relation_name=self._prometheus_scrape_relation_name,
+            jobs=[
+                {
+                    "metrics_path": "/metrics/prometheus",
+                    "static_configs": [
+                        {
+                            "targets": [f"*:{KRATOS_ADMIN_PORT}"],
+                        }
+                    ],
+                }
+            ],
+        )
+
+        self.loki_consumer = LogProxyConsumer(
+            self,
+            log_files=[self._log_path],
+            relation_name=self._loki_push_api_relation_name,
+            container_name=self._container_name,
+        )
+
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(
@@ -158,6 +188,11 @@ class KratosCharm(CharmBase):
             self.on.create_admin_account_action, self._on_create_admin_account_action
         )
         self.framework.observe(self.on.run_migration_action, self._on_run_migration_action)
+
+        self.framework.observe(
+            self.loki_consumer.on.promtail_digest_error,
+            self._promtail_error,
+        )
 
     @property
     def _kratos_service_params(self) -> str:
@@ -189,17 +224,19 @@ class KratosCharm(CharmBase):
                     "override": "replace",
                     "summary": "Kratos Operator layer",
                     "startup": "disabled",
-                    "command": "kratos serve all " + self._kratos_service_params,
+                    "command": '/bin/sh -c "{} {} 2>&1 | tee -a {}"'.format(
+                        self._kratos_service_command, self._kratos_service_params, self._log_path
+                    ),
                 }
             },
             "checks": {
                 "kratos-ready": {
                     "override": "replace",
-                    "http": {"url": "http://localhost:4434/admin/health/ready"},
+                    "http": {"url": f"http://localhost:{KRATOS_ADMIN_PORT}/admin/health/ready"},
                 },
                 "kratos-alive": {
                     "override": "replace",
-                    "http": {"url": "http://localhost:4434/admin/health/alive"},
+                    "http": {"url": f"http://localhost:{KRATOS_ADMIN_PORT}/admin/health/alive"},
                 },
             },
         }
@@ -209,12 +246,23 @@ class KratosCharm(CharmBase):
     def _domain_url(self) -> Optional[str]:
         return normalise_url(self.public_ingress.url) if self.public_ingress.is_ready() else None
 
+    @property
+    def _log_level(self) -> str:
+        return self.config["log_level"]
+
     @cached_property
     def _get_available_mappers(self) -> List[str]:
         return [
             schema_file.name[: -len("_schema.jsonnet")]
             for schema_file in self._mappers_local_dir_path.iterdir()
         ]
+
+    def _validate_config_log_level(self) -> bool:
+        is_valid = self._log_level in LOG_LEVELS
+        if not is_valid:
+            logger.info(f"Invalid configuration value for log_level: {self._log_level}")
+            self.unit.status = BlockedStatus("Invalid configuration value for log_level")
+        return is_valid
 
     def _render_conf_file(self) -> str:
         """Render the Kratos configuration file."""
@@ -224,6 +272,7 @@ class KratosCharm(CharmBase):
 
         default_schema_id, schemas = self._get_identity_schema_config()
         rendered = template.render(
+            log_level=self._log_level,
             mappers_path=str(self._mappers_dir_path),
             default_browser_return_url=self._get_login_ui_endpoint_info("default_url"),
             identity_schemas=schemas,
@@ -377,6 +426,9 @@ class KratosCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
 
+        if not self._validate_config_log_level():
+            return
+
         self.unit.status = MaintenanceStatus("Configuring resources")
         self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
 
@@ -440,6 +492,14 @@ class KratosCharm(CharmBase):
         self.unit.status = MaintenanceStatus(
             "Configuring container and resources for database connection"
         )
+
+        try:
+            self._container.get_service(self._container_name)
+        except (ModelError, RuntimeError):
+            event.defer()
+            self.unit.status = WaitingStatus("Waiting for Kratos service")
+            logger.info("Kratos service is absent. Deferring database created event.")
+            return
 
         logger.info("Updating Kratos config and restarting service")
         self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
@@ -681,6 +741,9 @@ class KratosCharm(CharmBase):
             event.fail(f"Something went wrong when running the migration: {err}")
             return
         event.log("Successfully migrated the database.")
+
+    def _promtail_error(self, event: PromtailDigestError) -> None:
+        logger.error(event.message)
 
 
 if __name__ == "__main__":

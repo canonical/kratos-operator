@@ -51,6 +51,7 @@ def mocked_kratos_service(harness: Harness, mocked_container: MagicMock) -> Gene
     service = MagicMock()
     service.is_running = lambda: True
     mocked_container.get_service = MagicMock(return_value=service)
+    mocked_container.can_connect = MagicMock(return_value=True)
     return service
 
 
@@ -202,3 +203,11 @@ def mocked_create_identity(mocker: MockerFixture, kratos_identity_json: Dict) ->
 def mocked_run_migration(mocker: MockerFixture) -> MagicMock:
     mock = mocker.patch("charm.KratosAPI.run_migration", return_value=(None, None))
     return mock
+
+
+@pytest.fixture(autouse=True)
+def mocked_log_proxy_consumer_setup_promtail(mocker: MockerFixture) -> MagicMock:
+    mocked_setup_promtail = mocker.patch(
+        "charms.loki_k8s.v0.loki_push_api.LogProxyConsumer._setup_promtail", return_value=None
+    )
+    return mocked_setup_promtail
