@@ -89,7 +89,7 @@ def setup_hydra_relation(harness: Harness) -> int:
 def setup_login_ui_relation(harness: Harness) -> tuple[int, dict]:
     relation_id = harness.add_relation("ui-endpoint-info", "identity-platform-login-ui-operator")
     harness.add_relation_unit(relation_id, "identity-platform-login-ui-operator/0")
-    endpoint = f"http://public:80/{harness.model.name}-identity-platform-login-ui-operator"
+    endpoint = f"https://public/{harness.model.name}-identity-platform-login-ui-operator"
     databag = {
         "consent_url": f"{endpoint}/consent",
         "error_url": f"{endpoint}/error",
@@ -268,6 +268,7 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness: Ha
             ],
         },
         "selfservice": {
+            "allowed_return_urls": [login_databag["login_url"]],
             "default_browser_return_url": login_databag["default_url"],
             "flows": {
                 "error": {
@@ -630,6 +631,7 @@ def test_on_client_config_changed_with_ingress(
             ],
         },
         "selfservice": {
+            "allowed_return_urls": [login_databag["login_url"]],
             "default_browser_return_url": login_databag["default_url"],
             "flows": {
                 "error": {
@@ -720,6 +722,7 @@ def test_on_client_config_changed_with_hydra(harness: Harness) -> None:
             ],
         },
         "selfservice": {
+            "allowed_return_urls": [login_databag["login_url"]],
             "default_browser_return_url": login_databag["default_url"],
             "flows": {
                 "error": {
@@ -787,6 +790,7 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harn
             ],
         },
         "selfservice": {
+            "allowed_return_urls": [login_databag["login_url"]],
             "default_browser_return_url": login_databag["default_url"],
             "flows": {
                 "error": {

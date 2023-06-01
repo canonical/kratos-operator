@@ -271,14 +271,16 @@ class KratosCharm(CharmBase):
             template = Template(file.read())
 
         default_schema_id, schemas = self._get_identity_schema_config()
+        login_ui_url = self._get_login_ui_endpoint_info("login_url")
         rendered = template.render(
             log_level=self._log_level,
             mappers_path=str(self._mappers_dir_path),
             default_browser_return_url=self._get_login_ui_endpoint_info("default_url"),
+            allowed_return_urls=[login_ui_url] if login_ui_url else [],
             identity_schemas=schemas,
             default_identity_schema_id=default_schema_id,
             public_base_url=self._domain_url,
-            login_ui_url=self._get_login_ui_endpoint_info("login_url"),
+            login_ui_url=login_ui_url,
             error_ui_url=self._get_login_ui_endpoint_info("error_url"),
             oidc_providers=self.external_provider.get_providers(),
             available_mappers=self._get_available_mappers,
