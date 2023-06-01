@@ -9,6 +9,12 @@ identity:
           url: '{{ identity_schema }}'
         {%- endfor %}
 selfservice:
+    {%- if allowed_return_urls %}
+    allowed_return_urls:
+    {%- for return_url in allowed_return_urls %}
+        - {{ return_url }}
+    {%- endfor %}
+    {%- endif %}
     default_browser_return_url:
         {{ default_browser_return_url | d("http://example-default-return-url.com", true) }}
     {%- if error_ui_url or login_ui_url or registration_ui_url %}
