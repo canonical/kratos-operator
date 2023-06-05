@@ -119,7 +119,7 @@ from ops.charm import (
     RelationJoinedEvent,
 )
 from ops.framework import EventBase, EventSource, Handle, Object, ObjectEvents
-from ops.model import Relation
+from ops.model import Relation, TooManyRelatedAppsError
 
 # The unique Charmhub library identifier, never change it
 LIBID = "33040051de7f43a8bb43349f2b037dfc"
@@ -129,7 +129,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 4
+LIBPATCH = 5
 
 DEFAULT_RELATION_NAME = "kratos-external-idp"
 logger = logging.getLogger(__name__)
@@ -261,6 +261,7 @@ class BaseProviderConfigHandler:
 
     mandatory_fields = {"provider", "client_id", "secret_backend", "scope"}
     optional_fields = {"provider_id", "jsonnet_mapper"}
+    excluded_fields = {"enabled"}
     providers: List[str] = []
 
     @classmethod
@@ -288,7 +289,8 @@ class BaseProviderConfigHandler:
             )
 
         for key in config_keys:
-            logger.warn(f"Invalid config '{key}' for provider '{provider}' will be ignored")
+            if key not in cls.excluded_fields:
+                logger.warn(f"Invalid config '{key}' for provider '{provider}' will be ignored")
 
         return {key: value for key, value in config.items() if key not in config_keys}
 
@@ -516,6 +518,30 @@ class ExternalIdpProvider(Object):
         for relation in self._charm.model.relations[self._relation_name]:
             relation.data[self._charm.app].clear()
 
+    def get_redirect_uri(self, relation_id: Optional[int] = None) -> Optional[str]:
+        """Get the kratos client's redirect_uri."""
+        if not self.model.unit.is_leader():
+            return None
+
+        try:
+            relation = self.model.get_relation(
+                relation_name=self._relation_name, relation_id=relation_id
+            )
+        except TooManyRelatedAppsError:
+            raise RuntimeError("More than one relations are defined. Please provide a relation_id")
+
+        if not relation or not relation.app:
+            return None
+
+        data = relation.data[relation.app]
+        data = _load_data(data, REQUIRER_JSON_SCHEMA)
+        providers = data["providers"]
+
+        if len(providers) == 0:
+            return None
+
+        return providers[0].get("redirect_uri")
+
     def validate_provider_config(self, config: Mapping) -> None:
         """Validate the provider config.
 
@@ -683,6 +709,9 @@ class ExternalIdpRequirer(Object):
         self, redirect_uri: str, provider_id: str, relation_id: int
     ) -> None:
         """Update the relation databag."""
+        if not self._charm.unit.is_leader():
+            return
+
         data = dict(
             providers=[
                 dict(
