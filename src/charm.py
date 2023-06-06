@@ -108,6 +108,7 @@ class KratosCharm(CharmBase):
         self._loki_push_api_relation_name = "logging"
         self._kratos_service_command = "kratos serve all"
         self._log_path = "/var/log/kratos.log"
+        self._log_dir = "/var/log"
 
         self.kratos = KratosAPI(
             f"http://127.0.0.1:{KRATOS_ADMIN_PORT}", self._container, str(self._config_file_path)
@@ -499,6 +500,8 @@ class KratosCharm(CharmBase):
             return
 
         self._push_default_files()
+        if not self._container.isdir(self._log_dir):
+            self._container.make_dir(path=self._log_dir, make_parents=True, permissions=0o777)
 
     def _on_leader_elected(self, event: LeaderElectedEvent) -> None:
         if not self.unit.is_leader():
