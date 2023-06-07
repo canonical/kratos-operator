@@ -500,8 +500,6 @@ class KratosCharm(CharmBase):
             return
 
         self._push_default_files()
-        if not self._container.isdir(self._log_dir):
-            self._container.make_dir(path=self._log_dir, make_parents=True, permissions=0o777)
 
     def _on_leader_elected(self, event: LeaderElectedEvent) -> None:
         if not self.unit.is_leader():
@@ -512,6 +510,15 @@ class KratosCharm(CharmBase):
 
     def _on_pebble_ready(self, event: PebbleReadyEvent) -> None:
         """Event Handler for pebble ready event."""
+        # Necessary directory for log forwarding
+        if not self._container.can_connect():
+            event.defer()
+            logger.info("Cannot connect to Hydra container. Deferring event.")
+            self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
+            return
+        if not self._container.isdir(self._log_dir):
+            self._container.make_dir(path=self._log_dir, make_parents=True, permissions=0o777)
+
         self._handle_status_update_config(event)
 
     def _on_config_changed(self, event: ConfigChangedEvent) -> None:

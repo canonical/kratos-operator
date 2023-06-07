@@ -211,3 +211,15 @@ def mocked_log_proxy_consumer_setup_promtail(mocker: MockerFixture) -> MagicMock
         "charms.loki_k8s.v0.loki_push_api.LogProxyConsumer._setup_promtail", return_value=None
     )
     return mocked_setup_promtail
+
+
+@pytest.fixture()
+def mocked_isdir(mocker: MockerFixture) -> MagicMock:
+    mocked_isdir = mocker.patch("ops.Container.isdir", return_value=False)
+    return mocked_isdir
+
+
+@pytest.fixture()
+def mocked_make_dir(mocker: MockerFixture) -> MagicMock:
+    mocked_make_dir = mocker.patch("ops.Container.make_dir", return_value=None)
+    return mocked_make_dir
