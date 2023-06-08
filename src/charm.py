@@ -107,8 +107,8 @@ class KratosCharm(CharmBase):
         self._prometheus_scrape_relation_name = "metrics-endpoint"
         self._loki_push_api_relation_name = "logging"
         self._kratos_service_command = "kratos serve all"
-        self._log_dir = "/var/log"
-        self._log_path = f"{self._log_dir}/kratos.log"
+        self._log_dir = Path("/var/log")
+        self._log_path = self._log_dir / "kratos.log"
 
         self.kratos = KratosAPI(
             f"http://127.0.0.1:{KRATOS_ADMIN_PORT}", self._container, str(self._config_file_path)
@@ -167,7 +167,7 @@ class KratosCharm(CharmBase):
 
         self.loki_consumer = LogProxyConsumer(
             self,
-            log_files=[self._log_path],
+            log_files=[str(self._log_path)],
             relation_name=self._loki_push_api_relation_name,
             container_name=self._container_name,
         )
@@ -239,7 +239,9 @@ class KratosCharm(CharmBase):
                     "summary": "Kratos Operator layer",
                     "startup": "disabled",
                     "command": '/bin/sh -c "{} {} 2>&1 | tee -a {}"'.format(
-                        self._kratos_service_command, self._kratos_service_params, self._log_path
+                        self._kratos_service_command,
+                        self._kratos_service_params,
+                        str(self._log_path),
                     ),
                 }
             },
@@ -516,8 +518,8 @@ class KratosCharm(CharmBase):
             logger.info("Cannot connect to Hydra container. Deferring event.")
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
-        if not self._container.isdir(self._log_dir):
-            self._container.make_dir(path=self._log_dir, make_parents=True, permissions=0o777)
+        if not self._container.isdir(str(self._log_dir)):
+            self._container.make_dir(path=str(self._log_dir), make_parents=True, permissions=0o777)
 
         self._handle_status_update_config(event)
 
