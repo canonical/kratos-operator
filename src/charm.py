@@ -107,8 +107,8 @@ class KratosCharm(CharmBase):
         self._prometheus_scrape_relation_name = "metrics-endpoint"
         self._loki_push_api_relation_name = "logging"
         self._kratos_service_command = "kratos serve all"
-        self._log_path = "/var/log/kratos.log"
         self._log_dir = "/var/log"
+        self._log_path = f"{self._log_dir}/kratos.log"
 
         self.kratos = KratosAPI(
             f"http://127.0.0.1:{KRATOS_ADMIN_PORT}", self._container, str(self._config_file_path)
