@@ -12,6 +12,7 @@ import logging
 from functools import cached_property
 from os.path import join
 from pathlib import Path
+from secrets import token_hex
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import requests
@@ -54,7 +55,16 @@ from ops.charm import (
     RelationEvent,
 )
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
+from ops.model import (
+    ActiveStatus,
+    BlockedStatus,
+    MaintenanceStatus,
+    ModelError,
+    Relation,
+    Secret,
+    SecretNotFoundError,
+    WaitingStatus,
+)
 from ops.pebble import ChangeError, Error, ExecError, Layer
 
 from kratos import KratosAPI
@@ -68,6 +78,8 @@ logger = logging.getLogger(__name__)
 KRATOS_ADMIN_PORT = 4434
 KRATOS_PUBLIC_PORT = 4433
 PEER_RELATION_NAME = "kratos-peers"
+SECRET_LABEL = "cookie_secret"
+COOKIE_SECRET_KEY = "cookiesecret"
 PEER_KEY_DB_MIGRATE_VERSION = "db_migrate_version"
 DB_MIGRATE_VERSION = "0.11.1"
 DEFAULT_SCHEMA_ID_FILE_NAME = "default.schema"
@@ -257,6 +269,11 @@ class KratosCharm(CharmBase):
             for schema_file in self._mappers_local_dir_path.iterdir()
         ]
 
+    @property
+    def _peers(self) -> Optional[Relation]:
+        """Fetch the peer relation."""
+        return self.model.get_relation(PEER_RELATION_NAME)
+
     def _validate_config_log_level(self) -> bool:
         is_valid = self._log_level in LOG_LEVELS
         if not is_valid:
@@ -273,6 +290,7 @@ class KratosCharm(CharmBase):
         default_schema_id, schemas = self._get_identity_schema_config()
         login_ui_url = self._get_login_ui_endpoint_info("login_url")
         rendered = template.render(
+            cookie_secrets=[self._get_secret()],
             log_level=self._log_level,
             mappers_path=str(self._mappers_dir_path),
             default_browser_return_url=self._get_login_ui_endpoint_info("default_url"),
@@ -421,6 +439,20 @@ class KratosCharm(CharmBase):
 
         return True
 
+    def _get_secret(self) -> Optional[str]:
+        try:
+            juju_secret = self.model.get_secret(label=SECRET_LABEL)
+            return juju_secret.get_content()[COOKIE_SECRET_KEY]
+        except SecretNotFoundError:
+            return None
+
+    def _create_secret(self) -> Secret:
+        # This function assumes that the peer relation is ready, do not call without
+        # verifying it first.
+        if self.unit.is_leader():
+            secret = {COOKIE_SECRET_KEY: token_hex()}
+            return self.model.app.add_secret(secret, label=SECRET_LABEL)
+
     def _handle_status_update_config(self, event: HookEvent) -> None:
         if not self._container.can_connect():
             event.defer()
@@ -433,6 +465,10 @@ class KratosCharm(CharmBase):
 
         self.unit.status = MaintenanceStatus("Configuring resources")
         self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
+        if not self._peers:
+            self.unit.status = WaitingStatus("Waiting for peer relation")
+            event.defer()
+            return
 
         if not self.model.relations[self._db_relation_name]:
             self.unit.status = BlockedStatus("Missing required relation with postgresql")
@@ -443,6 +479,10 @@ class KratosCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting for database creation")
             event.defer()
             return
+
+        if not self._get_secret():
+            self.unit.status = MaintenanceStatus("Creating secret")
+            self._create_secret()
 
         self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
         # We need to push the layer because this may run before _on_pebble_ready
