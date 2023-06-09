@@ -1293,7 +1293,7 @@ def test_on_pebble_ready_make_dir_called(
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     mocked_isdir.assert_called_once_with("/var/log")
-    mocked_make_dir.assert_called_once_with(path="/var/log", make_parents=True, permissions=0o777)
+    mocked_make_dir.assert_called_once_with(path="/var/log", make_parents=True, permissions=0o755)
 
 
 def test_on_pebble_ready_cannot_connect_container_make_dir_not_called(

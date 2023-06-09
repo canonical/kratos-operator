@@ -519,7 +519,7 @@ class KratosCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
         if not self._container.isdir(str(self._log_dir)):
-            self._container.make_dir(path=str(self._log_dir), make_parents=True, permissions=0o777)
+            self._container.make_dir(path=str(self._log_dir), make_parents=True, permissions=0o755)
 
         self._handle_status_update_config(event)
 
