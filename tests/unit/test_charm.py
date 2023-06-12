@@ -176,6 +176,18 @@ def setup_external_provider_relation(harness: Harness) -> tuple[int, dict]:
     return relation_id, data
 
 
+def validate_config(expected_config, config):
+    expected_schemas = expected_config["identity"].pop("schemas")
+    schemas = config["identity"].pop("schemas")
+    secrets = config.pop("secrets")
+
+    assert "cookie" in secrets
+    assert len(secrets["cookie"]) > 0
+    assert all(schema in schemas for schema in expected_schemas)
+    assert len(expected_schemas) == len(schemas)
+    assert config == expected_config
+
+
 def test_on_pebble_ready_cannot_connect_container(harness: Harness) -> None:
     harness.set_can_connect(CONTAINER_NAME, False)
 
@@ -296,13 +308,8 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness: Ha
             },
         },
     }
-    expected_schemas = expected_config["identity"].pop("schemas")
 
-    config = yaml.safe_load(harness.charm._render_conf_file())
-    schemas = config["identity"].pop("schemas")
-    assert all(schema in schemas for schema in expected_schemas)
-    assert len(expected_schemas) == len(schemas)
-    assert config == expected_config
+    validate_config(expected_config, yaml.safe_load(harness.charm._render_conf_file()))
 
 
 def test_on_pebble_ready_when_missing_database_relation(harness: Harness) -> None:
@@ -367,13 +374,8 @@ def test_on_config_changed_when_identity_schemas_config(harness: Harness) -> Non
             },
         },
     }
-    expected_schemas = expected_config["identity"].pop("schemas")
 
-    config = yaml.safe_load(harness.charm._render_conf_file())
-    schemas = config["identity"].pop("schemas")
-    assert all(schema in schemas for schema in expected_schemas)
-    assert len(expected_schemas) == len(schemas)
-    assert config == expected_config
+    validate_config(expected_config, yaml.safe_load(harness.charm._render_conf_file()))
 
 
 def test_on_config_changed_when_identity_schemas_config_unset(harness: Harness) -> None:
@@ -418,13 +420,8 @@ def test_on_config_changed_when_identity_schemas_config_unset(harness: Harness) 
             },
         },
     }
-    expected_schemas = expected_config["identity"].pop("schemas")
 
-    config = yaml.safe_load(harness.charm._render_conf_file())
-    schemas = config["identity"].pop("schemas")
-    assert all(schema in schemas for schema in expected_schemas)
-    assert len(expected_schemas) == len(schemas)
-    assert config == expected_config
+    validate_config(expected_config, yaml.safe_load(harness.charm._render_conf_file()))
 
 
 def test_on_database_created_cannot_connect_container(harness: Harness) -> None:
@@ -610,7 +607,7 @@ def test_on_client_config_changed_with_ingress(
 ) -> None:
     setup_postgres_relation(harness)
     setup_ingress_relation(harness, "public")
-    (login_relation_id, login_databag) = setup_login_ui_relation(harness)
+    (_, login_databag) = setup_login_ui_relation(harness)
 
     relation_id, data = setup_external_provider_relation(harness)
     container = harness.model.unit.get_container(CONTAINER_NAME)
@@ -681,25 +678,22 @@ def test_on_client_config_changed_with_ingress(
             },
         },
     }
-    expected_schemas = expected_config["identity"].pop("schemas")
+
+    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
+    validate_config(expected_config, yaml.safe_load(container_config))
+
     expected_redirect_url = harness.charm.public_ingress.url.replace(
         "http://", "https://"
     ).replace(":80", "")
-
     app_data = json.loads(harness.get_relation_data(relation_id, harness.charm.app)["providers"])
 
-    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
-    config = yaml.load(container_config.read(), yaml.Loader)
-    schemas = config["identity"].pop("schemas")
-    assert all(schema in schemas for schema in expected_schemas)
-    assert len(expected_schemas) == len(schemas)
-    assert config == expected_config
     assert app_data[0]["redirect_uri"].startswith(expected_redirect_url)
 
 
 def test_on_client_config_changed_with_hydra(harness: Harness) -> None:
     setup_postgres_relation(harness)
-    (login_relation_id, login_databag) = setup_login_ui_relation(harness)
+    setup_peer_relation(harness)
+    (_, login_databag) = setup_login_ui_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
@@ -753,14 +747,9 @@ def test_on_client_config_changed_with_hydra(harness: Harness) -> None:
             "url": "http://hydra-admin-url:80/testing-hydra",
         },
     }
-    expected_schemas = expected_config["identity"].pop("schemas")
 
     container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
-    config = yaml.load(container_config.read(), yaml.Loader)
-    schemas = config["identity"].pop("schemas")
-    assert all(schema in schemas for schema in expected_schemas)
-    assert len(expected_schemas) == len(schemas)
-    assert config == expected_config
+    validate_config(expected_config, yaml.safe_load(container_config))
 
 
 def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harness) -> None:
@@ -818,14 +807,9 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harn
             },
         },
     }
-    expected_schemas = expected_config["identity"].pop("schemas")
 
     container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
-    config = yaml.load(container_config.read(), yaml.Loader)
-    schemas = config["identity"].pop("schemas")
-    assert all(schema in schemas for schema in expected_schemas)
-    assert len(expected_schemas) == len(schemas)
-    assert config == expected_config
+    validate_config(expected_config, yaml.safe_load(container_config))
 
 
 def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(
@@ -852,6 +836,7 @@ def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(
 
 def test_on_client_config_changed_without_login_ui_endpoints(harness: Harness) -> None:
     setup_postgres_relation(harness)
+    setup_peer_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
@@ -896,14 +881,8 @@ def test_on_client_config_changed_without_login_ui_endpoints(harness: Harness) -
         },
     }
 
-    expected_schemas = expected_config["identity"].pop("schemas")
-
     container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
-    config = yaml.load(container_config.read(), yaml.Loader)
-    schemas = config["identity"].pop("schemas")
-    assert all(schema in schemas for schema in expected_schemas)
-    assert len(expected_schemas) == len(schemas)
-    assert config == expected_config
+    validate_config(expected_config, yaml.safe_load(container_config))
 
 
 def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
@@ -953,14 +932,8 @@ def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
         },
     }
 
-    expected_schemas = expected_config["identity"].pop("schemas")
-
     container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
-    config = yaml.load(container_config.read(), yaml.Loader)
-    schemas = config["identity"].pop("schemas")
-    assert all(schema in schemas for schema in expected_schemas)
-    assert len(expected_schemas) == len(schemas)
-    assert config == expected_config
+    validate_config(expected_config, yaml.safe_load(container_config))
 
 
 @pytest.mark.parametrize(

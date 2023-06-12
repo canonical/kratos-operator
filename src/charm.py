@@ -465,10 +465,6 @@ class KratosCharm(CharmBase):
 
         self.unit.status = MaintenanceStatus("Configuring resources")
         self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
-        if not self._peers:
-            self.unit.status = WaitingStatus("Waiting for peer relation")
-            event.defer()
-            return
 
         if not self.model.relations[self._db_relation_name]:
             self.unit.status = BlockedStatus("Missing required relation with postgresql")
@@ -477,6 +473,11 @@ class KratosCharm(CharmBase):
 
         if not self.database.is_resource_created():
             self.unit.status = WaitingStatus("Waiting for database creation")
+            event.defer()
+            return
+
+        if not self._peers:
+            self.unit.status = WaitingStatus("Waiting for peer relation")
             event.defer()
             return
 
