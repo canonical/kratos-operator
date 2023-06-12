@@ -450,7 +450,7 @@ class KratosCharm(CharmBase):
         # This function assumes that the peer relation is ready, do not call without
         # verifying it first.
         if self.unit.is_leader():
-            secret = {COOKIE_SECRET_KEY: token_hex()}
+            secret = {COOKIE_SECRET_KEY: token_hex(16)}
             return self.model.app.add_secret(secret, label=SECRET_LABEL)
 
     def _handle_status_update_config(self, event: HookEvent) -> None:
