@@ -472,7 +472,10 @@ class KratosCharm(CharmBase):
             return
 
         if not self._get_secret():
-            self.unit.status = MaintenanceStatus("Creating secret")
+            self.unit.status = WaitingStatus("Waiting for secret creation")
+            if not self.unit.is_leader():
+                event.defer()
+                return
             self._create_secret()
 
         self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
