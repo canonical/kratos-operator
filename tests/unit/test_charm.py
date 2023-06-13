@@ -692,7 +692,6 @@ def test_on_client_config_changed_with_ingress(
 
 def test_on_client_config_changed_with_hydra(harness: Harness) -> None:
     setup_postgres_relation(harness)
-    setup_peer_relation(harness)
     (_, login_databag) = setup_login_ui_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
@@ -836,7 +835,6 @@ def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(
 
 def test_on_client_config_changed_without_login_ui_endpoints(harness: Harness) -> None:
     setup_postgres_relation(harness)
-    setup_peer_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)

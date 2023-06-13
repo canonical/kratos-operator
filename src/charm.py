@@ -60,7 +60,6 @@ from ops.model import (
     BlockedStatus,
     MaintenanceStatus,
     ModelError,
-    Relation,
     Secret,
     SecretNotFoundError,
     WaitingStatus,
@@ -268,11 +267,6 @@ class KratosCharm(CharmBase):
             schema_file.name[: -len("_schema.jsonnet")]
             for schema_file in self._mappers_local_dir_path.iterdir()
         ]
-
-    @property
-    def _peers(self) -> Optional[Relation]:
-        """Fetch the peer relation."""
-        return self.model.get_relation(PEER_RELATION_NAME)
 
     def _validate_config_log_level(self) -> bool:
         is_valid = self._log_level in LOG_LEVELS
