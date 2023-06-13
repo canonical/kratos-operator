@@ -447,20 +447,11 @@ class KratosCharm(CharmBase):
             return None
 
     def _create_secret(self) -> Secret:
-        # This function assumes that the peer relation is ready, do not call without
-        # verifying it first.
         if not self.unit.is_leader():
             return
 
         secret = {COOKIE_SECRET_KEY: token_hex(16)}
-        try:
-            juju_secret = self.model.app.add_secret(secret, label=SECRET_LABEL)
-        except ModelError:
-            # Secret may already exist
-            juju_secret = self.model.get_secret(label=SECRET_LABEL)
-            if not juju_secret:
-                raise
-            juju_secret.set_content(secret)
+        juju_secret = self.model.app.add_secret(secret, label=SECRET_LABEL)
         return juju_secret
 
     def _handle_status_update_config(self, event: HookEvent) -> None:
@@ -483,11 +474,6 @@ class KratosCharm(CharmBase):
 
         if not self.database.is_resource_created():
             self.unit.status = WaitingStatus("Waiting for database creation")
-            event.defer()
-            return
-
-        if not self._peers:
-            self.unit.status = WaitingStatus("Waiting for peer relation")
             event.defer()
             return
 
