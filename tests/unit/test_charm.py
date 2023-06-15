@@ -3,6 +3,7 @@
 
 import base64
 import json
+from typing import Any, Dict
 from unittest.mock import MagicMock
 
 import pytest
@@ -139,6 +140,7 @@ def setup_loki_relation(harness: Harness) -> int:
         "loki-k8s",
         databag,
     )
+    return relation_id
 
 
 def trigger_database_changed(harness: Harness) -> None:
@@ -176,7 +178,7 @@ def setup_external_provider_relation(harness: Harness) -> tuple[int, dict]:
     return relation_id, data
 
 
-def validate_config(expected_config, config):
+def validate_config(expected_config: Dict[str, Any], config: Dict[str, Any]) -> None:
     expected_schemas = expected_config["identity"].pop("schemas")
     schemas = config["identity"].pop("schemas")
     secrets = config.pop("secrets")
@@ -250,6 +252,7 @@ def test_on_pebble_ready_service_started_when_database_is_created(harness: Harne
     setup_peer_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     service = harness.model.unit.get_container("kratos").get_service("kratos")
@@ -695,6 +698,7 @@ def test_on_client_config_changed_with_hydra(harness: Harness) -> None:
     (_, login_databag) = setup_login_ui_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     setup_hydra_relation(harness)
@@ -757,6 +761,7 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harn
     (login_relation_id, login_databag) = setup_login_ui_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     relation_id = harness.add_relation("endpoint-info", "hydra")
@@ -837,6 +842,7 @@ def test_on_client_config_changed_without_login_ui_endpoints(harness: Harness) -
     setup_postgres_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     setup_hydra_relation(harness)
@@ -890,6 +896,7 @@ def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
     setup_peer_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     relation_id = harness.add_relation("endpoint-info", "hydra")
@@ -1253,7 +1260,9 @@ def test_on_pebble_ready_with_loki(harness: Harness) -> None:
     setup_postgres_relation(harness)
     setup_peer_relation(harness)
     container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
     harness.charm.on.kratos_pebble_ready.emit(container)
+
     setup_loki_relation(harness)
 
     assert harness.model.unit.status == ActiveStatus()

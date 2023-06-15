@@ -51,6 +51,7 @@ from ops.charm import (
     ConfigChangedEvent,
     HookEvent,
     InstallEvent,
+    LeaderElectedEvent,
     PebbleReadyEvent,
     RelationEvent,
 )
@@ -171,6 +172,7 @@ class KratosCharm(CharmBase):
         )
 
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
+        self.framework.observe(self.on.leader_elected, self._on_leader_elected)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(
             self.endpoints_provider.on.ready, self._update_kratos_endpoints_relation_data
@@ -303,7 +305,9 @@ class KratosCharm(CharmBase):
         )
         return rendered
 
-    def _push_file(self, dst: Path, src: Path = None, content: str = None) -> None:
+    def _push_file(
+        self, dst: Path, src: Optional[Path] = None, content: Optional[str] = None
+    ) -> None:
         if not content:
             if not src:
                 raise ValueError("`src` or `content` must be provided.")
@@ -440,9 +444,9 @@ class KratosCharm(CharmBase):
         except SecretNotFoundError:
             return None
 
-    def _create_secret(self) -> Secret:
+    def _create_secret(self) -> Optional[Secret]:
         if not self.unit.is_leader():
-            return
+            return None
 
         secret = {COOKIE_SECRET_KEY: token_hex(16)}
         juju_secret = self.model.app.add_secret(secret, label=SECRET_LABEL)
@@ -473,10 +477,8 @@ class KratosCharm(CharmBase):
 
         if not self._get_secret():
             self.unit.status = WaitingStatus("Waiting for secret creation")
-            if not self.unit.is_leader():
-                event.defer()
-                return
-            self._create_secret()
+            event.defer()
+            return
 
         self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
         # We need to push the layer because this may run before _on_pebble_ready
@@ -497,6 +499,13 @@ class KratosCharm(CharmBase):
             return
 
         self._push_default_files()
+
+    def _on_leader_elected(self, event: LeaderElectedEvent) -> None:
+        if not self.unit.is_leader():
+            return
+
+        if not self._get_secret():
+            self._create_secret()
 
     def _on_pebble_ready(self, event: PebbleReadyEvent) -> None:
         """Event Handler for pebble ready event."""
