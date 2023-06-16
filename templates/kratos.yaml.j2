@@ -60,6 +60,11 @@ selfservice:
             enabled: True
     {%- endif %}
 dsn: postgres://{{ db_info.get('username') }}:{{ db_info.get('password') }}@{{ db_info.get('endpoints') }}/{{ db_info.get('database_name') }}
+secrets:
+    cookie:
+    {%- for secret in cookie_secrets %}
+        - {{ secret }}
+    {%- endfor %}
 courier:
     smtp:
         connection_uri: {{ smtp_connection_uri }}

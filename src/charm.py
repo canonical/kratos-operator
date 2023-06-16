@@ -12,6 +12,7 @@ import logging
 from functools import cached_property
 from os.path import join
 from pathlib import Path
+from secrets import token_hex
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import requests
@@ -50,11 +51,20 @@ from ops.charm import (
     ConfigChangedEvent,
     HookEvent,
     InstallEvent,
+    LeaderElectedEvent,
     PebbleReadyEvent,
     RelationEvent,
 )
 from ops.main import main
-from ops.model import ActiveStatus, BlockedStatus, MaintenanceStatus, ModelError, WaitingStatus
+from ops.model import (
+    ActiveStatus,
+    BlockedStatus,
+    MaintenanceStatus,
+    ModelError,
+    Secret,
+    SecretNotFoundError,
+    WaitingStatus,
+)
 from ops.pebble import ChangeError, Error, ExecError, Layer
 
 from kratos import KratosAPI
@@ -68,6 +78,8 @@ logger = logging.getLogger(__name__)
 KRATOS_ADMIN_PORT = 4434
 KRATOS_PUBLIC_PORT = 4433
 PEER_RELATION_NAME = "kratos-peers"
+SECRET_LABEL = "cookie_secret"
+COOKIE_SECRET_KEY = "cookiesecret"
 PEER_KEY_DB_MIGRATE_VERSION = "db_migrate_version"
 DB_MIGRATE_VERSION = "0.11.1"
 DEFAULT_SCHEMA_ID_FILE_NAME = "default.schema"
@@ -160,6 +172,7 @@ class KratosCharm(CharmBase):
         )
 
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
+        self.framework.observe(self.on.leader_elected, self._on_leader_elected)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(
             self.endpoints_provider.on.ready, self._update_kratos_endpoints_relation_data
@@ -273,6 +286,7 @@ class KratosCharm(CharmBase):
         default_schema_id, schemas = self._get_identity_schema_config()
         login_ui_url = self._get_login_ui_endpoint_info("login_url")
         rendered = template.render(
+            cookie_secrets=[self._get_secret()],
             log_level=self._log_level,
             mappers_path=str(self._mappers_dir_path),
             default_browser_return_url=self._get_login_ui_endpoint_info("default_url"),
@@ -291,7 +305,9 @@ class KratosCharm(CharmBase):
         )
         return rendered
 
-    def _push_file(self, dst: Path, src: Path = None, content: str = None) -> None:
+    def _push_file(
+        self, dst: Path, src: Optional[Path] = None, content: Optional[str] = None
+    ) -> None:
         if not content:
             if not src:
                 raise ValueError("`src` or `content` must be provided.")
@@ -421,6 +437,21 @@ class KratosCharm(CharmBase):
 
         return True
 
+    def _get_secret(self) -> Optional[str]:
+        try:
+            juju_secret = self.model.get_secret(label=SECRET_LABEL)
+            return juju_secret.get_content()[COOKIE_SECRET_KEY]
+        except SecretNotFoundError:
+            return None
+
+    def _create_secret(self) -> Optional[Secret]:
+        if not self.unit.is_leader():
+            return None
+
+        secret = {COOKIE_SECRET_KEY: token_hex(16)}
+        juju_secret = self.model.app.add_secret(secret, label=SECRET_LABEL)
+        return juju_secret
+
     def _handle_status_update_config(self, event: HookEvent) -> None:
         if not self._container.can_connect():
             event.defer()
@@ -444,6 +475,11 @@ class KratosCharm(CharmBase):
             event.defer()
             return
 
+        if not self._get_secret():
+            self.unit.status = WaitingStatus("Waiting for secret creation")
+            event.defer()
+            return
+
         self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
         # We need to push the layer because this may run before _on_pebble_ready
         try:
@@ -463,6 +499,13 @@ class KratosCharm(CharmBase):
             return
 
         self._push_default_files()
+
+    def _on_leader_elected(self, event: LeaderElectedEvent) -> None:
+        if not self.unit.is_leader():
+            return
+
+        if not self._get_secret():
+            self._create_secret()
 
     def _on_pebble_ready(self, event: PebbleReadyEvent) -> None:
         """Event Handler for pebble ready event."""

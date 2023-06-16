@@ -30,9 +30,9 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: microk8s
-          channel: 1.25-strict/stable
-          juju-channel: 3.1
-          bootstrap-options: '--agent-version=3.1.0'
+          channel: 1.26-strict/stable
+          juju-channel: 3.2
+          bootstrap-options: '--agent-version=3.2.0'
 
       - name: Run integration tests
         # set a predictable model name so it can be consumed by charm-logdump-action
@@ -52,6 +52,7 @@ jobs:
 
       - name: Get kratos container logs
         run: kubectl logs kratos-0 -c kratos -n testing
+        if: failure()
 
       # Hack to overcome lack of tools (cat, tar) in the workload container
       - name: Get kratos config file
@@ -62,3 +63,4 @@ jobs:
           f = p.pull(\"/etc/config/kratos.yaml\")
           print(f.read())
           '"
+        if: failure()
