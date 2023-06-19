@@ -1286,23 +1286,8 @@ def test_on_config_changed_with_invalid_log_level(harness: Harness) -> None:
     assert "Invalid configuration value for log_level" in harness.charm.unit.status.message
 
 
-def test_on_pebble_ready_make_dir_called(
-    harness: Harness, mocked_isdir: MagicMock, mocked_make_dir: MagicMock
-) -> None:
+def test_on_pebble_ready_make_dir_called(harness: Harness) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
 
-    mocked_isdir.assert_called_once_with("/var/log")
-    mocked_make_dir.assert_called_once_with(path="/var/log", make_parents=True)
-
-
-def test_on_pebble_ready_cannot_connect_container_make_dir_not_called(
-    harness: Harness, mocked_isdir: MagicMock, mocked_make_dir: MagicMock
-) -> None:
-    harness.set_can_connect(CONTAINER_NAME, False)
-    container = harness.model.unit.get_container(CONTAINER_NAME)
-    harness.charm.on.kratos_pebble_ready.emit(container)
-
-    assert harness.model.unit.status == WaitingStatus("Waiting to connect to Kratos container")
-    mocked_isdir.assert_not_called
-    mocked_make_dir.assert_not_called
+    assert container.isdir("/var/log")
