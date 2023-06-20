@@ -1284,3 +1284,10 @@ def test_on_config_changed_with_invalid_log_level(harness: Harness) -> None:
 
     assert isinstance(harness.model.unit.status, BlockedStatus)
     assert "Invalid configuration value for log_level" in harness.charm.unit.status.message
+
+
+def test_on_pebble_ready_make_dir_called(harness: Harness) -> None:
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    assert container.isdir("/var/log")
