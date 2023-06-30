@@ -148,8 +148,6 @@ class KratosCharm(CharmBase):
 
         self.endpoints_provider = KratosEndpointsProvider(self)
 
-        self.framework.observe(self.on.install, self._on_install)
-
         self.metrics_endpoint = MetricsEndpointProvider(
             self,
             relation_name=self._prometheus_scrape_relation_name,
@@ -172,6 +170,7 @@ class KratosCharm(CharmBase):
             container_name=self._container_name,
         )
 
+        self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.leader_elected, self._on_leader_elected)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
@@ -497,7 +496,7 @@ class KratosCharm(CharmBase):
     def _on_install(self, event: InstallEvent) -> None:
         if not self._container.can_connect():
             event.defer()
-            logger.info("Cannot connect to Kratos container. Deferring event.")
+            logger.info("Cannot connect to Kratos container. Deferring install event.")
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
 
@@ -521,6 +520,7 @@ class KratosCharm(CharmBase):
             self._container.make_dir(path=str(self._log_dir), make_parents=True)
             logger.info(f"Created directory {self._log_dir}")
 
+        self._push_default_files()
         self._handle_status_update_config(event)
 
     def _on_config_changed(self, event: ConfigChangedEvent) -> None:

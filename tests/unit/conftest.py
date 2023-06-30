@@ -211,3 +211,9 @@ def mocked_log_proxy_consumer_setup_promtail(mocker: MockerFixture) -> MagicMock
         "charms.loki_k8s.v0.loki_push_api.LogProxyConsumer._setup_promtail", return_value=None
     )
     return mocked_setup_promtail
+
+
+@pytest.fixture()
+def mocked_push_default_files(mocker: MockerFixture) -> MagicMock:
+    mocked = mocker.patch("charm.KratosCharm._push_default_files")
+    return mocked

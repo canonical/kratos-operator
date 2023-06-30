@@ -3,8 +3,10 @@
 
 import base64
 import json
+import os
+from pathlib import Path
 from typing import Any, Dict
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
@@ -15,6 +17,7 @@ from ops.testing import Harness
 
 from charm import DB_MIGRATE_VERSION, PEER_KEY_DB_MIGRATE_VERSION
 
+CONFIG_DIR = Path("/etc/config")
 CONTAINER_NAME = "kratos"
 DB_USERNAME = "fake_relation_id_1"
 DB_PASSWORD = "fake-password"
@@ -35,6 +38,7 @@ IDENTITY_SCHEMA = {
         }
     },
 }
+PROJ_ROOT_DIR = Path(__file__).parents[2]
 
 
 def setup_postgres_relation(harness: Harness) -> None:
@@ -190,6 +194,42 @@ def validate_config(expected_config: Dict[str, Any], config: Dict[str, Any]) -> 
     assert config == expected_config
 
 
+def test_on_push_default_files(harness: Harness) -> None:
+    expected_mappers = {mapper.name for mapper in os.scandir(PROJ_ROOT_DIR / "claim_mappers")}
+    expected_schemas = {schema.name for schema in os.scandir(PROJ_ROOT_DIR / "identity_schemas")}
+
+    harness.set_can_connect(CONTAINER_NAME, True)
+
+    with patch.object(
+        harness.charm, "_mappers_local_dir_path", PROJ_ROOT_DIR / "claim_mappers"
+    ), patch.object(
+        harness.charm, "_identity_schemas_local_dir_path", PROJ_ROOT_DIR / "identity_schemas"
+    ):
+        harness.charm._push_default_files()
+
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    mappers = {mapper.name for mapper in container.list_files(CONFIG_DIR / "claim_mappers")}
+    schemas = {schema.name for schema in container.list_files(CONFIG_DIR / "schemas" / "default")}
+
+    assert expected_mappers == mappers and expected_schemas == schemas
+
+
+def test_on_install_push_default_files(
+    harness: Harness, mocked_push_default_files: MagicMock
+) -> None:
+    harness.set_can_connect(CONTAINER_NAME, True)
+    harness.charm.on.install.emit()
+
+    mocked_push_default_files.assert_called_once()
+
+
+def test_on_install_cannot_connect_container(harness: Harness) -> None:
+    harness.set_can_connect(CONTAINER_NAME, False)
+    harness.charm.on.install.emit()
+
+    assert isinstance(harness.model.unit.status, WaitingStatus)
+
+
 def test_on_pebble_ready_cannot_connect_container(harness: Harness) -> None:
     harness.set_can_connect(CONTAINER_NAME, False)
 
@@ -331,6 +371,15 @@ def test_on_pebble_ready_when_database_not_created_yet(harness: Harness) -> None
 
     assert isinstance(harness.model.unit.status, WaitingStatus)
     assert "Waiting for database creation" in harness.charm.unit.status.message
+
+
+def test_on_pebble_ready_push_default_files(
+    harness: Harness, mocked_push_default_files: MagicMock
+) -> None:
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    mocked_push_default_files.assert_called_once()
 
 
 def test_on_config_changed_when_identity_schemas_config(harness: Harness) -> None:
