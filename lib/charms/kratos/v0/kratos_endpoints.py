@@ -42,7 +42,6 @@ from typing import Dict, Optional
 
 from ops.charm import CharmBase, RelationCreatedEvent
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
-from ops.model import Application
 
 # The unique Charmhub library identifier, never change it
 LIBID = "5868b36df1c04c90b33f5e5557327162"
@@ -94,13 +93,14 @@ class KratosEndpointsProvider(Object):
             return
 
         relations = self.model.relations[self._relation_name]
+        endpoints_databag = {
+            "admin_endpoint": admin_endpoint,
+            "public_endpoint": public_endpoint,
+            "login_browser_endpoint": f"{public_endpoint}/self-service/login/browser",
+            "sessions_endpoint": f"{public_endpoint}/sessions/whoami",
+        }
         for relation in relations:
-            relation.data[self._charm.app].update(
-                {
-                    "admin_endpoint": admin_endpoint,
-                    "public_endpoint": public_endpoint,
-                }
-            )
+            relation.data[self._charm.app].update(endpoints_databag)
 
 
 class KratosEndpointsRelationError(Exception):
@@ -133,7 +133,7 @@ class KratosEndpointsRequirer(Object):
         self.charm = charm
         self.relation_name = relation_name
 
-    def get_kratos_endpoints(self) -> Dict:
+    def get_kratos_endpoints(self) -> Optional[Dict]:
         """Get the kratos endpoints."""
         endpoints = self.model.relations[self.relation_name]
         if len(endpoints) == 0:
@@ -144,12 +144,13 @@ class KratosEndpointsRequirer(Object):
 
         data = endpoints[0].data[app]
 
+        if not data:
+            logger.info("No relation data available.")
+            return
+
         if "public_endpoint" not in data:
             raise KratosEndpointsRelationDataMissingError(
                 "Missing public endpoint in kratos-endpoint-info relation data"
             )
 
-        return {
-            "admin_endpoint": data["admin_endpoint"],
-            "public_endpoint": data["public_endpoint"],
-        }
+        return data
