@@ -533,14 +533,14 @@ class KratosCharm(CharmBase):
         admin_endpoint = (
             self.admin_ingress.url
             if self.admin_ingress.is_ready()
-            else f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}",
+            else f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
         )
         public_endpoint = (
             self.public_ingress.url
             if self.public_ingress.is_ready()
-            else f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}",
+            else f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
         )
-        self.endpoints_provider.send_endpoint_relation_data(admin_endpoint[0], public_endpoint[0])
+        self.endpoints_provider.send_endpoint_relation_data(admin_endpoint, public_endpoint)
 
     def _on_database_created(self, event: DatabaseCreatedEvent) -> None:
         """Event Handler for database created event."""
