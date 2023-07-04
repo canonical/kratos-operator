@@ -274,6 +274,5 @@ async def test_kratos_scale_up(ops_test: OpsTest) -> None:
         status="active",
         raise_on_blocked=True,
         timeout=1000,
+        wait_for_exact_units=3,
     )
-
-    assert all(unit.workload_status == "active" for unit in app.units)
