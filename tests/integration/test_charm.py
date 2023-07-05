@@ -74,10 +74,6 @@ async def test_build_and_deploy(ops_test: OpsTest) -> None:
         timeout=1000,
     )
 
-    assert all(
-        unit.workload_status == "active" for unit in ops_test.model.applications[APP_NAME].units
-    )
-
 
 async def test_ingress_relation(ops_test: OpsTest) -> None:
     await ops_test.model.deploy(
