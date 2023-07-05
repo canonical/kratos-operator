@@ -104,10 +104,8 @@ class KratosAPI:
         This will fetch all identities and iterate over them in memory.
         """
         ids = self.list_identities()
-        id = list(filter(lambda identity: identity["traits"].get("email") == email, ids))
-        if not id:
-            return None
-        return id[0]
+        id_ = [identity for identity in ids if identity["traits"].get("email") == email]
+        return id_[0] if id_ else None
 
     def recover_password_with_code(self, identity_id: str, expires_in: str = "1h") -> Dict:
         """Create a one time code for recovering an identity's password."""
