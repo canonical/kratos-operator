@@ -531,10 +531,14 @@ class KratosCharm(CharmBase):
         logger.info("Sending endpoints info")
 
         admin_endpoint = (
-            f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
+            self.admin_ingress.url
+            if self.admin_ingress.is_ready()
+            else f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
         )
         public_endpoint = (
-            f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
+            self.public_ingress.url
+            if self.public_ingress.is_ready()
+            else f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
         )
         self.endpoints_provider.send_endpoint_relation_data(admin_endpoint, public_endpoint)
 
@@ -599,18 +603,21 @@ class KratosCharm(CharmBase):
             logger.info("This app's admin ingress URL: %s", event.url)
 
         self._handle_status_update_config(event)
+        self._update_kratos_endpoints_relation_data(event)
 
     def _on_public_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
         if self.unit.is_leader():
             logger.info("This app's public ingress URL: %s", event.url)
 
         self._handle_status_update_config(event)
+        self._update_kratos_endpoints_relation_data(event)
 
     def _on_ingress_revoked(self, event: IngressPerAppRevokedEvent) -> None:
         if self.unit.is_leader():
             logger.info("This app no longer has ingress")
 
         self._handle_status_update_config(event)
+        self._update_kratos_endpoints_relation_data(event)
 
     def _on_client_config_changed(self, event: ClientConfigChangedEvent) -> None:
         domain_url = self._domain_url

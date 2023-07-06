@@ -882,6 +882,8 @@ def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(
     expected_data = {
         "admin_endpoint": "http://kratos.kratos-model.svc.cluster.local:4434",
         "public_endpoint": "http://kratos.kratos-model.svc.cluster.local:4433",
+        "login_browser_endpoint": "http://kratos.kratos-model.svc.cluster.local:4433/self-service/login/browser",
+        "sessions_endpoint": "http://kratos.kratos-model.svc.cluster.local:4433/sessions/whoami",
     }
 
     assert harness.get_relation_data(endpoint_info_relation_id, "kratos") == expected_data
