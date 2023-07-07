@@ -14,3 +14,5 @@ parts:
     prime:
       - claim_mappers/**
       - identity_schemas/**
+    charm-binary-python-packages:
+      - jsonschema
