@@ -44,3 +44,7 @@ provides:
     interface: prometheus_scrape
     description: |
       Provides application metrics to COS Prometheus instance
+  tracing:
+    interface: tracing
+    description: |
+      Provides traces to COS Tempo instance
