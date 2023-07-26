@@ -1,39 +1,15 @@
 groups:
 - name: KratosHighSeverityLog
   rules:
-  - alert: ErrorLevelLog
-    expr: sum(count_over_time({%%juju_topology%%} |= `"level":"error"` [5m])) < 100 and sum(count_over_time({%%juju_topology%%} |= `"level":"error"` [5m])) > 0
+  - alert: LowFrequencyHighSeverityLog
+    expr: sum by(severity) (count_over_time({%%juju_topology%%} | json | severity =~ `error|fatal|critical` [5m])) > 0 and sum by(severity) (count_over_time({%%juju_topology%%} | json | severity =~ `error|fatal|critical` [5m])) < 100
     labels:
       severity: warning
     annotations:
-      message: "Logs with level error found in application {{ $labels.juju_application }} of Juju charm {{ $labels.juju_charm }} in model {{ $labels.juju_model }}. Frequency of logs with level error is low."
-  - alert: ErrorLevelLogHighFrequency
-    expr: sum(count_over_time({%%juju_topology%%} |= `"level":"error"` [5m])) > 100
+      summary: "Logs with level error or above found in application {{ $labels.juju_application }} of Juju charm {{ $labels.juju_charm }} in model {{ $labels.juju_model }}. Frequency of logs is low."
+  - alert: HighFrequencyHighSeverityLog
+    expr: sum by(severity) (count_over_time({%%juju_topology%%} | json | severity =~ `error|fatal|critical` [5m])) > 100
     labels:
       severity: error
     annotations:
-      summary: "Logs with level error found in application {{ $labels.juju_application }} of Juju charm {{ $labels.juju_charm }} in model {{ $labels.juju_model }}. Frequency of logs with level error is high."
-  - alert: CriticalLevelLog
-    expr: sum(count_over_time({%%juju_topology%%} |= `"level":"critical"` [5m])) < 100 and sum(count_over_time({%%juju_topology%%} |= `"level":"critical"` [5m])) > 0
-    labels:
-      severity: warning
-    annotations:
-      message: "Logs with level critical found in application {{ $labels.juju_application }} of Juju charm {{ $labels.juju_charm }} in model {{ $labels.juju_model }}. Frequency of logs with level critical is low."
-  - alert: CriticalLevelLogHighFrequency
-    expr: sum(count_over_time({%%juju_topology%%} |= `"level":"critical"` [5m])) > 100
-    labels:
-      severity: error
-    annotations:
-      summary: "Logs with level critical found in application {{ $labels.juju_application }} of Juju charm {{ $labels.juju_charm }} in model {{ $labels.juju_model }}. Frequency of logs with level critical is high."
-  - alert: FatalLevelLog
-    expr: sum(count_over_time({%%juju_topology%%} |= `"level":"fatal"` [5m])) < 100 and sum(count_over_time({%%juju_topology%%} |= `"level":"fatal"` [5m])) > 0
-    labels:
-      severity: warning
-    annotations:
-      message: "Logs with level fatal found in application {{ $labels.juju_application }} of Juju charm {{ $labels.juju_charm }} in model {{ $labels.juju_model }}. Frequency of logs with level critical is low."
-  - alert: FatalLevelLogHighFrequency
-    expr: sum(count_over_time({%%juju_topology%%} |= `"level":"fatal"` [5m])) > 100
-    labels:
-      severity: error
-    annotations:
-      summary: "Logs with level fatal found in application {{ $labels.juju_application }} of Juju charm {{ $labels.juju_charm }} in model {{ $labels.juju_model }}. Frequency of logs with level fatal is high."
+      summary: "Logs with level error or above found in application {{ $labels.juju_application }} of Juju charm {{ $labels.juju_charm }} in model {{ $labels.juju_model }}. Frequency of logs is high."
