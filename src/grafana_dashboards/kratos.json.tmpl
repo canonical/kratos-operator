@@ -185,37 +185,10 @@
             "uid": "${lokids}"
           },
           "editorMode": "code",
-          "expr": "sum(count_over_time( {juju_charm=\"kratos\"} |= `\"level\":\"error\"` [5m]))",
-          "legendFormat": "error",
+          "expr": "sum by(level) (count_over_time({juju_application="kratos"} | json | level =~ `error|fatal|critical` [5m]))",
           "queryType": "range",
           "range": true,
-          "refId": "ErrorLevelLog"
-        },
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${lokids}"
-          },
-          "editorMode": "code",
-          "expr": "sum(count_over_time( {juju_charm=\"kratos\"} |= `\"level\":\"critical\"` [5m]))",
-          "hide": false,
-          "legendFormat": "critical",
-          "queryType": "range",
-          "range": true,
-          "refId": "CriticalLevelLog"
-        },
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "${lokids}"
-          },
-          "editorMode": "code",
-          "expr": "sum(count_over_time( {juju_charm=\"kratos\"} |= `\"level\":\"fatal\"` [5m]))",
-          "hide": false,
-          "legendFormat": "fatal",
-          "queryType": "range",
-          "range": true,
-          "refId": "FatalLevelLog"
+          "refId": "LogLevels"
         }
       ],
       "title": "Kratos High Severity Log Entries",
