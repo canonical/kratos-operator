@@ -425,25 +425,15 @@ class KratosCharm(CharmBase):
         Returns True if migration was run successfully, else returns false.
         """
         try:
-            process = self._container.exec(
-                [
-                    "kratos",
-                    "migrate",
-                    "sql",
-                    "-e",
-                    "--config",
-                    str(self._config_file_path),
-                    "--yes",
-                ],
-            )
-            stdout, _ = process.wait_output()
-            logger.info(f"Successfully executed automigration: {stdout}")
-        except ExecError as err:
-            logger.error(f"Exited with code {err.exit_code}. Stderr: {err.stderr!r}")
+            stdout = self.kratos.run_migration()
+            logger.info(f"Successfully executed the database migration: {stdout}")
+            return True
+        except Error as err:
             self.unit.status = BlockedStatus("Database migration job failed")
-            return False
+            err_msg = err.stderr if isinstance(err, ExecError) else err
+            logger.error(f"Database migration failed: {err_msg}")
 
-        return True
+        return False
 
     def _get_secret(self) -> Optional[str]:
         try:
@@ -802,15 +792,11 @@ class KratosCharm(CharmBase):
         timeout = float(event.params.get("timeout", 120))
         event.log("Migrating database.")
         try:
-            _, err = self.kratos.run_migration(timeout=timeout)
+            self.kratos.run_migration(timeout=timeout)
+            event.log("Successfully migrated the database.")
         except Error as e:
-            event.fail(f"Something went wrong when trying to run the command: {e}")
-            return
-
-        if err:
-            event.fail(f"Something went wrong when running the migration: {err}")
-            return
-        event.log("Successfully migrated the database.")
+            err_msg = e.stderr if isinstance(e, ExecError) else e
+            event.fail(f"Database migration action failed: {err_msg}")
 
     def _promtail_error(self, event: PromtailDigestError) -> None:
         logger.error(event.message)

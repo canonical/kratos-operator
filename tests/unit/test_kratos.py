@@ -200,12 +200,11 @@ def test_recover_password_with_link(
     assert ret == recover_password_with_link_resp
 
 
-def test_run_migration(
-    kratos_api: KratosAPI, kratos_identity_json: Dict, mocked_kratos_process: MagicMock
-) -> None:
-    mocked_kratos_process.wait_output.return_value = (json.dumps([kratos_identity_json]), None)
+def test_run_migration(kratos_api: KratosAPI, mocked_kratos_process: MagicMock) -> None:
+    expected_output = "success"
+    mocked_kratos_process.wait_output.return_value = (expected_output, None)
 
-    kratos_api.run_migration()
+    cmd_output = kratos_api.run_migration()
 
     assert kratos_api.container.exec.call_args[0][0] == [
         "kratos",
@@ -216,3 +215,5 @@ def test_run_migration(
         kratos_api.config_file_path,
         "--yes",
     ]
+
+    assert expected_output == cmd_output
