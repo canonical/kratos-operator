@@ -1,0 +1,31 @@
+groups:
+- name: KratosUnavailable
+  rules:
+  - alert: KratosUnavailable-one
+    expr: sum(up) + 1 == count(up)
+    for: 1m
+    labels:
+      severity: warning
+    annotations:
+      summary: "One unit of {{ $labels.juju_application }} in model {{ $labels.juju_model }} is down"
+  - alert: KratosUnavailable-multiple
+    expr: sum(up) + 1 < count(up)
+    for: 1m
+    labels:
+      severity: error
+    annotations:
+      summary: "Multiple units of {{ $labels.juju_application }} in model {{ $labels.juju_model }} are down"
+  - alert: KratosUnavailable-all-except-one
+    expr: sum(up) == 1 and 1 < count(up)
+    for: 1m
+    labels:
+      severity: critical
+    annotations:
+      summary: "All but one unit of {{ $labels.juju_application }} in model {{ $labels.juju_model }} are down"
+  - alert: KratosUnavailable-all
+    expr: sum(up) == 0
+    for: 1m
+    labels:
+      severity: fatal
+    annotations:
+      summary: "All units of {{ $labels.juju_application }} in model {{ $labels.juju_model }} are down"
