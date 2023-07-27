@@ -44,3 +44,7 @@ provides:
     interface: prometheus_scrape
     description: |
       Provides application metrics to COS Prometheus instance
+  grafana-dashboard:
+    description: |
+      Forwards the built-in grafana dashboard(s) for monitoring kratos.
+    interface: grafana_dashboard
