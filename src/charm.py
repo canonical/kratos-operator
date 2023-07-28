@@ -40,6 +40,7 @@ from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
 from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer, PromtailDigestError
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
+from charms.tempo_k8s.v0.tracing import TracingEndpointProvider
 from charms.traefik_k8s.v1.ingress import (
     IngressPerAppReadyEvent,
     IngressPerAppRequirer,
@@ -108,6 +109,7 @@ class KratosCharm(CharmBase):
         self._prometheus_scrape_relation_name = "metrics-endpoint"
         self._loki_push_api_relation_name = "logging"
         self._grafana_dashboard_relation_name = "grafana-dashboard"
+        self._tracing_relation_name = "tracing"
         self._kratos_service_command = "kratos serve all"
         self._log_dir = Path("/var/log")
         self._log_path = self._log_dir / "kratos.log"
@@ -171,6 +173,7 @@ class KratosCharm(CharmBase):
             relation_name=self._loki_push_api_relation_name,
             container_name=self._container_name,
         )
+        self.tracing = TracingEndpointProvider(self)
 
         self._grafana_dashboards = GrafanaDashboardProvider(
             self, relation_name=self._grafana_dashboard_relation_name
@@ -212,6 +215,11 @@ class KratosCharm(CharmBase):
             self.loki_consumer.on.promtail_digest_error,
             self._promtail_error,
         )
+        # TODO @shipperizer figure out why self.tracing.on.endpoint_changed
+        # doesn't seem to be working
+        self.framework.observe(
+            self.on[self._tracing_relation_name].relation_changed, self._on_config_changed
+        )
 
     @property
     def _kratos_service_params(self) -> str:
@@ -235,21 +243,29 @@ class KratosCharm(CharmBase):
 
     @property
     def _pebble_layer(self) -> Layer:
+        container = {
+            "override": "replace",
+            "summary": "Kratos Operator layer",
+            "startup": "disabled",
+            "command": '/bin/sh -c "{} {} 2>&1 | tee -a {}"'.format(
+                self._kratos_service_command,
+                self._kratos_service_params,
+                str(self._log_path),
+            ),
+        }
+
+        if self.model.relations[self._tracing_relation_name]:
+            container["environment"] = {
+                "TRACING_PROVIDER": "otel",
+                "TRACING_PROVIDERS_OTLP_SERVER_URL": self._get_tracing_endpoint_info(),
+                "TRACING_PROVIDERS_OTLP_INSECURE": True,
+                "TRACING_PROVIDERS_OTLP_SAMPLING_SAMPLING_RATIO": 1,
+            }
+
         pebble_layer: LayerDict = {
             "summary": "kratos layer",
             "description": "pebble config layer for kratos",
-            "services": {
-                self._container_name: {
-                    "override": "replace",
-                    "summary": "Kratos Operator layer",
-                    "startup": "disabled",
-                    "command": '/bin/sh -c "{} {} 2>&1 | tee -a {}"'.format(
-                        self._kratos_service_command,
-                        self._kratos_service_params,
-                        str(self._log_path),
-                    ),
-                }
-            },
+            "services": {self._container_name: container},
             "checks": {
                 "kratos-ready": {
                     "override": "replace",
@@ -261,6 +277,7 @@ class KratosCharm(CharmBase):
                 },
             },
         }
+
         return Layer(pebble_layer)
 
     @property
@@ -532,6 +549,12 @@ class KratosCharm(CharmBase):
     def _on_config_changed(self, event: ConfigChangedEvent) -> None:
         """Event Handler for config changed event."""
         self._handle_status_update_config(event)
+
+    def _get_tracing_endpoint_info(self) -> str:
+        if not self.model.relations[self._tracing_relation_name]:
+            return ""
+
+        return self.tracing.otlp_http_endpoint or ""
 
     def _update_kratos_endpoints_relation_data(self, event: RelationEvent) -> None:
         logger.info("Sending endpoints info")
