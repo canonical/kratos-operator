@@ -1302,28 +1302,32 @@ def test_create_admin_account_without_password(
     )
 
 
-def test_run_migration(
+def test_run_migration_action(
     harness: Harness, mocked_kratos_service: MagicMock, mocked_run_migration: MagicMock
 ) -> None:
     event = MagicMock()
 
     harness.charm._on_run_migration_action(event)
 
-    event.log.assert_called_with("Successfully migrated the database.")
+    mocked_run_migration.assert_called_once()
+    event.fail.assert_not_called()
 
 
-def test_error_on_run_migration(
+def test_error_on_run_migration_action(
     harness: Harness, mocked_kratos_service: MagicMock, mocked_run_migration: MagicMock
 ) -> None:
-    mocked_run_migration.return_value = (None, "Error")
+    mocked_run_migration.side_effect = ExecError(
+        command=[], exit_code=1, stdout="", stderr="Error"
+    )
     event = MagicMock()
 
     harness.charm._on_run_migration_action(event)
 
+    mocked_run_migration.assert_called_once()
     event.fail.assert_called()
 
 
-def test_timeout_on_run_migration(
+def test_timeout_on_run_migration_action(
     harness: Harness, mocked_kratos_service: MagicMock, mocked_run_migration: MagicMock
 ) -> None:
     mocked_run_migration.side_effect = TimeoutError
@@ -1331,6 +1335,7 @@ def test_timeout_on_run_migration(
 
     harness.charm._on_run_migration_action(event)
 
+    mocked_run_migration.assert_called_once()
     event.fail.assert_called()
 
 

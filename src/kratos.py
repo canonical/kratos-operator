@@ -6,7 +6,7 @@
 import json
 import logging
 from os.path import join
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import requests
 from ops.model import Container
@@ -40,10 +40,9 @@ class KratosAPI:
         if password:
             identity["credentials"] = {"password": {"config": {"password": password}}}
 
-        stdout, _ = self._run_cmd(cmd, stdin=json.dumps(identity))
-        json_stdout = json.loads(stdout)
-        logger.info(f"Successfully created identity: {json_stdout.get('id')}")
-        return json_stdout
+        cmd_output = json.loads(self._run_cmd(cmd, input_=json.dumps(identity)))
+        logger.info(f"Successfully created identity: {cmd_output.get('id')}")
+        return cmd_output
 
     def get_identity(self, identity_id: str) -> Dict:
         """Get an identity."""
@@ -58,10 +57,9 @@ class KratosAPI:
             identity_id,
         ]
 
-        stdout, _ = self._run_cmd(cmd)
-        json_stdout = json.loads(stdout)
+        cmd_output = json.loads(self._run_cmd(cmd))
         logger.info(f"Successfully fetched identity: {identity_id}")
-        return json_stdout
+        return cmd_output
 
     def delete_identity(self, identity_id: str) -> str:
         """Get an identity."""
@@ -76,9 +74,9 @@ class KratosAPI:
             identity_id,
         ]
 
-        stdout, _ = self._run_cmd(cmd)
+        cmd_output = self._run_cmd(cmd)
         logger.info(f"Successfully deleted identity: {identity_id}")
-        return stdout
+        return cmd_output
 
     def list_identities(self) -> List:
         """List all identities."""
@@ -93,10 +91,9 @@ class KratosAPI:
         ]
 
         # TODO: Consider reading from the stream instead of waiting for output
-        stdout, _ = self._run_cmd(cmd)
-        json_stdout = json.loads(stdout)
+        cmd_output = json.loads(self._run_cmd(cmd))
         logger.info("Successfully fetched all identities")
-        return json_stdout
+        return cmd_output
 
     def get_identity_from_email(self, email: str) -> Optional[Dict]:
         """Get an identity using an email.
@@ -127,7 +124,7 @@ class KratosAPI:
 
         return r.json()
 
-    def run_migration(self, timeout: float = 120) -> Tuple[str, str]:
+    def run_migration(self, timeout: float = 120) -> str:
         """Run an sql migration."""
         cmd = [
             "kratos",
@@ -140,19 +137,12 @@ class KratosAPI:
         ]
         return self._run_cmd(cmd, timeout=timeout)
 
-    def _run_cmd(
-        self, cmd: List[str], timeout: float = 20, stdin: Optional[str] = None
-    ) -> Tuple[str, str]:
+    def _run_cmd(self, cmd: List[str], timeout: float = 20, input_: Optional[str] = None) -> str:
         logger.debug(f"Running cmd: {cmd}")
         process = self.container.exec(cmd, timeout=timeout)
-        if stdin:
-            process.stdin.write(stdin)
+        if input_:
+            process.stdin.write(input_)
             process.stdin.close()
-        stdout, stderr = process.wait_output()
+        output, _ = process.wait_output()
 
-        if isinstance(stdout, bytes):
-            stdout = stdout.decode()
-        if isinstance(stderr, bytes):
-            stderr = stderr.decode()
-
-        return stdout, stderr
+        return output.decode() if isinstance(output, bytes) else output
