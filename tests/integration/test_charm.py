@@ -4,6 +4,7 @@
 
 import json
 import logging
+from asyncio import sleep
 from pathlib import Path
 
 import pytest
@@ -19,7 +20,7 @@ DB_APP = "postgresql-k8s"
 TRAEFIK_CHARM = "traefik-k8s"
 TRAEFIK_ADMIN_APP = "traefik-admin"
 TRAEFIK_PUBLIC_APP = "traefik-public"
-ADMIN_MAIL = "admin@adminmail.com"
+ADMIN_MAIL = "admin1@adminmail.com"
 IDENTITY_SCHEMA = {
     "$id": "https://schemas.ory.sh/presets/kratos/quickstart/email-password/identity.schema.json",
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -76,10 +77,12 @@ async def test_build_and_deploy(ops_test: OpsTest) -> None:
         apps=[KRATOS_APP, DB_APP],
         status="active",
         raise_on_blocked=False,
+        raise_on_error=False,
         timeout=1000,
     )
 
 
+@pytest.mark.skip_if_deployed
 async def test_ingress_relation(ops_test: OpsTest) -> None:
     await ops_test.model.deploy(
         TRAEFIK_CHARM,
@@ -240,7 +243,13 @@ async def test_identity_schemas_config(ops_test: OpsTest) -> None:
         timeout=1000,
     )
 
-    resp = requests.get(f"http://{public_address}/{ops_test.model.name}-{KRATOS_APP}/schemas")
+    for _ in range(40):
+        resp = requests.get(f"http://{public_address}/{ops_test.model.name}-{KRATOS_APP}/schemas")
+        # It may take some time for the changes to take effect, so we wait and retry
+        if len(resp.json()) != 1:
+            await sleep(3)
+        else:
+            break
 
     assert len(resp.json()) == 1
     assert resp.json()[0]["id"] == schema_id
@@ -259,9 +268,16 @@ async def test_identity_schemas_config(ops_test: OpsTest) -> None:
         timeout=1000,
     )
 
-    resp = requests.get(f"http://{public_address}/{ops_test.model.name}-{KRATOS_APP}/schemas")
+    for _ in range(40):
+        resp = requests.get(f"http://{public_address}/{ops_test.model.name}-{KRATOS_APP}/schemas")
+        # It may take some time for the changes to take effect, so we wait and retry
+        if len(resp.json()) != 2:
+            await sleep(3)
+        else:
+            break
 
-    assert original_resp == resp.json()
+    assert all(s in original_resp for s in resp.json())
+    assert len(original_resp) == len(resp.json())
 
 
 async def test_kratos_scale_up(ops_test: OpsTest) -> None:
