@@ -64,7 +64,13 @@ import logging
 from typing import TYPE_CHECKING, List, Literal, MutableMapping, Optional, Tuple, cast
 
 import pydantic
-from ops.charm import CharmBase, CharmEvents, RelationEvent, RelationRole
+from ops.charm import (
+    CharmBase,
+    CharmEvents,
+    RelationBrokenEvent,
+    RelationEvent,
+    RelationRole,
+)
 from ops.framework import EventSource, Object
 from ops.model import ModelError, Relation
 from pydantic import BaseModel
@@ -77,7 +83,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 4
+LIBPATCH = 5
 
 PYDEPS = ["pydantic<2.0"]
 
@@ -86,7 +92,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_RELATION_NAME = "tracing"
 RELATION_INTERFACE_NAME = "tracing"
 
-IngesterProtocol = Literal["otlp_grpc", "otlp_http", "zipkin", "tempo"]
+IngesterProtocol = Literal[
+    "otlp_grpc", "otlp_http", "zipkin", "tempo", "jaeger_http_thrift", "jaeger_grpc"
+]
 
 RawIngester = Tuple[IngesterProtocol, int]
 
@@ -97,6 +105,10 @@ class TracingError(RuntimeError):
 
 class DataValidationError(TracingError):
     """Raised when data validation fails on IPU relation data."""
+
+
+class AmbiguousRelationUsageError(TracingError):
+    """Raised when one wrongly assumes that there can only be one relation on an endpoint."""
 
 
 # todo: use fully-encoded json fields like Traefik does. MUCH neater
@@ -359,6 +371,10 @@ class TracingEndpointRequirer(Object):
             raise
 
 
+class EndpointRemovedEvent(RelationBrokenEvent):
+    """Event representing a change in one of the ingester endpoints."""
+
+
 class EndpointChangedEvent(_AutoSnapshotEvent):
     """Event representing a change in one of the ingester endpoints."""
 
@@ -378,6 +394,7 @@ class TracingEndpointEvents(CharmEvents):
     """TracingEndpointProvider events."""
 
     endpoint_changed = EventSource(EndpointChangedEvent)
+    endpoint_removed = EventSource(EndpointRemovedEvent)
 
 
 class TracingEndpointProvider(Object):
@@ -420,44 +437,79 @@ class TracingEndpointProvider(Object):
         )
 
         super().__init__(charm, relation_name)
+
+        self._is_single_endpoint = charm.meta.relations[relation_name].limit == 1
+
         self._charm = charm
         self._relation_name = relation_name
 
         events = self._charm.on[self._relation_name]
         self.framework.observe(events.relation_changed, self._on_tracing_relation_changed)
+        self.framework.observe(events.relation_broken, self._on_tracing_relation_broken)
 
-    def _is_ready(self, relation: Optional[Relation]):
+    @property
+    def relations(self) -> List[Relation]:
+        """The tracing relations associated with this endpoint."""
+        return self._charm.model.relations[self._relation_name]
+
+    @property
+    def _relation(self) -> Relation:
+        """If this wraps a single endpoint, the relation bound to it, if any."""
+        if not self._is_single_endpoint:
+            objname = type(self).__name__
+            raise AmbiguousRelationUsageError(
+                f"This {objname} wraps a {self._relation_name} endpoint that has "
+                "limit != 1. We can't determine what relation, of the possibly many, you are "
+                f"talking about. Please pass a relation instance while calling {objname}, "
+                "or set limit=1 in the charm metadata."
+            )
+        relations = self.relations
+        return relations[0] if relations else None
+
+    def is_ready(self, relation: Optional[Relation] = None):
+        """Is this endpoint ready?"""
+        relation = relation or self._relation
         if not relation:
-            logger.error("no relation")
+            logger.error(f"no relation on {self._relation_name}: tracing not ready")
             return False
         if relation.data is None:
-            logger.error("relation data is None")
+            logger.error(f"relation data is None for {relation}")
             return False
         if not relation.app:
             logger.error(f"{relation} event received but there is no relation.app")
+            return False
+        try:
+            TracingRequirerAppData.load(relation.data[relation.app])
+        except (json.JSONDecodeError, pydantic.ValidationError):
+            logger.info(f"failed validating relation data for {relation}")
             return False
         return True
 
     def _on_tracing_relation_changed(self, event):
         """Notify the providers that there is new endpoint information available."""
         relation = event.relation
-        if not self._is_ready(relation):
+        if not self.is_ready(relation):
+            self.on.endpoint_removed.emit(relation)  # type: ignore
             return
 
         data = TracingRequirerAppData.load(relation.data[relation.app])
-        if data:
-            self.on.endpoint_changed.emit(relation, data.host, [i.dict() for i in data.ingesters])  # type: ignore
+        self.on.endpoint_changed.emit(relation, data.host, [i.dict() for i in data.ingesters])  # type: ignore
 
-    @property
-    def endpoints(self) -> Optional[TracingRequirerAppData]:
+    def _on_tracing_relation_broken(self, event: RelationBrokenEvent):
+        """Notify the providers that the endpoint is broken."""
+        relation = event.relation
+        self.on.endpoint_removed.emit(relation)
+
+    def get_all_endpoints(
+        self, relation: Optional[Relation] = None
+    ) -> Optional[TracingRequirerAppData]:
         """Unmarshalled relation data."""
-        relation = self._charm.model.get_relation(self._relation_name)
-        if not self._is_ready(relation):
+        if not self.is_ready(relation or self._relation):
             return
         return TracingRequirerAppData.load(relation.data[relation.app])  # type: ignore
 
-    def _get_ingester(self, protocol: IngesterProtocol):
-        ep = self.endpoints
+    def _get_ingester(self, relation: Relation, protocol: IngesterProtocol):
+        ep = self.get_all_endpoints(relation)
         if not ep:
             return None
         try:
@@ -467,22 +519,28 @@ class TracingEndpointProvider(Object):
             logger.error(f"no ingester found with protocol={protocol!r}")
             return None
 
-    @property
-    def otlp_grpc_endpoint(self) -> Optional[str]:
+    def otlp_grpc_endpoint(self, relation: Optional[Relation] = None) -> Optional[str]:
         """Ingester endpoint for the ``otlp_grpc`` protocol."""
-        return self._get_ingester("otlp_grpc")
+        return self._get_ingester(relation or self._relation, protocol="otlp_grpc")
 
-    @property
-    def otlp_http_endpoint(self) -> Optional[str]:
+    def otlp_http_endpoint(self, relation: Optional[Relation] = None) -> Optional[str]:
         """Ingester endpoint for the ``otlp_http`` protocol."""
-        return self._get_ingester("otlp_http")
+        return self._get_ingester(relation or self._relation, protocol="otlp_http")
 
-    @property
-    def zipkin_endpoint(self) -> Optional[str]:
+    def zipkin_endpoint(self, relation: Optional[Relation] = None) -> Optional[str]:
         """Ingester endpoint for the ``zipkin`` protocol."""
-        return self._get_ingester("zipkin")
+        return self._get_ingester(relation or self._relation, protocol="zipkin")
+
+    def tempo_endpoint(self, relation: Optional[Relation] = None) -> Optional[str]:
+        """Ingester endpoint for the ``tempo`` protocol."""
+        return self._get_ingester(relation or self._relation, protocol="tempo")
 
     @property
-    def tempo_endpoint(self) -> Optional[str]:
-        """Ingester endpoint for the ``tempo`` protocol."""
-        return self._get_ingester("tempo")
+    def jaeger_http_thrift_endpoint(self) -> Optional[str]:
+        """Ingester endpoint for the ``jaeger_http_thrift`` protocol."""
+        return self._get_ingester("jaeger_http_thrift")
+
+    @property
+    def jaeger_grpc_endpoint(self) -> Optional[str]:
+        """Ingester endpoint for the ``jaeger_grpc`` protocol."""
+        return self._get_ingester("jaeger_grpc")
