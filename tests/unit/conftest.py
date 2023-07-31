@@ -25,6 +25,12 @@ def harness(mocked_kubernetes_service_patcher: MagicMock) -> Harness:
     return harness
 
 
+@pytest.fixture(autouse=True)
+def lk_client(mocker: MockerFixture) -> None:
+    mock_lightkube = mocker.patch("charm.Client", autospec=True)
+    return mock_lightkube.return_value
+
+
 @pytest.fixture()
 def mocked_kratos_process() -> MagicMock:
     mock = MagicMock()

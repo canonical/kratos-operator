@@ -60,7 +60,7 @@ jobs:
           juju ssh kratos/0 "PYTHONPATH=agents/unit-kratos-0/charm/venv/ python3 -c '
           from ops import pebble
           p = pebble.Client(\"/charm/containers/kratos/pebble.socket\")
-          f = p.pull(\"/etc/config/kratos.yaml\")
+          f = p.pull(\"/etc/config/kratos/kratos.yaml\")
           print(f.read())
           '"
         if: failure()

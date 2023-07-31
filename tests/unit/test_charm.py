@@ -209,45 +209,19 @@ def setup_external_provider_relation(harness: Harness) -> tuple[int, dict]:
     return relation_id, data
 
 
-def validate_config(expected_config: Dict[str, Any], config: Dict[str, Any]) -> None:
+def validate_config(
+    expected_config: Dict[str, Any], config: Dict[str, Any], validate_schemas: bool = True
+) -> None:
     expected_schemas = expected_config["identity"].pop("schemas")
     schemas = config["identity"].pop("schemas")
     secrets = config.pop("secrets")
 
     assert "cookie" in secrets
     assert len(secrets["cookie"]) > 0
-    assert all(schema in schemas for schema in expected_schemas)
     assert len(expected_schemas) == len(schemas)
+    if validate_schemas:
+        assert all(schema in schemas for schema in expected_schemas)
     assert config == expected_config
-
-
-def test_on_push_default_files(harness: Harness) -> None:
-    expected_mappers = {mapper.name for mapper in os.scandir(PROJ_ROOT_DIR / "claim_mappers")}
-    expected_schemas = {schema.name for schema in os.scandir(PROJ_ROOT_DIR / "identity_schemas")}
-
-    harness.set_can_connect(CONTAINER_NAME, True)
-
-    with patch.object(
-        harness.charm, "_mappers_local_dir_path", PROJ_ROOT_DIR / "claim_mappers"
-    ), patch.object(
-        harness.charm, "_identity_schemas_local_dir_path", PROJ_ROOT_DIR / "identity_schemas"
-    ):
-        harness.charm._push_default_files()
-
-    container = harness.model.unit.get_container(CONTAINER_NAME)
-    mappers = {mapper.name for mapper in container.list_files(CONFIG_DIR / "claim_mappers")}
-    schemas = {schema.name for schema in container.list_files(CONFIG_DIR / "schemas" / "default")}
-
-    assert expected_mappers == mappers and expected_schemas == schemas
-
-
-def test_on_install_push_default_files(
-    harness: Harness, mocked_push_default_files: MagicMock
-) -> None:
-    harness.set_can_connect(CONTAINER_NAME, True)
-    harness.charm.on.install.emit()
-
-    mocked_push_default_files.assert_called_once()
 
 
 def test_on_install_cannot_connect_container(harness: Harness) -> None:
@@ -276,7 +250,7 @@ def test_on_pebble_ready_correct_plan(harness: Harness) -> None:
                 "override": "replace",
                 "summary": "Kratos Operator layer",
                 "startup": "disabled",
-                "command": '/bin/sh -c "kratos serve all --config /etc/config/kratos.yaml 2>&1 | tee -a /var/log/kratos.log"',
+                "command": '/bin/sh -c "kratos serve all --config /etc/config/kratos/kratos.yaml 2>&1 | tee -a /var/log/kratos.log"',
             }
         }
     }
@@ -297,7 +271,7 @@ def test_on_pebble_ready_correct_plan_with_dev_flag(
                 "override": "replace",
                 "summary": "Kratos Operator layer",
                 "startup": "disabled",
-                "command": '/bin/sh -c "kratos serve all --config /etc/config/kratos.yaml --dev 2>&1 | tee -a /var/log/kratos.log"',
+                "command": '/bin/sh -c "kratos serve all --config /etc/config/kratos/kratos.yaml --dev 2>&1 | tee -a /var/log/kratos.log"',
             }
         }
     }
@@ -327,7 +301,9 @@ def test_on_pebble_ready_service_started_when_database_is_created(harness: Harne
     assert harness.model.unit.status == ActiveStatus()
 
 
-def test_on_pebble_ready_has_correct_config_when_database_is_created(harness: Harness) -> None:
+def test_on_pebble_ready_has_correct_config_when_database_is_created(
+    harness: Harness, lk_client: MagicMock
+) -> None:
     setup_postgres_relation(harness)
     (login_relation_id, login_databag) = setup_login_ui_relation(harness)
 
@@ -342,10 +318,10 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness: Ha
         "identity": {
             "default_schema_id": "social_user_v0",
             "schemas": [
-                {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
+                {"id": "admin_v0", "url": "base64://something"},
                 {
                     "id": "social_user_v0",
-                    "url": "file:///etc/config/schemas/default/social_user_v0.json",
+                    "url": "base64://something",
                 },
             ],
         },
@@ -400,13 +376,12 @@ def test_on_pebble_ready_when_database_not_created_yet(harness: Harness) -> None
     assert "Waiting for database creation" in harness.charm.unit.status.message
 
 
-def test_on_pebble_ready_push_default_files(
-    harness: Harness, mocked_push_default_files: MagicMock
-) -> None:
+def test_on_pebble_ready_lk_called(harness: Harness, lk_client: MagicMock) -> None:
+    setup_postgres_relation(harness)
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
 
-    mocked_push_default_files.assert_called_once()
+    lk_client.patch.assert_called_once()
 
 
 def test_on_config_changed_when_identity_schemas_config(harness: Harness) -> None:
@@ -476,10 +451,10 @@ def test_on_config_changed_when_identity_schemas_config_unset(harness: Harness) 
         "identity": {
             "default_schema_id": "social_user_v0",
             "schemas": [
-                {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
+                {"id": "admin_v0", "url": "base64://something"},
                 {
                     "id": "social_user_v0",
-                    "url": "file:///etc/config/schemas/default/social_user_v0.json",
+                    "url": "base64://something",
                 },
             ],
         },
@@ -682,14 +657,13 @@ def test_on_client_config_changed_when_no_dns_available(harness: Harness) -> Non
 
 
 def test_on_client_config_changed_with_ingress(
-    harness: Harness, mocked_container: Container
+    harness: Harness, mocked_container: Container, lk_client: MagicMock
 ) -> None:
     setup_postgres_relation(harness)
     setup_ingress_relation(harness, "public")
     (_, login_databag) = setup_login_ui_relation(harness)
 
     relation_id, data = setup_external_provider_relation(harness)
-    container = harness.model.unit.get_container(CONTAINER_NAME)
 
     expected_config = {
         "log": {
@@ -699,10 +673,10 @@ def test_on_client_config_changed_with_ingress(
         "identity": {
             "default_schema_id": "social_user_v0",
             "schemas": [
-                {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
+                {"id": "admin_v0", "url": "base64://something"},
                 {
                     "id": "social_user_v0",
-                    "url": "file:///etc/config/schemas/default/social_user_v0.json",
+                    "url": "base64://something",
                 },
             ],
         },
@@ -734,7 +708,7 @@ def test_on_client_config_changed_with_ingress(
                                 "client_id": data["client_id"],
                                 "client_secret": data["client_secret"],
                                 "issuer_url": data["issuer_url"],
-                                "mapper_url": "file:///etc/config/claim_mappers/default_schema.jsonnet",
+                                "mapper_url": "file:///etc/config/kratos/default_schema.jsonnet",
                                 "provider": data["provider"],
                                 "scope": data["scope"].split(" "),
                             },
@@ -758,8 +732,8 @@ def test_on_client_config_changed_with_ingress(
         },
     }
 
-    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
-    validate_config(expected_config, yaml.safe_load(container_config))
+    container_config = lk_client.replace.call_args_list[-1][0][0].data["kratos.yaml"]
+    validate_config(expected_config, yaml.safe_load(container_config), validate_schemas=False)
 
     expected_redirect_url = harness.charm.public_ingress.url.replace(
         "http://", "https://"
@@ -769,7 +743,7 @@ def test_on_client_config_changed_with_ingress(
     assert app_data[0]["redirect_uri"].startswith(expected_redirect_url)
 
 
-def test_on_client_config_changed_with_hydra(harness: Harness) -> None:
+def test_on_client_config_changed_with_hydra(harness: Harness, lk_client: MagicMock) -> None:
     setup_postgres_relation(harness)
     (_, login_databag) = setup_login_ui_relation(harness)
 
@@ -787,10 +761,10 @@ def test_on_client_config_changed_with_hydra(harness: Harness) -> None:
         "identity": {
             "default_schema_id": "social_user_v0",
             "schemas": [
-                {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
+                {"id": "admin_v0", "url": "base64://something"},
                 {
                     "id": "social_user_v0",
-                    "url": "file:///etc/config/schemas/default/social_user_v0.json",
+                    "url": "base64://something",
                 },
             ],
         },
@@ -827,11 +801,13 @@ def test_on_client_config_changed_with_hydra(harness: Harness) -> None:
         },
     }
 
-    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
-    validate_config(expected_config, yaml.safe_load(container_config))
+    container_config = lk_client.replace.call_args_list[-1][0][0].data["kratos.yaml"]
+    validate_config(expected_config, yaml.safe_load(container_config), validate_schemas=False)
 
 
-def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harness) -> None:
+def test_on_client_config_changed_when_missing_hydra_relation_data(
+    harness: Harness, lk_client: MagicMock
+) -> None:
     setup_postgres_relation(harness)
     setup_peer_relation(harness)
     (login_relation_id, login_databag) = setup_login_ui_relation(harness)
@@ -851,10 +827,10 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harn
         "identity": {
             "default_schema_id": "social_user_v0",
             "schemas": [
-                {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
+                {"id": "admin_v0", "url": "base64://something"},
                 {
                     "id": "social_user_v0",
-                    "url": "file:///etc/config/schemas/default/social_user_v0.json",
+                    "url": "base64://something",
                 },
             ],
         },
@@ -888,8 +864,8 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harn
         },
     }
 
-    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
-    validate_config(expected_config, yaml.safe_load(container_config))
+    container_config = lk_client.replace.call_args_list[-1][0][0].data["kratos.yaml"]
+    validate_config(expected_config, yaml.safe_load(container_config), validate_schemas=False)
 
 
 def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(
@@ -916,7 +892,9 @@ def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(
     assert harness.get_relation_data(endpoint_info_relation_id, "kratos") == expected_data
 
 
-def test_on_client_config_changed_without_login_ui_endpoints(harness: Harness) -> None:
+def test_on_client_config_changed_without_login_ui_endpoints(
+    harness: Harness, lk_client: MagicMock
+) -> None:
     setup_postgres_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
@@ -938,10 +916,10 @@ def test_on_client_config_changed_without_login_ui_endpoints(harness: Harness) -
         "identity": {
             "default_schema_id": "social_user_v0",
             "schemas": [
-                {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
+                {"id": "admin_v0", "url": "base64://something"},
                 {
                     "id": "social_user_v0",
-                    "url": "file:///etc/config/schemas/default/social_user_v0.json",
+                    "url": "base64://something",
                 },
             ],
         },
@@ -963,12 +941,12 @@ def test_on_client_config_changed_without_login_ui_endpoints(harness: Harness) -
         },
     }
 
-    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
-    validate_config(expected_config, yaml.safe_load(container_config))
+    container_config = lk_client.replace.call_args_list[-1][0][0].data["kratos.yaml"]
+    validate_config(expected_config, yaml.safe_load(container_config), validate_schemas=False)
 
 
 def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
-    harness: Harness,
+    harness: Harness, lk_client: MagicMock
 ) -> None:
     setup_postgres_relation(harness)
     setup_peer_relation(harness)
@@ -993,10 +971,10 @@ def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
         "identity": {
             "default_schema_id": "social_user_v0",
             "schemas": [
-                {"id": "admin_v0", "url": "file:///etc/config/schemas/default/admin_v0.json"},
+                {"id": "admin_v0", "url": "base64://something"},
                 {
                     "id": "social_user_v0",
-                    "url": "file:///etc/config/schemas/default/social_user_v0.json",
+                    "url": "base64://something",
                 },
             ],
         },
@@ -1015,8 +993,8 @@ def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
         },
     }
 
-    container_config = container.pull(path="/etc/config/kratos.yaml", encoding="utf-8")
-    validate_config(expected_config, yaml.safe_load(container_config))
+    container_config = lk_client.replace.call_args_list[-1][0][0].data["kratos.yaml"]
+    validate_config(expected_config, yaml.safe_load(container_config), validate_schemas=False)
 
 
 @pytest.mark.parametrize(
