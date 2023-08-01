@@ -1,0 +1,67 @@
+@startuml
+skinparam ParticipantPadding 20
+skinparam BoxPadding 5
+skinparam sequenceMessageAlign center
+
+title Database Migration
+actor User
+box "juju controller" #DarkSalmon
+    control juju
+end box
+
+box #LightBlue
+	collections Kratos as KratosA
+	database "PostgreSQL DB (source)" as source
+end box
+
+box #LightGreen
+	collections Kratos as KratosB
+	database "PostgreSQL DB (target)" as target
+end box
+
+collections Client
+
+== Deployment ==
+|||
+User -> juju: juju deploy kratos \\\n<new-kratos-app> \\\n--channel <channel> \\\n--revision <original-rev>
+juju --> KratosB **: Deploy
+User -> juju: juju deploy \\\npostgresql <new-postgresql-app> \\\n--channel <channel>
+juju --> target **: Deploy
+User -> juju: juju integrate \\\n<new-kratos-app>\\\n<new-postgresql-app>
+|||
+
+== Replication ==
+|||
+User -> source: Replicate to target
+source --> target: Replication started
+...Wait for source and target databases almost/fully synced...
+
+User -> source: Stop write traffic
+KratosA -> source !! : Write requests
+...Wait for data drained to target database...
+
+User -> source: Stop replication
+source --> target !! : Replication stopped
+|||
+
+== Upgrade Charm ==
+|||
+User -> juju: juju refresh <new-kratos-app> \\\n--channel <channel> \\\n--revision <new-rev>
+juju --> KratosB: Upgrade Charm
+User -> juju: juju run <new-kratos-app>/<leader> \\\nrun-migration \\\ntimeout <timeout-in-seconds>
+juju --> KratosB
+KratosB -> target: Apply schema changes
+...Wait for migration complete...
+juju -> User: Migration action done
+|||
+
+== Switch Traffic ==
+User -> Client: Switch traffic
+group Switchover
+|||
+Client -> KratosA !!
+Client -> KratosB
+|||
+end
+|||
+@enduml

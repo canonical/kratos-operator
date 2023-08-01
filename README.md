@@ -154,6 +154,9 @@ This action can be used to trigger a database migration:
 juju run kratos/0 run-migration
 ```
 
+**Note:** refer to the [migration guide](./docs/MIGRATION.md) for further
+information.
+
 ## OCI Images
 
 The image used by this charm is hosted on [Docker Hub](https://hub.docker.com/r/oryd/kratos) and maintained by Ory.
