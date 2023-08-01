@@ -544,7 +544,7 @@ class KratosCharm(CharmBase):
         if not self.model.relations[self._tracing_relation_name]:
             return ""
 
-        return self.tracing.otlp_http_endpoint or ""
+        return self.tracing.otlp_http_endpoint() or ""
 
     def _update_kratos_endpoints_relation_data(self, event: RelationEvent) -> None:
         logger.info("Sending endpoints info")

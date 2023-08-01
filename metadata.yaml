@@ -50,5 +50,6 @@ provides:
     interface: grafana_dashboard
   tracing:
     interface: tracing
+    limit: 1
     description: |
       Provides traces to COS Tempo instance
