@@ -3,10 +3,9 @@
 
 import base64
 import json
-import os
 from pathlib import Path
 from typing import Any, Dict
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 import requests
@@ -15,8 +14,6 @@ from charms.tempo_k8s.v0.tracing import Ingester, TracingRequirerAppData
 from ops.model import ActiveStatus, BlockedStatus, Container, WaitingStatus
 from ops.pebble import ExecError, TimeoutError
 from ops.testing import Harness
-
-from charm import DB_MIGRATE_VERSION, PEER_KEY_DB_MIGRATE_VERSION
 
 CONFIG_DIR = Path("/etc/config")
 CONTAINER_NAME = "kratos"
@@ -71,11 +68,6 @@ def setup_ingress_relation(harness: Harness, type: str) -> int:
 def setup_peer_relation(harness: Harness) -> None:
     rel_id = harness.add_relation("kratos-peers", "kratos")
     harness.add_relation_unit(rel_id, "kratos/1")
-    harness.update_relation_data(
-        rel_id,
-        "kratos",
-        {PEER_KEY_DB_MIGRATE_VERSION: DB_MIGRATE_VERSION},
-    )
 
 
 def setup_hydra_relation(harness: Harness) -> int:
@@ -240,8 +232,11 @@ def test_on_pebble_ready_cannot_connect_container(harness: Harness) -> None:
     assert isinstance(harness.model.unit.status, WaitingStatus)
 
 
-def test_on_pebble_ready_correct_plan(harness: Harness) -> None:
+def test_on_pebble_ready_correct_plan(
+    harness: Harness, mocked_migration_is_needed: MagicMock, mocked_get_secret: MagicMock
+) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
+    setup_postgres_relation(harness)
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     expected_plan = {
@@ -259,10 +254,14 @@ def test_on_pebble_ready_correct_plan(harness: Harness) -> None:
 
 
 def test_on_pebble_ready_correct_plan_with_dev_flag(
-    harness: Harness, caplog: pytest.LogCaptureFixture
+    harness: Harness,
+    mocked_migration_is_needed: MagicMock,
+    mocked_get_secret: MagicMock,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     harness.update_config({"dev": True})
     container = harness.model.unit.get_container(CONTAINER_NAME)
+    setup_postgres_relation(harness)
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     expected_plan = {
@@ -280,20 +279,21 @@ def test_on_pebble_ready_correct_plan_with_dev_flag(
     assert "Running Kratos in dev mode, don't do this in production" in caplog.messages
 
 
-def test_on_pebble_ready_service_not_started_when_database_not_created(harness: Harness) -> None:
+def test_on_pebble_ready_service_does_not_exist_when_database_not_created(
+    harness: Harness,
+) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
 
-    service = harness.model.unit.get_container("kratos").get_service("kratos")
-    assert not service.is_running()
+    assert "kratos" not in harness.model.unit.get_container("kratos").get_services()
 
 
-def test_on_pebble_ready_service_started_when_database_is_created(harness: Harness) -> None:
-    setup_postgres_relation(harness)
-    setup_peer_relation(harness)
-
+def test_on_pebble_ready_service_started_when_database_is_created(
+    harness: Harness, mocked_migration_is_needed: MagicMock, mocked_get_secret: MagicMock
+) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
-    harness.charm.on.leader_elected.emit()
+    setup_peer_relation(harness)
+    setup_postgres_relation(harness)
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     service = harness.model.unit.get_container("kratos").get_service("kratos")
@@ -355,7 +355,9 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(
         },
     }
 
-    validate_config(expected_config, yaml.safe_load(harness.charm._render_conf_file()))
+    validate_config(
+        expected_config, yaml.safe_load(harness.charm._render_conf_file()), validate_schemas=False
+    )
 
 
 def test_on_pebble_ready_when_missing_database_relation(harness: Harness) -> None:
@@ -376,16 +378,26 @@ def test_on_pebble_ready_when_database_not_created_yet(harness: Harness) -> None
     assert "Waiting for database creation" in harness.charm.unit.status.message
 
 
-def test_on_pebble_ready_lk_called(harness: Harness, lk_client: MagicMock) -> None:
+def test_on_database_created_lk_called(
+    harness: Harness,
+    lk_client: MagicMock,
+    mocked_get_secret: MagicMock,
+    mocked_run_migration: MagicMock,
+) -> None:
+    setup_peer_relation(harness)
     setup_postgres_relation(harness)
-    container = harness.model.unit.get_container(CONTAINER_NAME)
-    harness.charm.on.kratos_pebble_ready.emit(container)
 
     lk_client.patch.assert_called_once()
 
 
-def test_on_config_changed_when_identity_schemas_config(harness: Harness) -> None:
+def test_on_config_changed_when_identity_schemas_config(
+    harness: Harness, lk_client: MagicMock, mocked_migration_is_needed: MagicMock
+) -> None:
+    setup_peer_relation(harness)
     setup_postgres_relation(harness)
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
+    harness.charm.on.kratos_pebble_ready.emit(container)
     schema_id = "user_v0"
     harness.update_config(
         dict(
@@ -429,11 +441,19 @@ def test_on_config_changed_when_identity_schemas_config(harness: Harness) -> Non
         },
     }
 
-    validate_config(expected_config, yaml.safe_load(harness.charm._render_conf_file()))
+    container_config = lk_client.replace.call_args_list[-1][0][0].data["kratos.yaml"]
+    validate_config(expected_config, yaml.safe_load(container_config), validate_schemas=False)
 
 
-def test_on_config_changed_when_identity_schemas_config_unset(harness: Harness) -> None:
+def test_on_config_changed_when_identity_schemas_config_unset(
+    harness: Harness, lk_client: MagicMock, mocked_migration_is_needed: MagicMock
+) -> None:
+    setup_peer_relation(harness)
     setup_postgres_relation(harness)
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
     schema_id = "user_v0"
     harness.update_config(
         dict(
@@ -475,7 +495,8 @@ def test_on_config_changed_when_identity_schemas_config_unset(harness: Harness) 
         },
     }
 
-    validate_config(expected_config, yaml.safe_load(harness.charm._render_conf_file()))
+    container_config = lk_client.replace.call_args_list[-1][0][0].data["kratos.yaml"]
+    validate_config(expected_config, yaml.safe_load(container_config), validate_schemas=False)
 
 
 def test_on_database_created_cannot_connect_container(harness: Harness) -> None:
@@ -502,6 +523,7 @@ def test_on_database_created_updated_config_and_start_service_when_pebble_is_rea
     harness: Harness, mocked_pebble_exec_success: MagicMock
 ) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
     harness.charm.on.kratos_pebble_ready.emit(container)
     setup_peer_relation(harness)
     setup_postgres_relation(harness)
@@ -517,13 +539,14 @@ def test_on_database_created_updated_config_and_start_service_when_pebble_is_rea
 
 
 def test_on_database_created_updated_config_and_start_service_when_pebble_is_ready_in_non_leader_unit(
-    harness: Harness,
+    harness: Harness, mocked_get_secret: MagicMock, mocked_migration_is_needed: MagicMock
 ) -> None:
     harness.set_leader(False)
     container = harness.model.unit.get_container(CONTAINER_NAME)
-    harness.charm.on.kratos_pebble_ready.emit(container)
+    harness.charm.on.leader_elected.emit()
     setup_peer_relation(harness)
     setup_postgres_relation(harness)
+    harness.charm.on.kratos_pebble_ready.emit(container)
 
     service = harness.model.unit.get_container("kratos").get_service("kratos")
     assert service.is_running()
@@ -546,23 +569,26 @@ def test_on_database_created_not_run_migration_in_non_leader_unit(
     mocked_pebble_exec.assert_not_called()
 
 
-def test_on_database_created_pending_migration_in_non_leader_unit(harness: Harness) -> None:
+def test_on_database_created_pending_migration_in_non_leader_unit(
+    harness: Harness, mocked_get_secret: MagicMock
+) -> None:
     harness.set_leader(False)
     container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
     harness.charm.on.kratos_pebble_ready.emit(container)
-    rel_id = harness.add_relation("kratos-peers", "kratos")
-    harness.add_relation_unit(rel_id, "kratos/1")
 
+    setup_peer_relation(harness)
     setup_postgres_relation(harness)
 
     assert isinstance(harness.charm.unit.status, WaitingStatus)
-    assert "Waiting for database migration to complete" in harness.charm.unit.status.message
+    assert "Unit waiting for leadership to run the migration" in harness.charm.unit.status.message
 
 
 def test_on_database_created_when_migration_is_successful(
     harness: Harness, mocked_pebble_exec_success: MagicMock
 ) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
     harness.charm.on.kratos_pebble_ready.emit(container)
     setup_peer_relation(harness)
     setup_postgres_relation(harness)
@@ -582,6 +608,7 @@ def test_on_database_created_when_migration_failed(
     harness: Harness, mocked_pebble_exec_failed: MagicMock
 ) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
     harness.charm.on.kratos_pebble_ready.emit(container)
     setup_peer_relation(harness)
     setup_postgres_relation(harness)
@@ -601,6 +628,7 @@ def test_on_database_changed_when_pebble_is_ready(
     harness: Harness, mocked_pebble_exec_success: MagicMock
 ) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     setup_peer_relation(harness)
@@ -623,6 +651,7 @@ def test_on_config_changed_when_pebble_is_ready(
     harness: Harness, mocked_pebble_exec_success: MagicMock
 ) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     setup_peer_relation(harness)
@@ -806,7 +835,7 @@ def test_on_client_config_changed_with_hydra(harness: Harness, lk_client: MagicM
 
 
 def test_on_client_config_changed_when_missing_hydra_relation_data(
-    harness: Harness, lk_client: MagicMock
+    harness: Harness, lk_client: MagicMock, mocked_migration_is_needed: MagicMock
 ) -> None:
     setup_postgres_relation(harness)
     setup_peer_relation(harness)
@@ -946,7 +975,7 @@ def test_on_client_config_changed_without_login_ui_endpoints(
 
 
 def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
-    harness: Harness, lk_client: MagicMock
+    harness: Harness, lk_client: MagicMock, mocked_migration_is_needed: MagicMock
 ) -> None:
     setup_postgres_relation(harness)
     setup_peer_relation(harness)
@@ -1317,7 +1346,9 @@ def test_timeout_on_run_migration_action(
     event.fail.assert_called()
 
 
-def test_on_pebble_ready_with_loki(harness: Harness) -> None:
+def test_on_pebble_ready_with_loki(
+    harness: Harness, mocked_migration_is_needed: MagicMock
+) -> None:
     setup_postgres_relation(harness)
     setup_peer_relation(harness)
     container = harness.model.unit.get_container(CONTAINER_NAME)
