@@ -38,17 +38,12 @@ jobs:
 
       - name: Create Pull Request
         id: create-pull-request
-        uses: peter-evans/create-pull-request@v5
+        uses: canonical/create-pull-request@main
         with:
-          title: '(Automated) Update Charm Libs'
-          body: 'Update charm libs'
-          commit-message: 'Update charm libs'
-          signoff: false
-          delete-branch: true
-          branch: 'automated-update-charm-libs'
-
-      - name: Print Created Pull Request
-        if: ${{ steps.create-pull-request.outputs.pull-request-number }}
-        run: |
-          echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
-          echo "Pull Request URL - ${{ steps.cpr.outputs.pull-request-url }}"
+          github-token: ${{ secrets.PAT_TOKEN }}
+          commit-message: Update charm libs
+          branch-name: 'automated-update-charm-libs'
+          title: (Automated) Update Charm Libs
+          body: Update charm libs
+          upsert: true
+          ignore-no-changes: true
