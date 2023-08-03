@@ -229,6 +229,13 @@ def mocked_run_migration(mocker: MockerFixture) -> MagicMock:
 
 
 @pytest.fixture(autouse=True)
+def mocked_config_map_handler(mocker: MockerFixture) -> MagicMock:
+    mock = mocker.patch("charm.ConfigMapHandler", autospec=True)
+    mock.return_value.get_identity_schemas.return_value = {}
+    return mock.return_value
+
+
+@pytest.fixture(autouse=True)
 def mocked_log_proxy_consumer_setup_promtail(mocker: MockerFixture) -> MagicMock:
     mocked_setup_promtail = mocker.patch(
         "charms.loki_k8s.v0.loki_push_api.LogProxyConsumer._setup_promtail", return_value=None
