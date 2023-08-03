@@ -391,7 +391,7 @@ def test_on_database_created_lk_called(
 
 
 def test_on_config_changed_when_identity_schemas_config(
-    harness: Harness, lk_client: MagicMock, mocked_migration_is_needed: MagicMock
+    harness: Harness, mocked_config_map_handler: MagicMock, mocked_migration_is_needed: MagicMock
 ) -> None:
     setup_peer_relation(harness)
     setup_postgres_relation(harness)
@@ -441,12 +441,13 @@ def test_on_config_changed_when_identity_schemas_config(
         },
     }
 
-    container_config = lk_client.replace.call_args_list[-1][0][0].data["kratos.yaml"]
-    validate_config(expected_config, yaml.safe_load(container_config), validate_schemas=False)
+    configmap = mocked_config_map_handler.update_kratos_config.call_args_list[-1][0][0]
+    config = configmap["kratos.yaml"]
+    validate_config(expected_config, yaml.safe_load(config), validate_schemas=False)
 
 
 def test_on_config_changed_when_identity_schemas_config_unset(
-    harness: Harness, lk_client: MagicMock, mocked_migration_is_needed: MagicMock
+    harness: Harness, mocked_config_map_handler: MagicMock, mocked_migration_is_needed: MagicMock
 ) -> None:
     setup_peer_relation(harness)
     setup_postgres_relation(harness)
@@ -495,8 +496,9 @@ def test_on_config_changed_when_identity_schemas_config_unset(
         },
     }
 
-    container_config = lk_client.replace.call_args_list[-1][0][0].data["kratos.yaml"]
-    validate_config(expected_config, yaml.safe_load(container_config), validate_schemas=False)
+    configmap = mocked_config_map_handler.update_kratos_config.call_args_list[-1][0][0]
+    config = configmap["kratos.yaml"]
+    validate_config(expected_config, yaml.safe_load(config), validate_schemas=False)
 
 
 def test_on_database_created_cannot_connect_container(harness: Harness) -> None:
@@ -686,7 +688,7 @@ def test_on_client_config_changed_when_no_dns_available(harness: Harness) -> Non
 
 
 def test_on_client_config_changed_with_ingress(
-    harness: Harness, mocked_container: Container, lk_client: MagicMock
+    harness: Harness, mocked_container: Container, mocked_config_map_handler: MagicMock
 ) -> None:
     setup_postgres_relation(harness)
     setup_ingress_relation(harness, "public")
@@ -761,8 +763,9 @@ def test_on_client_config_changed_with_ingress(
         },
     }
 
-    container_config = lk_client.replace.call_args_list[-1][0][0].data["kratos.yaml"]
-    validate_config(expected_config, yaml.safe_load(container_config), validate_schemas=False)
+    configmap = mocked_config_map_handler.update_kratos_config.call_args_list[-1][0][0]
+    config = configmap["kratos.yaml"]
+    validate_config(expected_config, yaml.safe_load(config), validate_schemas=False)
 
     expected_redirect_url = harness.charm.public_ingress.url.replace(
         "http://", "https://"
@@ -772,7 +775,9 @@ def test_on_client_config_changed_with_ingress(
     assert app_data[0]["redirect_uri"].startswith(expected_redirect_url)
 
 
-def test_on_client_config_changed_with_hydra(harness: Harness, lk_client: MagicMock) -> None:
+def test_on_client_config_changed_with_hydra(
+    harness: Harness, mocked_config_map_handler: MagicMock
+) -> None:
     setup_postgres_relation(harness)
     (_, login_databag) = setup_login_ui_relation(harness)
 
@@ -830,12 +835,13 @@ def test_on_client_config_changed_with_hydra(harness: Harness, lk_client: MagicM
         },
     }
 
-    container_config = lk_client.replace.call_args_list[-1][0][0].data["kratos.yaml"]
-    validate_config(expected_config, yaml.safe_load(container_config), validate_schemas=False)
+    configmap = mocked_config_map_handler.update_kratos_config.call_args_list[-1][0][0]
+    config = configmap["kratos.yaml"]
+    validate_config(expected_config, yaml.safe_load(config), validate_schemas=False)
 
 
 def test_on_client_config_changed_when_missing_hydra_relation_data(
-    harness: Harness, lk_client: MagicMock, mocked_migration_is_needed: MagicMock
+    harness: Harness, mocked_config_map_handler: MagicMock, mocked_migration_is_needed: MagicMock
 ) -> None:
     setup_postgres_relation(harness)
     setup_peer_relation(harness)
@@ -893,8 +899,9 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(
         },
     }
 
-    container_config = lk_client.replace.call_args_list[-1][0][0].data["kratos.yaml"]
-    validate_config(expected_config, yaml.safe_load(container_config), validate_schemas=False)
+    configmap = mocked_config_map_handler.update_kratos_config.call_args_list[-1][0][0]
+    config = configmap["kratos.yaml"]
+    validate_config(expected_config, yaml.safe_load(config), validate_schemas=False)
 
 
 def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(
@@ -922,7 +929,7 @@ def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(
 
 
 def test_on_client_config_changed_without_login_ui_endpoints(
-    harness: Harness, lk_client: MagicMock
+    harness: Harness, mocked_config_map_handler: MagicMock
 ) -> None:
     setup_postgres_relation(harness)
 
@@ -970,12 +977,13 @@ def test_on_client_config_changed_without_login_ui_endpoints(
         },
     }
 
-    container_config = lk_client.replace.call_args_list[-1][0][0].data["kratos.yaml"]
-    validate_config(expected_config, yaml.safe_load(container_config), validate_schemas=False)
+    configmap = mocked_config_map_handler.update_kratos_config.call_args_list[-1][0][0]
+    config = configmap["kratos.yaml"]
+    validate_config(expected_config, yaml.safe_load(config), validate_schemas=False)
 
 
 def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
-    harness: Harness, lk_client: MagicMock, mocked_migration_is_needed: MagicMock
+    harness: Harness, mocked_config_map_handler: MagicMock, mocked_migration_is_needed: MagicMock
 ) -> None:
     setup_postgres_relation(harness)
     setup_peer_relation(harness)
@@ -1022,8 +1030,9 @@ def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
         },
     }
 
-    container_config = lk_client.replace.call_args_list[-1][0][0].data["kratos.yaml"]
-    validate_config(expected_config, yaml.safe_load(container_config), validate_schemas=False)
+    configmap = mocked_config_map_handler.update_kratos_config.call_args_list[-1][0][0]
+    config = configmap["kratos.yaml"]
+    validate_config(expected_config, yaml.safe_load(config), validate_schemas=False)
 
 
 @pytest.mark.parametrize(
