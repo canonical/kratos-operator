@@ -60,6 +60,7 @@ from ops.charm import (
     PebbleReadyEvent,
     RelationDepartedEvent,
     RelationEvent,
+    RemoveEvent,
 )
 from ops.main import main
 from ops.model import (
@@ -196,6 +197,7 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.leader_elected, self._on_leader_elected)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
+        self.framework.observe(self.on.remove, self._on_remove)
         self.framework.observe(
             self.endpoints_provider.on.ready, self._update_kratos_endpoints_relation_data
         )
@@ -655,6 +657,12 @@ class KratosCharm(CharmBase):
     def _on_config_changed(self, event: ConfigChangedEvent) -> None:
         """Event Handler for config changed event."""
         self._handle_status_update_config(event)
+
+    def _on_remove(self, event: RemoveEvent) -> None:
+        if not self.unit.is_leader():
+            return
+
+        self.configmap_handler.delete_all_configmaps()
 
     def _get_tracing_endpoint_info(self) -> str:
         if not self._tracing_ready:
