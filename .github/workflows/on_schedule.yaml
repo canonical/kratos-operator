@@ -8,6 +8,7 @@ jobs:
     uses: ./.github/workflows/update_libs.yaml
     secrets:
       CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
 
   update-deps:
     name: Update Dependencies
