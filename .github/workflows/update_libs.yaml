@@ -12,6 +12,8 @@ on:
     secrets:
       CHARMCRAFT_CREDENTIALS:
         required: true
+      PAT_TOKEN:
+        required: true
   workflow_dispatch:
     inputs:
       charmcraft_channel:
