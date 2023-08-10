@@ -14,20 +14,43 @@ from ops.charm import CharmBase
 logger = logging.getLogger(__name__)
 
 
-class ConfigMapHandler(CharmBase):
+class ConfigMapManager:
     """A helper object for managing the configMaps holding the kratos config."""
 
-    kratos_config_map_name = "kratos-config"
-    providers_config_map_name = "providers"
-    identity_schemas_config_map_name = "identity-schemas"
+    def __init__(self) -> None:
+        self.configmaps = []
 
-    def __init__(self, client: Client, charm: CharmBase) -> None:
-        self.client = client
-        self.charm = charm
+    def create_all(self) -> None:
+        """Create all the configMaps."""
+        for cm in self.configmaps:
+            cm.create()
 
-    def _create_map(self, configmap_name: str) -> None:
+    def delete_all(self) -> None:
+        """Delete all the configMaps."""
+        for cm in self.configmaps:
+            cm.delete()
+
+    def register(self, cm: "BaseConfigMap") -> None:
+        """Register a configMap."""
+        self.configmaps.append(cm)
+
+
+class BaseConfigMap:
+    """Base class for managing a configMap."""
+
+    def __init__(
+        self, configmap_name: str, manager: ConfigMapManager, client: Client, charm: CharmBase
+    ) -> None:
+        self.name = configmap_name
+        self._manager = manager
+        self._client = client
+        self._charm = charm
+        manager.register(self)
+
+    def create(self):
+        """Create the configMap."""
         try:
-            self.client.get(ConfigMap, configmap_name, namespace=self.charm.model.name)
+            self._client.get(ConfigMap, self.name, namespace=self._charm.model.name)
             return
         except ApiError:
             pass
@@ -37,92 +60,56 @@ class ConfigMapHandler(CharmBase):
             kind="ConfigMap",
             # TODO @nsklikas: revisit labels
             metadata=ObjectMeta(
-                name=configmap_name,
+                name=self.name,
                 labels={
-                    "juju-app-name": self.charm.app.name,
+                    "juju-app-name": self._charm.app.name,
                     "app.kubernetes.io/managed-by": "juju",
                 },
             ),
         )
-        self.client.create(cm)
+        self._client.create(cm)
 
-    def _update_map(self, configmap_name: str, data: Dict) -> None:
+    def update(self, data: Dict):
+        """Update the configMap."""
         try:
-            cm = self.client.get(ConfigMap, configmap_name, namespace=self.charm.model.name)
+            cm = self._client.get(ConfigMap, self.name, namespace=self._charm.model.name)
         except ApiError:
             return
         cm.data = data
-        self.client.replace(cm)
+        self._client.replace(cm)
 
-    def _get_map(self, configmap_name: str) -> Dict:
+    def get(self):
+        """Get the configMap."""
         try:
-            cm = self.client.get(ConfigMap, configmap_name, namespace=self.charm.model.name)
+            cm = self._client.get(ConfigMap, self.name, namespace=self._charm.model.name)
         except ApiError:
             return {}
         return cm.data
 
-    def _delete_map(self, configmap_name: str) -> None:
+    def delete(self):
+        """Delete the configMap."""
         try:
-            self.client.delete(ConfigMap, configmap_name, namespace=self.charm.model.name)
+            self._client.delete(ConfigMap, self.name, namespace=self._charm.model.name)
         except ApiError:
             raise ValueError
 
-    def create_all_configmaps(self) -> None:
-        """Create all the configMaps."""
-        self.create_kratos_config()
-        self.create_identity_schemas()
-        self.create_providers()
 
-    def delete_all_configmaps(self) -> None:
-        """Delete all the configMaps."""
-        self.delete_kratos_config()
-        self.delete_identity_schemas()
-        self.delete_providers()
+class KratosConfigMap(BaseConfigMap):
+    """Class for managing the Kratos config configMap."""
 
-    def create_providers(self) -> None:
-        """Create the OIDC Providers configMap."""
-        return self._create_map(self.providers_config_map_name)
+    def __init__(self, manager: ConfigMapManager, client: Client, charm: CharmBase) -> None:
+        super().__init__("kratos-config", manager, client, charm)
 
-    def update_providers(self, data: Dict[str, str]) -> None:
-        """Update the OIDC Providers configMap."""
-        return self._update_map(self.providers_config_map_name, data)
 
-    def get_providers(self) -> Dict:
-        """Get the OIDC Providers configMap."""
-        return self._get_map(self.providers_config_map_name)
+class IdentitySchemaConfigMap(BaseConfigMap):
+    """Class for managing the Identity Schemas configMap."""
 
-    def delete_providers(self) -> None:
-        """Delete the OIDC Providers configMap."""
-        return self._delete_map(self.providers_config_map_name)
+    def __init__(self, manager: ConfigMapManager, client: Client, charm: CharmBase) -> None:
+        super().__init__("identity-schemas", manager, client, charm)
 
-    def create_identity_schemas(self) -> None:
-        """Create the Identity Schemas configMap."""
-        return self._create_map(self.identity_schemas_config_map_name)
 
-    def update_identity_schemas(self, data: Dict[str, str]) -> None:
-        """Update the Identity Schemas configMap."""
-        return self._update_map(self.identity_schemas_config_map_name, data)
+class ProvidersConfigMap(BaseConfigMap):
+    """Class for managing the Providers configMap."""
 
-    def get_identity_schemas(self) -> Dict:
-        """Get the Identity Schemas configMap."""
-        return self._get_map(self.identity_schemas_config_map_name)
-
-    def delete_identity_schemas(self) -> None:
-        """Delete the Identity Schemas configMap."""
-        return self._delete_map(self.identity_schemas_config_map_name)
-
-    def create_kratos_config(self) -> None:
-        """Create the Kratos Config configMap."""
-        return self._create_map(self.kratos_config_map_name)
-
-    def update_kratos_config(self, data: Dict[str, str]) -> None:
-        """Update the Kratos Config configMap."""
-        return self._update_map(self.kratos_config_map_name, data)
-
-    def get_kratos_config(self) -> Dict:
-        """Get the Kratos Config configMap."""
-        return self._get_map(self.kratos_config_map_name)
-
-    def delete_kratos_config(self) -> None:
-        """Delete the Kratos Config configMap."""
-        return self._delete_map(self.kratos_config_map_name)
+    def __init__(self, manager: ConfigMapManager, client: Client, charm: CharmBase) -> None:
+        super().__init__("providers", manager, client, charm)
