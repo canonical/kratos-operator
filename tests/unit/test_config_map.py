@@ -6,88 +6,138 @@ from unittest.mock import MagicMock
 import pytest
 from httpx import Response
 from lightkube import ApiError
+from pytest_mock import MockerFixture
 
 from charm import KratosCharm
-from config_map import ConfigMapHandler
+from config_map import (
+    ConfigMapBase,
+    ConfigMapManager,
+    IdentitySchemaConfigMap,
+    KratosConfigMap,
+    ProvidersConfigMap,
+)
 
 
 @pytest.fixture
-def handler(lk_client: MagicMock) -> ConfigMapHandler:
-    charm = MagicMock(spec=KratosCharm)
-    handler = ConfigMapHandler(lk_client, charm)
-    return handler
+def mocked_charm() -> MagicMock:
+    mock = MagicMock(spec=KratosCharm)
+    mock.model.name = "namespace"
+    return mock
 
 
-def test_create_map_already_exists(lk_client: MagicMock, handler: ConfigMapHandler) -> None:
-    handler._create_map("config")
+def test_create_all(lk_client: MagicMock, mocker: MockerFixture, mocked_charm: MagicMock) -> None:
+    mock = mocker.patch("config_map.ConfigMapBase.create")
+    KratosConfigMap(lk_client, mocked_charm)
+    IdentitySchemaConfigMap(lk_client, mocked_charm)
+
+    ConfigMapManager.create_all()
+
+    assert mock.call_count == 2
+
+
+def test_delete_all(lk_client: MagicMock, mocker: MockerFixture, mocked_charm: MagicMock) -> None:
+    mock = mocker.patch("config_map.ConfigMapBase.delete")
+    KratosConfigMap(lk_client, mocked_charm)
+    IdentitySchemaConfigMap(lk_client, mocked_charm)
+
+    ConfigMapManager.delete_all()
+
+    assert mock.call_count == 2
+
+
+@pytest.mark.parametrize("cls", (KratosConfigMap, IdentitySchemaConfigMap, ProvidersConfigMap))
+def test_config_map_create(
+    lk_client: MagicMock, cls: ConfigMapBase, mocked_charm: MagicMock
+) -> None:
+    resp = Response(status_code=403, json={"message": "Forbidden", "code": 403})
+    lk_client.get.side_effect = ApiError(response=resp)
+    cm = cls(lk_client, mocked_charm)
+
+    cm.create()
+
+    assert lk_client.create.call_args[0][0].metadata.name == cm.name
+
+
+@pytest.mark.parametrize("cls", (KratosConfigMap, IdentitySchemaConfigMap, ProvidersConfigMap))
+def test_create_map_already_exists(
+    lk_client: MagicMock, cls: ConfigMapBase, mocked_charm: MagicMock
+) -> None:
+    cm = cls(lk_client, mocked_charm)
+
+    cm.create()
 
     assert lk_client.get.called
     assert not lk_client.create.called
 
 
-def test_create_map(lk_client: MagicMock, handler: ConfigMapHandler) -> None:
-    resp = Response(status_code=403, json={"message": "Forbidden", "code": 403})
-    lk_client.get.side_effect = ApiError(response=resp)
+@pytest.mark.parametrize("cls", (KratosConfigMap, IdentitySchemaConfigMap, ProvidersConfigMap))
+def test_config_map_update(
+    lk_client: MagicMock, cls: ConfigMapBase, mocked_charm: MagicMock
+) -> None:
+    data = {"a": 1}
+    cm = cls(lk_client, mocked_charm)
 
-    handler._create_map("config")
+    cm.update(data)
 
-    assert lk_client.get.called
-    assert lk_client.create.called
-
-
-def test_update_map(lk_client: MagicMock, handler: ConfigMapHandler) -> None:
-    data = {"data": 1}
-
-    handler._update_map("config", data)
-
-    assert lk_client.get.called
-    assert lk_client.replace.called
     assert lk_client.replace.call_args[0][0].data == data
 
 
-def test_update_map_error(lk_client: MagicMock, handler: ConfigMapHandler) -> None:
+@pytest.mark.parametrize("cls", (KratosConfigMap, IdentitySchemaConfigMap, ProvidersConfigMap))
+def test_update_map_error(
+    lk_client: MagicMock, cls: ConfigMapBase, mocked_charm: MagicMock
+) -> None:
     data = {"data": 1}
     resp = Response(status_code=403, json={"message": "Forbidden", "code": 403})
     lk_client.get.side_effect = ApiError(response=resp)
+    cm = cls(lk_client, mocked_charm)
 
-    handler._update_map("config", data)
+    cm.update(data)
 
     assert lk_client.get.called
     assert not lk_client.replace.called
 
 
-def test_get_map(lk_client: MagicMock, handler: ConfigMapHandler) -> None:
-    data = {"data": 1}
-    lk_client.get.return_value.data = data
+@pytest.mark.parametrize("cls", (KratosConfigMap, IdentitySchemaConfigMap, ProvidersConfigMap))
+def test_config_map_get(lk_client: MagicMock, cls: ConfigMapBase, mocked_charm: MagicMock) -> None:
+    cm = cls(lk_client, mocked_charm)
 
-    d = handler._get_map("config")
+    cm.get()
 
     assert lk_client.get.called
-    assert d == data
 
 
-def test_get_map_error(lk_client: MagicMock, handler: ConfigMapHandler) -> None:
+@pytest.mark.parametrize("cls", (KratosConfigMap, IdentitySchemaConfigMap, ProvidersConfigMap))
+def test_get_map_error(lk_client: MagicMock, cls: ConfigMapBase, mocked_charm: MagicMock) -> None:
     resp = Response(status_code=403, json={"message": "Forbidden", "code": 403})
     lk_client.get.side_effect = ApiError(response=resp)
+    cm = cls(lk_client, mocked_charm)
 
-    d = handler._get_map("config")
+    d = cm.get()
 
     assert lk_client.get.called
     assert d == {}
 
 
-def test_delete_map(lk_client: MagicMock, handler: ConfigMapHandler) -> None:
-    data = {"data": 1}
-    lk_client.delete.return_value.data = data
+@pytest.mark.parametrize("cls", (KratosConfigMap, IdentitySchemaConfigMap, ProvidersConfigMap))
+def test_config_map_delete(
+    lk_client: MagicMock,
+    cls: ConfigMapBase,
+    mocked_charm: MagicMock,
+) -> None:
+    cm = cls(lk_client, mocked_charm)
 
-    handler._delete_map("config")
+    cm.delete()
 
     assert lk_client.delete.called
 
 
-def test_delete_map_error(lk_client: MagicMock, handler: ConfigMapHandler) -> None:
+@pytest.mark.parametrize("cls", (KratosConfigMap, IdentitySchemaConfigMap, ProvidersConfigMap))
+def test_delete_map_error(
+    lk_client: MagicMock, cls: ConfigMapBase, mocked_charm: MagicMock
+) -> None:
     resp = Response(status_code=403, json={"message": "Forbidden", "code": 403})
     lk_client.delete.side_effect = ApiError(response=resp)
+    cm = cls(lk_client, mocked_charm)
 
     with pytest.raises(ValueError):
-        handler._delete_map("config")
+        cm.delete()

@@ -229,9 +229,21 @@ def mocked_run_migration(mocker: MockerFixture) -> MagicMock:
 
 
 @pytest.fixture(autouse=True)
-def mocked_config_map_handler(mocker: MockerFixture) -> MagicMock:
-    mock = mocker.patch("charm.ConfigMapHandler", autospec=True)
-    mock.return_value.get_identity_schemas.return_value = {}
+def mocked_kratos_configmap(mocker: MockerFixture) -> MagicMock:
+    mock = mocker.patch("charm.KratosConfigMap", autospec=True)
+    return mock.return_value
+
+
+@pytest.fixture(autouse=True)
+def mocked_schemas_configmap(mocker: MockerFixture) -> MagicMock:
+    mock = mocker.patch("charm.IdentitySchemaConfigMap", autospec=True)
+    mock.return_value.get.return_value = {}
+    return mock.return_value
+
+
+@pytest.fixture(autouse=True)
+def mocked_providers_configmap(mocker: MockerFixture) -> MagicMock:
+    mock = mocker.patch("charm.ProvidersConfigMap", autospec=True)
     return mock.return_value
 
 

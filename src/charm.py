@@ -75,7 +75,8 @@ from ops.model import (
 from ops.pebble import ChangeError, Error, ExecError, Layer
 from tenacity import before_log, retry, stop_after_attempt, wait_exponential
 
-from config_map import ConfigMapHandler
+import config_map
+from config_map import IdentitySchemaConfigMap, KratosConfigMap, ProvidersConfigMap
 from kratos import KratosAPI
 from utils import dict_to_action_output, normalise_url
 
@@ -125,7 +126,9 @@ class KratosCharm(CharmBase):
         self.kratos = KratosAPI(
             f"http://127.0.0.1:{KRATOS_ADMIN_PORT}", self._container, str(self._config_file_path)
         )
-        self.configmap_handler = ConfigMapHandler(self.client, self)
+        self.kratos_configmap = KratosConfigMap(self.client, self)
+        self.schemas_configmap = IdentitySchemaConfigMap(self.client, self)
+        self.providers_configmap = ProvidersConfigMap(self.client, self)
         self.service_patcher = KubernetesServicePatch(
             self, [("admin", KRATOS_ADMIN_PORT), ("public", KRATOS_PUBLIC_PORT)]
         )
@@ -377,7 +380,7 @@ class KratosCharm(CharmBase):
     )
     def _update_config(self) -> None:
         conf = self._render_conf_file()
-        self.configmap_handler.update_kratos_config({"kratos.yaml": conf})
+        self.kratos_configmap.update({"kratos.yaml": conf})
 
     def _get_hydra_endpoint_info(self) -> Optional[str]:
         oauth2_provider_url = None
@@ -433,7 +436,7 @@ class KratosCharm(CharmBase):
         return None
 
     def _get_configmap_identity_schema_config(self) -> Optional[Tuple[str, Dict]]:
-        identity_schemas = self.configmap_handler.get_identity_schemas()
+        identity_schemas = self.schemas_configmap.get()
         if not identity_schemas:
             return None
 
@@ -492,7 +495,7 @@ class KratosCharm(CharmBase):
 
     def _get_oidc_providers(self) -> Optional[List]:
         providers = self.external_provider.get_providers()
-        if p := self.configmap_handler.get_providers():
+        if p := self.providers_configmap.get():
             providers.extend(p.values())
         return providers
 
@@ -635,7 +638,7 @@ class KratosCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
 
-        self.configmap_handler.create_all_configmaps()
+        config_map.create_all()
 
     def _on_leader_elected(self, event: LeaderElectedEvent) -> None:
         if not self.unit.is_leader():
@@ -667,7 +670,7 @@ class KratosCharm(CharmBase):
         if not self.unit.is_leader():
             return
 
-        self.configmap_handler.delete_all_configmaps()
+        config_map.delete_all()
 
     def _get_tracing_endpoint_info(self) -> str:
         if not self._tracing_ready:
