@@ -5,4 +5,4 @@ lightkube-models
 Jinja2
 jsonschema
 requests
-backoff==2.2.1
+tenacity==8.2.2

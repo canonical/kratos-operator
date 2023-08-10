@@ -15,7 +15,6 @@ from pathlib import Path
 from secrets import token_hex
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
-import backoff
 import requests
 from charms.data_platform_libs.v0.data_interfaces import (
     DatabaseCreatedEvent,
@@ -48,7 +47,7 @@ from charms.traefik_k8s.v2.ingress import (
     IngressPerAppRevokedEvent,
 )
 from jinja2 import Template
-from lightkube import ApiError, Client
+from lightkube import Client
 from lightkube.resources.apps_v1 import StatefulSet
 from ops.charm import (
     ActionEvent,
@@ -74,6 +73,7 @@ from ops.model import (
     WaitingStatus,
 )
 from ops.pebble import ChangeError, Error, ExecError, Layer
+from tenacity import before_log, retry, stop_after_attempt, wait_exponential
 
 from config_map import ConfigMapHandler
 from kratos import KratosAPI
@@ -369,7 +369,12 @@ class KratosCharm(CharmBase):
         )
         return rendered
 
-    @backoff.on_exception(backoff.expo, ApiError, max_tries=5, logger=logger)
+    @retry(
+        wait=wait_exponential(multiplier=3, min=1, max=10),
+        stop=stop_after_attempt(5),
+        reraise=True,
+        before=before_log(logger, logging.INFO),
+    )
     def _update_config(self) -> None:
         conf = self._render_conf_file()
         self.configmap_handler.update_kratos_config({"kratos.yaml": conf})
