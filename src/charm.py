@@ -543,9 +543,6 @@ class KratosCharm(CharmBase):
         return juju_secret
 
     def _migration_is_needed(self) -> Optional[bool]:
-        if not self._peers:
-            return None
-
         return self._get_peer_data(PEER_KEY_DB_MIGRATE_VERSION) != self.kratos.get_version()
 
     def _handle_status_update_config(self, event: HookEvent) -> None:
@@ -567,6 +564,11 @@ class KratosCharm(CharmBase):
 
         if not self.database.is_resource_created():
             self.unit.status = WaitingStatus("Waiting for database creation")
+            event.defer()
+            return
+
+        if not self._peers:
+            self.unit.status = WaitingStatus("Waiting for peer relation")
             event.defer()
             return
 

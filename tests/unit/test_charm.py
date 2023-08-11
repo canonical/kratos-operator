@@ -236,6 +236,7 @@ def test_on_pebble_ready_correct_plan(
     harness: Harness, mocked_migration_is_needed: MagicMock, mocked_get_secret: MagicMock
 ) -> None:
     container = harness.model.unit.get_container(CONTAINER_NAME)
+    setup_peer_relation(harness)
     setup_postgres_relation(harness)
     harness.charm.on.kratos_pebble_ready.emit(container)
 
@@ -261,6 +262,7 @@ def test_on_pebble_ready_correct_plan_with_dev_flag(
 ) -> None:
     harness.update_config({"dev": True})
     container = harness.model.unit.get_container(CONTAINER_NAME)
+    setup_peer_relation(harness)
     setup_postgres_relation(harness)
     harness.charm.on.kratos_pebble_ready.emit(container)
 
@@ -776,8 +778,9 @@ def test_on_client_config_changed_with_ingress(
 
 
 def test_on_client_config_changed_with_hydra(
-    harness: Harness, mocked_kratos_configmap: MagicMock
+    harness: Harness, mocked_kratos_configmap: MagicMock, mocked_migration_is_needed: MagicMock
 ) -> None:
+    setup_peer_relation(harness)
     setup_postgres_relation(harness)
     (_, login_databag) = setup_login_ui_relation(harness)
 
@@ -929,8 +932,9 @@ def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(
 
 
 def test_on_client_config_changed_without_login_ui_endpoints(
-    harness: Harness, mocked_kratos_configmap: MagicMock
+    harness: Harness, mocked_kratos_configmap: MagicMock, mocked_migration_is_needed: MagicMock
 ) -> None:
+    setup_peer_relation(harness)
     setup_postgres_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
