@@ -40,7 +40,7 @@ from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
 from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer, PromtailDigestError
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
-from charms.tempo_k8s.v0.tracing import TracingEndpointProvider
+from charms.tempo_k8s.v0.tracing import TracingEndpointRequirer
 from charms.traefik_k8s.v1.ingress import (
     IngressPerAppReadyEvent,
     IngressPerAppRequirer,
@@ -173,7 +173,10 @@ class KratosCharm(CharmBase):
             relation_name=self._loki_push_api_relation_name,
             container_name=self._container_name,
         )
-        self.tracing = TracingEndpointProvider(self)
+        self.tracing = TracingEndpointRequirer(
+            self,
+            relation_name=self._tracing_relation_name,
+        )
 
         self._grafana_dashboards = GrafanaDashboardProvider(
             self, relation_name=self._grafana_dashboard_relation_name
@@ -215,11 +218,9 @@ class KratosCharm(CharmBase):
             self.loki_consumer.on.promtail_digest_error,
             self._promtail_error,
         )
-        # TODO @shipperizer figure out why self.tracing.on.endpoint_changed
-        # doesn't seem to be working
-        self.framework.observe(
-            self.on[self._tracing_relation_name].relation_changed, self._on_config_changed
-        )
+
+        self.framework.observe(self.tracing.on.endpoint_changed, self._on_config_changed)
+        self.framework.observe(self.tracing.on.endpoint_removed, self._on_config_changed)
 
     @property
     def _kratos_service_params(self) -> str:
@@ -242,6 +243,10 @@ class KratosCharm(CharmBase):
         return service.is_running()
 
     @property
+    def _tracing_ready(self) -> bool:
+        return self.tracing.is_ready()
+
+    @property
     def _pebble_layer(self) -> Layer:
         container = {
             "override": "replace",
@@ -254,7 +259,7 @@ class KratosCharm(CharmBase):
             ),
         }
 
-        if self.model.relations[self._tracing_relation_name]:
+        if self._tracing_ready:
             container["environment"] = {
                 "TRACING_PROVIDER": "otel",
                 "TRACING_PROVIDERS_OTLP_SERVER_URL": self._get_tracing_endpoint_info(),
@@ -541,7 +546,7 @@ class KratosCharm(CharmBase):
         self._handle_status_update_config(event)
 
     def _get_tracing_endpoint_info(self) -> str:
-        if not self.model.relations[self._tracing_relation_name]:
+        if not self._tracing_ready:
             return ""
 
         return self.tracing.otlp_http_endpoint() or ""
