@@ -1369,11 +1369,14 @@ def test_layer_updated_with_tracing_endpoint_info(harness: Harness) -> None:
     harness.set_leader(True)
     harness.set_can_connect(CONTAINER_NAME, True)
     harness.charm.on.kratos_pebble_ready.emit(CONTAINER_NAME)
-    tracing_relation_id = setup_tempo_relation(harness)
+    setup_tempo_relation(harness)
 
     pebble_env = harness.charm._pebble_layer.to_dict()["services"][CONTAINER_NAME]["environment"]
 
-    assert pebble_env["TRACING_PROVIDERS_OTLP_SERVER_URL"] == "tempo-k8s-0.tempo-k8s-endpoints.namespace.svc.cluster.local:4318"
+    assert (
+        pebble_env["TRACING_PROVIDERS_OTLP_SERVER_URL"]
+        == "tempo-k8s-0.tempo-k8s-endpoints.namespace.svc.cluster.local:4318"
+    )
     assert pebble_env["TRACING_PROVIDERS_OTLP_INSECURE"]
     assert pebble_env["TRACING_PROVIDERS_OTLP_SAMPLING_SAMPLING_RATIO"] == 1
     assert pebble_env["TRACING_PROVIDER"] == "otel"
