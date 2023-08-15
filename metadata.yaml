@@ -32,6 +32,11 @@ requires:
     limit: 1
   logging:
     interface: loki_push_api
+  tracing:
+    interface: tracing
+    limit: 1
+    description: |
+      Provides traces to COS Tempo instance
 peers:
   kratos-peers:
     interface: kratos-peers
@@ -48,8 +53,3 @@ provides:
     description: |
       Forwards the built-in grafana dashboard(s) for monitoring kratos.
     interface: grafana_dashboard
-  tracing:
-    interface: tracing
-    limit: 1
-    description: |
-      Provides traces to COS Tempo instance
