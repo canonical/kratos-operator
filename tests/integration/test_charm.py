@@ -14,9 +14,9 @@ from pytest_operator.plugin import OpsTest
 logger = logging.getLogger(__name__)
 
 METADATA = yaml.safe_load(Path("./metadata.yaml").read_text())
-APP_NAME = METADATA["name"]
-POSTGRES = "postgresql-k8s"
-TRAEFIK = "traefik-k8s"
+KRATOS_APP = METADATA["name"]
+DB_APP = "postgresql-k8s"
+TRAEFIK_CHARM = "traefik-k8s"
 TRAEFIK_ADMIN_APP = "traefik-admin"
 TRAEFIK_PUBLIC_APP = "traefik-public"
 ADMIN_MAIL = "admin@adminmail.com"
@@ -49,6 +49,7 @@ async def get_app_address(ops_test: OpsTest, app_name: str) -> str:
     return status["applications"][app_name]["public-address"]
 
 
+@pytest.mark.skip_if_deployed
 @pytest.mark.abort_on_fail
 async def test_build_and_deploy(ops_test: OpsTest) -> None:
     """Build the charm-under-test and deploy it.
@@ -56,40 +57,44 @@ async def test_build_and_deploy(ops_test: OpsTest) -> None:
     Assert on the unit status before any relations/configurations take place.
     """
     await ops_test.model.deploy(
-        POSTGRES,
+        "postgresql-k8s",
         channel="14/stable",
         trust=True,
     )
     charm = await ops_test.build_charm(".")
     resources = {"oci-image": METADATA["resources"]["oci-image"]["upstream-source"]}
     await ops_test.model.deploy(
-        charm, resources=resources, application_name=APP_NAME, trust=True, series="jammy"
+        charm,
+        resources=resources,
+        application_name=KRATOS_APP,
+        trust=True,
+        series="jammy",
     )
-    await ops_test.model.add_relation(APP_NAME, POSTGRES)
+    await ops_test.model.integrate(KRATOS_APP, DB_APP)
 
     await ops_test.model.wait_for_idle(
-        apps=[APP_NAME, POSTGRES],
+        apps=[KRATOS_APP, DB_APP],
         status="active",
-        raise_on_blocked=True,
+        raise_on_blocked=False,
         timeout=1000,
     )
 
 
 async def test_ingress_relation(ops_test: OpsTest) -> None:
     await ops_test.model.deploy(
-        TRAEFIK,
+        TRAEFIK_CHARM,
         application_name=TRAEFIK_PUBLIC_APP,
         channel="latest/edge",
         config={"external_hostname": "some_hostname"},
     )
     await ops_test.model.deploy(
-        TRAEFIK,
+        TRAEFIK_CHARM,
         application_name=TRAEFIK_ADMIN_APP,
         channel="latest/edge",
         config={"external_hostname": "some_hostname"},
     )
-    await ops_test.model.add_relation(f"{APP_NAME}:admin-ingress", TRAEFIK_ADMIN_APP)
-    await ops_test.model.add_relation(f"{APP_NAME}:public-ingress", TRAEFIK_PUBLIC_APP)
+    await ops_test.model.integrate(f"{KRATOS_APP}:admin-ingress", TRAEFIK_ADMIN_APP)
+    await ops_test.model.integrate(f"{KRATOS_APP}:public-ingress", TRAEFIK_PUBLIC_APP)
 
     await ops_test.model.wait_for_idle(
         apps=[TRAEFIK_PUBLIC_APP, TRAEFIK_ADMIN_APP],
@@ -104,7 +109,7 @@ async def test_has_public_ingress(ops_test: OpsTest) -> None:
     public_address = await get_unit_address(ops_test, TRAEFIK_PUBLIC_APP, 0)
 
     resp = requests.get(
-        f"http://{public_address}/{ops_test.model.name}-{APP_NAME}/.well-known/ory/webauthn.js"
+        f"http://{public_address}/{ops_test.model.name}-{KRATOS_APP}/.well-known/ory/webauthn.js"
     )
 
     assert resp.status_code == 200
@@ -115,7 +120,7 @@ async def test_has_admin_ingress(ops_test: OpsTest) -> None:
     admin_address = await get_unit_address(ops_test, TRAEFIK_ADMIN_APP, 0)
 
     resp = requests.get(
-        f"http://{admin_address}/{ops_test.model.name}-{APP_NAME}/admin/identities"
+        f"http://{admin_address}/{ops_test.model.name}-{KRATOS_APP}/admin/identities"
     )
 
     assert resp.status_code == 200
@@ -124,7 +129,7 @@ async def test_has_admin_ingress(ops_test: OpsTest) -> None:
 @pytest.mark.abort_on_fail
 async def test_create_admin_account(ops_test: OpsTest) -> None:
     action = (
-        await ops_test.model.applications[APP_NAME]
+        await ops_test.model.applications[KRATOS_APP]
         .units[0]
         .run_action(
             "create-admin-account",
@@ -145,7 +150,7 @@ async def test_create_admin_account(ops_test: OpsTest) -> None:
 
 async def test_get_identity(ops_test: OpsTest) -> None:
     action = (
-        await ops_test.model.applications[APP_NAME]
+        await ops_test.model.applications[KRATOS_APP]
         .units[0]
         .run_action(
             "get-identity",
@@ -163,7 +168,7 @@ async def test_get_identity(ops_test: OpsTest) -> None:
 )
 async def test_reset_password(ops_test: OpsTest) -> None:
     action = (
-        await ops_test.model.applications[APP_NAME]
+        await ops_test.model.applications[KRATOS_APP]
         .units[0]
         .run_action(
             "reset-password",
@@ -178,7 +183,7 @@ async def test_reset_password(ops_test: OpsTest) -> None:
 
 async def test_delete_identity(ops_test: OpsTest) -> None:
     action = (
-        await ops_test.model.applications[APP_NAME]
+        await ops_test.model.applications[KRATOS_APP]
         .units[0]
         .run_action(
             "get-identity",
@@ -189,7 +194,7 @@ async def test_delete_identity(ops_test: OpsTest) -> None:
     res = (await action.wait()).results
 
     action = (
-        await ops_test.model.applications[APP_NAME]
+        await ops_test.model.applications[KRATOS_APP]
         .units[0]
         .run_action(
             "delete-identity",
@@ -202,7 +207,7 @@ async def test_delete_identity(ops_test: OpsTest) -> None:
     res = (await action.wait()).results
 
     action = (
-        await ops_test.model.applications[APP_NAME]
+        await ops_test.model.applications[KRATOS_APP]
         .units[0]
         .run_action(
             "get-identity",
@@ -216,12 +221,12 @@ async def test_delete_identity(ops_test: OpsTest) -> None:
 
 async def test_identity_schemas_config(ops_test: OpsTest) -> None:
     public_address = await get_unit_address(ops_test, TRAEFIK_PUBLIC_APP, 0)
-    resp = requests.get(f"http://{public_address}/{ops_test.model.name}-{APP_NAME}/schemas")
+    resp = requests.get(f"http://{public_address}/{ops_test.model.name}-{KRATOS_APP}/schemas")
 
     original_resp = resp.json()
 
     schema_id = "user_v1"
-    await ops_test.model.applications[APP_NAME].set_config(
+    await ops_test.model.applications[KRATOS_APP].set_config(
         dict(
             identity_schemas=json.dumps({schema_id: IDENTITY_SCHEMA}),
             default_identity_schema_id=schema_id,
@@ -229,18 +234,18 @@ async def test_identity_schemas_config(ops_test: OpsTest) -> None:
     )
 
     await ops_test.model.wait_for_idle(
-        apps=[APP_NAME],
+        apps=[KRATOS_APP],
         status="active",
         raise_on_blocked=True,
         timeout=1000,
     )
 
-    resp = requests.get(f"http://{public_address}/{ops_test.model.name}-{APP_NAME}/schemas")
+    resp = requests.get(f"http://{public_address}/{ops_test.model.name}-{KRATOS_APP}/schemas")
 
     assert len(resp.json()) == 1
     assert resp.json()[0]["id"] == schema_id
 
-    await ops_test.model.applications[APP_NAME].set_config(
+    await ops_test.model.applications[KRATOS_APP].set_config(
         dict(
             identity_schemas="",
             default_identity_schema_id="",
@@ -248,25 +253,25 @@ async def test_identity_schemas_config(ops_test: OpsTest) -> None:
     )
 
     await ops_test.model.wait_for_idle(
-        apps=[APP_NAME],
+        apps=[KRATOS_APP],
         status="active",
         raise_on_blocked=True,
         timeout=1000,
     )
 
-    resp = requests.get(f"http://{public_address}/{ops_test.model.name}-{APP_NAME}/schemas")
+    resp = requests.get(f"http://{public_address}/{ops_test.model.name}-{KRATOS_APP}/schemas")
 
     assert original_resp == resp.json()
 
 
 async def test_kratos_scale_up(ops_test: OpsTest) -> None:
     """Check that kratos works after it is scaled up."""
-    app = ops_test.model.applications[APP_NAME]
+    app = ops_test.model.applications[KRATOS_APP]
 
     await app.scale(3)
 
     await ops_test.model.wait_for_idle(
-        apps=[APP_NAME],
+        apps=[KRATOS_APP],
         status="active",
         raise_on_blocked=True,
         timeout=1000,
