@@ -15,7 +15,7 @@ To use the library from the requirer side:
 In the `metadata.yaml` of the charm, add the following:
 ```yaml
 requires:
-  endpoint-info:
+  hydra-endpoint-info:
     interface: hydra_endpoints
     limit: 1
 ```
@@ -52,9 +52,9 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 4
+LIBPATCH = 5
 
-RELATION_NAME = "endpoint-info"
+RELATION_NAME = "hydra-endpoint-info"
 INTERFACE_NAME = "hydra_endpoints"
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ class HydraEndpointsProviderEvents(ObjectEvents):
 
 
 class HydraEndpointsProvider(Object):
-    """Provider side of the endpoint-info relation."""
+    """Provider side of the hydra-endpoint-info relation."""
 
     on = HydraEndpointsProviderEvents()
 
@@ -93,7 +93,7 @@ class HydraEndpointsProvider(Object):
         if not self._charm.unit.is_leader():
             return
 
-        relations = self.model.relations[RELATION_NAME]
+        relations = self.model.relations[self._relation_name]
         for relation in relations:
             relation.data[self._charm.app].update(
                 {
@@ -113,7 +113,7 @@ class HydraEndpointsRelationMissingError(HydraEndpointsRelationError):
     """Raised when the relation is missing."""
 
     def __init__(self) -> None:
-        self.message = "Missing endpoint-info relation with hydra"
+        self.message = "Missing hydra-endpoint-info relation with hydra"
         super().__init__(self.message)
 
 
@@ -126,7 +126,7 @@ class HydraEndpointsRelationDataMissingError(HydraEndpointsRelationError):
 
 
 class HydraEndpointsRequirer(Object):
-    """Requirer side of the endpoint-info relation."""
+    """Requirer side of the hydra-endpoint-info relation."""
 
     def __init__(self, charm: CharmBase, relation_name: str = RELATION_NAME) -> None:
         super().__init__(charm, relation_name)
@@ -143,7 +143,7 @@ class HydraEndpointsRequirer(Object):
 
         if "admin_endpoint" not in data:
             raise HydraEndpointsRelationDataMissingError(
-                "Missing admin endpoint in endpoint-info relation data"
+                "Missing admin endpoint in hydra-endpoint-info relation data"
             )
 
         return {
