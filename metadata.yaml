@@ -24,7 +24,7 @@ requires:
     interface: ingress
   kratos-external-idp:
     interface: external_provider
-  endpoint-info:
+  hydra-endpoint-info:
     interface: hydra_endpoints
     limit: 1
   ui-endpoint-info:

@@ -78,7 +78,7 @@ def setup_peer_relation(harness: Harness) -> None:
 
 
 def setup_hydra_relation(harness: Harness) -> int:
-    relation_id = harness.add_relation("endpoint-info", "hydra")
+    relation_id = harness.add_relation("hydra-endpoint-info", "hydra")
     harness.add_relation_unit(relation_id, "hydra/0")
     harness.update_relation_data(
         relation_id,
@@ -828,7 +828,7 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harn
     harness.charm.on.leader_elected.emit()
     harness.charm.on.kratos_pebble_ready.emit(container)
 
-    relation_id = harness.add_relation("endpoint-info", "hydra")
+    relation_id = harness.add_relation("hydra-endpoint-info", "hydra")
     harness.add_relation_unit(relation_id, "hydra/0")
 
     expected_config = {
@@ -965,7 +965,7 @@ def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
     harness.charm.on.leader_elected.emit()
     harness.charm.on.kratos_pebble_ready.emit(container)
 
-    relation_id = harness.add_relation("endpoint-info", "hydra")
+    relation_id = harness.add_relation("hydra-endpoint-info", "hydra")
     harness.add_relation_unit(relation_id, "hydra/0")
 
     login_ui_relation_id = harness.add_relation(
