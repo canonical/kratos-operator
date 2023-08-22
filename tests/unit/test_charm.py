@@ -96,12 +96,12 @@ def setup_login_ui_relation(harness: Harness) -> tuple[int, dict]:
     harness.add_relation_unit(relation_id, "identity-platform-login-ui-operator/0")
     endpoint = f"https://public/{harness.model.name}-identity-platform-login-ui-operator"
     databag = {
-        "consent_url": f"{endpoint}/consent",
-        "error_url": f"{endpoint}/error",
-        "index_url": f"{endpoint}/index",
-        "login_url": f"{endpoint}/login",
-        "oidc_error_url": f"{endpoint}/oidc_error",
-        "registration_url": f"{endpoint}/registration",
+        "consent_url": f"{endpoint}/ui/consent",
+        "error_url": f"{endpoint}/ui/error",
+        "index_url": f"{endpoint}/ui/index",
+        "login_url": f"{endpoint}/ui/login",
+        "oidc_error_url": f"{endpoint}/ui/oidc_error",
+        "registration_url": f"{endpoint}/ui/registration",
         "default_url": endpoint,
     }
     harness.update_relation_data(
