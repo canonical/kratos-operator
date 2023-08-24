@@ -104,7 +104,7 @@ class KratosCharm(CharmBase):
         self._mappers_local_dir_path = Path("claim_mappers")
         self._db_name = f"{self.model.name}_{self.app.name}"
         self._db_relation_name = "pg-database"
-        self._hydra_relation_name = "endpoint-info"
+        self._hydra_relation_name = "hydra-endpoint-info"
         self._login_ui_relation_name = "ui-endpoint-info"
         self._prometheus_scrape_relation_name = "metrics-endpoint"
         self._loki_push_api_relation_name = "logging"
@@ -367,7 +367,7 @@ class KratosCharm(CharmBase):
                 hydra_endpoints = self.hydra_endpoints.get_hydra_endpoints()
                 oauth2_provider_url = hydra_endpoints["admin_endpoint"]
             except HydraEndpointsRelationDataMissingError:
-                logger.info("No hydra endpoint-info relation data found")
+                logger.info("No hydra-endpoint-info relation data found")
                 return None
 
         return oauth2_provider_url
