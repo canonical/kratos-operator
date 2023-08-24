@@ -5,7 +5,7 @@
 """Utility functions for the Kratos charm."""
 
 from typing import Dict
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse
 
 
 def dict_to_action_output(d: Dict) -> Dict:
@@ -29,7 +29,7 @@ def dict_to_action_output(d: Dict) -> Dict:
 
 
 def normalise_url(url: str) -> str:
-    """Convert a URL to a more user friendly HTTPS URL.
+    """Convert a URL to a more user-friendly HTTPS URL.
 
     The user will be redirected to this URL, we need to use the https prefix
     in order to be able to set cookies (secure attribute is set). Also we remove
@@ -49,9 +49,9 @@ def normalise_url(url: str) -> str:
     This is a hack and should be removed once traefik provides a way for us to
     request the https URL.
     """
-    p = urlparse(url)
+    parsed_url = urlparse(url)
 
-    p = p._replace(scheme="https")
-    p = p._replace(netloc=p.netloc.rsplit(":", 1)[0])
+    parsed_url = parsed_url._replace(scheme="https")
+    parsed_url = parsed_url._replace(netloc=parsed_url.netloc.rsplit(":", 1)[0])
 
-    return urlunparse(p)
+    return parsed_url.geturl()

@@ -286,8 +286,14 @@ class KratosCharm(CharmBase):
         return Layer(pebble_layer)
 
     @property
-    def _domain_url(self) -> Optional[str]:
-        return normalise_url(self.public_ingress.url) if self.public_ingress.is_ready() else None
+    def _public_url(self) -> Optional[str]:
+        url = self.public_ingress.url
+        return normalise_url(url) if url else None
+
+    @property
+    def _admin_url(self) -> Optional[str]:
+        url = self.admin_ingress.url
+        return normalise_url(url) if url else None
 
     @property
     def _log_level(self) -> str:
@@ -323,7 +329,7 @@ class KratosCharm(CharmBase):
             allowed_return_urls=[login_ui_url] if login_ui_url else [],
             identity_schemas=schemas,
             default_identity_schema_id=default_schema_id,
-            public_base_url=self._domain_url,
+            public_base_url=self._public_url,
             login_ui_url=login_ui_url,
             error_ui_url=self._get_login_ui_endpoint_info("error_url"),
             oidc_providers=self.external_provider.get_providers(),
@@ -555,14 +561,17 @@ class KratosCharm(CharmBase):
         logger.info("Sending endpoints info")
 
         admin_endpoint = (
-            self.admin_ingress.url
-            if self.admin_ingress.is_ready()
-            else f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
+            self._admin_url
+            or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
         )
         public_endpoint = (
-            self.public_ingress.url
-            if self.public_ingress.is_ready()
-            else f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
+            self._public_url
+            or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
+        )
+
+        admin_endpoint, public_endpoint = (
+            admin_endpoint.replace("https", "http"),
+            public_endpoint.replace("https", "http"),
         )
         self.endpoints_provider.send_endpoint_relation_data(admin_endpoint, public_endpoint)
 
@@ -644,8 +653,8 @@ class KratosCharm(CharmBase):
         self._update_kratos_endpoints_relation_data(event)
 
     def _on_client_config_changed(self, event: ClientConfigChangedEvent) -> None:
-        domain_url = self._domain_url
-        if domain_url is None:
+        public_url = self._public_url
+        if public_url is None:
             self.unit.status = BlockedStatus(
                 "Cannot add external provider without an external hostname. Please "
                 "provide an ingress relation or an external_url config."
@@ -661,7 +670,7 @@ class KratosCharm(CharmBase):
             self.unit.status = ActiveStatus()
 
             self.external_provider.set_relation_registered_provider(
-                join(domain_url, f"self-service/methods/oidc/callback/{event.provider_id}"),
+                join(public_url, f"self-service/methods/oidc/callback/{event.provider_id}"),
                 event.provider_id,
                 event.relation_id,
             )
