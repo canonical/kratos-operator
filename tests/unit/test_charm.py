@@ -345,6 +345,7 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness: Ha
                 "login": {
                     "ui_url": login_databag["login_url"],
                 },
+                "registration": None,
             },
         },
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
@@ -699,6 +700,17 @@ def test_on_client_config_changed_with_ingress(
                 "login": {
                     "ui_url": login_databag["login_url"],
                 },
+                "registration": {
+                    "after": {
+                        "oidc": {
+                            "hooks": [
+                                {
+                                    "hook": "session",
+                                },
+                            ],
+                        },
+                    },
+                },
             },
             "methods": {
                 "password": {
@@ -782,6 +794,7 @@ def test_on_client_config_changed_with_hydra(harness: Harness) -> None:
                 "login": {
                     "ui_url": login_databag["login_url"],
                 },
+                "registration": None,
             },
         },
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
@@ -842,6 +855,7 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harn
                 "login": {
                     "ui_url": login_databag["login_url"],
                 },
+                "registration": None,
             },
         },
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",

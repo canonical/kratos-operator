@@ -27,6 +27,13 @@ selfservice:
         login:
             ui_url: {{ login_ui_url }}
         {%- endif %}
+        registration:
+            {%- if oidc_providers %}
+            after:
+                oidc:
+                    hooks:
+                    - hook: session
+            {%- endif %}
     {%- endif %}
     {%- if oidc_providers %}
     methods:

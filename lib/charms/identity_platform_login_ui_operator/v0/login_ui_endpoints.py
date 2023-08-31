@@ -147,6 +147,14 @@ class LoginUIEndpointsRelationMissingError(LoginUIEndpointsRelationError):
         super().__init__(self.message)
 
 
+class LoginUIEndpointsRelationDataMissingError(LoginUIEndpointsRelationError):
+    """Raised when information is missing from the relation."""
+
+    def __init__(self, message: str) -> None:
+        self.message = message
+        super().__init__(self.message)
+
+
 class LoginUIEndpointsRequirer(Object):
     """Requirer side of the ui-endpoint-info relation."""
 
@@ -170,5 +178,10 @@ class LoginUIEndpointsRequirer(Object):
             raise LoginUIEndpointsRelationMissingError()
 
         ui_endpoint_relation_data = ui_endpoint_relation.data[ui_endpoint_relation.app]
+
+        if any(not ui_endpoint_relation_data.get(k := key) for key in RELATION_KEYS):
+            raise LoginUIEndpointsRelationDataMissingError(
+                f"Missing endpoint {k} in ui-endpoint-info relation data"
+            )
 
         return ui_endpoint_relation_data
