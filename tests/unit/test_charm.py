@@ -646,19 +646,20 @@ def test_on_config_changed_when_pebble_is_ready(
     assert isinstance(harness.charm.unit.status, ActiveStatus)
 
 
-@pytest.mark.parametrize("api_type,port", [("admin", "4434"), ("public", "4433")])
+@pytest.mark.parametrize("api_type,port", [("admin", 4434), ("public", 4433)])
 def test_ingress_relation_created(
-    harness: Harness, mocked_fqdn: MagicMock, api_type: str, port: str
+    harness: Harness, mocked_fqdn: MagicMock, api_type: str, port: int
 ) -> None:
     relation_id = setup_ingress_relation(harness, api_type)
     app_data = harness.get_relation_data(relation_id, harness.charm.app)
 
     assert app_data == {
-        "host": mocked_fqdn.return_value,
-        "model": harness.model.name,
-        "name": "kratos",
-        "port": port,
-        "strip-prefix": "true",
+        "model": json.dumps(harness.model.name),
+        "name": json.dumps("kratos"),
+        "port": json.dumps(port),
+        "redirect-https": json.dumps(False),
+        "scheme": json.dumps("http"),
+        "strip-prefix": json.dumps(True),
     }
 
 

@@ -41,7 +41,7 @@ from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer, PromtailDigestErr
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.tempo_k8s.v0.tracing import TracingEndpointRequirer
-from charms.traefik_k8s.v1.ingress import (
+from charms.traefik_k8s.v2.ingress import (
     IngressPerAppReadyEvent,
     IngressPerAppRequirer,
     IngressPerAppRevokedEvent,
@@ -125,12 +125,14 @@ class KratosCharm(CharmBase):
             relation_name="admin-ingress",
             port=KRATOS_ADMIN_PORT,
             strip_prefix=True,
+            redirect_https=False,
         )
         self.public_ingress = IngressPerAppRequirer(
             self,
             relation_name="public-ingress",
             port=KRATOS_PUBLIC_PORT,
             strip_prefix=True,
+            redirect_https=False,
         )
 
         self.database = DatabaseRequires(

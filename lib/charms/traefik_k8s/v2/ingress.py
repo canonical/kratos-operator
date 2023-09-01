@@ -1,4 +1,4 @@
-# Copyright 2022 Canonical Ltd.
+# Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 r"""# Interface Library for ingress.
@@ -28,7 +28,7 @@ requires:
 Then, to initialise the library:
 
 ```python
-from charms.traefik_k8s.v1.ingress import (IngressPerAppRequirer,
+from charms.traefik_k8s.v2.ingress import (IngressPerAppRequirer,
   IngressPerAppReadyEvent, IngressPerAppRevokedEvent)
 
 class SomeCharm(CharmBase):
@@ -50,105 +50,173 @@ class SomeCharm(CharmBase):
     def _on_ingress_revoked(self, event: IngressPerAppRevokedEvent):
         logger.info("This app no longer has ingress")
 """
-
+import json
 import logging
 import socket
 import typing
-from typing import Any, Dict, Optional, Tuple, Union
+from dataclasses import dataclass
+from typing import (
+    Any,
+    Dict,
+    List,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
-import yaml
+import pydantic
 from ops.charm import CharmBase, RelationBrokenEvent, RelationEvent
 from ops.framework import EventSource, Object, ObjectEvents, StoredState
-from ops.model import ModelError, Relation
+from ops.model import ModelError, Relation, Unit
+from pydantic import AnyHttpUrl, BaseModel, Field, validator
 
 # The unique Charmhub library identifier, never change it
 LIBID = "e6de2a5cd5b34422a204668f3b8f90d2"
 
 # Increment this major API version when introducing breaking changes
-LIBAPI = 1
+LIBAPI = 2
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 15
+LIBPATCH = 4
+
+PYDEPS = ["pydantic<2.0"]
 
 DEFAULT_RELATION_NAME = "ingress"
 RELATION_INTERFACE = "ingress"
 
 log = logging.getLogger(__name__)
+BUILTIN_JUJU_KEYS = {"ingress-address", "private-address", "egress-subnets"}
 
-try:
-    import jsonschema
 
-    DO_VALIDATION = True
-except ModuleNotFoundError:
-    log.warning(
-        "The `ingress` library needs the `jsonschema` package to be able "
-        "to do runtime data validation; without it, it will still work but validation "
-        "will be disabled. \n"
-        "It is recommended to add `jsonschema` to the 'requirements.txt' of your charm, "
-        "which will enable this feature."
+class DatabagModel(BaseModel):
+    """Base databag model."""
+
+    class Config:
+        """Pydantic config."""
+
+        allow_population_by_field_name = True
+        """Allow instantiating this class by field name (instead of forcing alias)."""
+
+    _NEST_UNDER = None
+
+    @classmethod
+    def load(cls, databag: MutableMapping):
+        """Load this model from a Juju databag."""
+        if cls._NEST_UNDER:
+            return cls.parse_obj(json.loads(databag[cls._NEST_UNDER]))
+
+        try:
+            data = {k: json.loads(v) for k, v in databag.items() if k not in BUILTIN_JUJU_KEYS}
+        except json.JSONDecodeError:
+            log.error(f"invalid databag contents: expecting json. {databag}")
+            raise
+
+        try:
+            return cls.parse_raw(json.dumps(data))  # type: ignore
+        except pydantic.ValidationError as e:
+            msg = f"failed to validate databag: {databag}"
+            log.error(msg, exc_info=True)
+            raise DataValidationError(msg) from e
+
+    def dump(self, databag: Optional[MutableMapping] = None):
+        """Write the contents of this model to Juju databag."""
+        if databag is None:
+            databag = {}
+
+        if self._NEST_UNDER:
+            databag[self._NEST_UNDER] = self.json()
+
+        dct = self.dict()
+        for key, field in self.__fields__.items():  # type: ignore
+            value = dct[key]
+            databag[field.alias or key] = json.dumps(value)
+
+        return databag
+
+
+# todo: import these models from charm-relation-interfaces/ingress/v2 instead of redeclaring them
+class IngressUrl(BaseModel):
+    """Ingress url schema."""
+
+    url: AnyHttpUrl
+
+
+class IngressProviderAppData(DatabagModel):
+    """Ingress application databag schema."""
+
+    ingress: IngressUrl
+
+
+class ProviderSchema(BaseModel):
+    """Provider schema for Ingress."""
+
+    app: IngressProviderAppData
+
+
+class IngressRequirerAppData(DatabagModel):
+    """Ingress requirer application databag model."""
+
+    model: str = Field(description="The model the application is in.")
+    name: str = Field(description="the name of the app requesting ingress.")
+    port: int = Field(description="The port the app wishes to be exposed.")
+
+    # fields on top of vanilla 'ingress' interface:
+    strip_prefix: Optional[bool] = Field(
+        description="Whether to strip the prefix from the ingress url.", alias="strip-prefix"
     )
-    DO_VALIDATION = False
+    redirect_https: Optional[bool] = Field(
+        description="Whether to redirect http traffic to https.", alias="redirect-https"
+    )
 
-INGRESS_REQUIRES_APP_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "model": {"type": "string"},
-        "name": {"type": "string"},
-        "host": {"type": "string"},
-        "port": {"type": "string"},
-        "strip-prefix": {"type": "string"},
-        "redirect-https": {"type": "string"},
-    },
-    "required": ["model", "name", "host", "port"],
-}
+    scheme: Optional[str] = Field(
+        default="http", description="What scheme to use in the generated ingress url"
+    )
 
-INGRESS_PROVIDES_APP_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "ingress": {"type": "object", "properties": {"url": {"type": "string"}}},
-    },
-    "required": ["ingress"],
-}
+    @validator("scheme", pre=True)
+    def validate_scheme(cls, scheme):  # noqa: N805  # pydantic wants 'cls' as first arg
+        """Validate scheme arg."""
+        if scheme not in {"http", "https", "h2c"}:
+            raise ValueError("invalid scheme: should be one of `http|https|h2c`")
+        return scheme
 
-try:
-    from typing import TypedDict
-except ImportError:
-    from typing_extensions import TypedDict  # py35 compatibility
-
-# Model of the data a unit implementing the requirer will need to provide.
-RequirerData = TypedDict(
-    "RequirerData",
-    {
-        "model": str,
-        "name": str,
-        "host": str,
-        "port": int,
-        "strip-prefix": bool,
-        "redirect-https": bool,
-    },
-    total=False,
-)
-# Provider ingress data model.
-ProviderIngressData = TypedDict("ProviderIngressData", {"url": str})
-# Provider application databag model.
-ProviderApplicationData = TypedDict("ProviderApplicationData", {"ingress": ProviderIngressData})  # type: ignore
+    @validator("port", pre=True)
+    def validate_port(cls, port):  # noqa: N805  # pydantic wants 'cls' as first arg
+        """Validate port."""
+        assert isinstance(port, int), type(port)
+        assert 0 < port < 65535, "port out of TCP range"
+        return port
 
 
-def _validate_data(data, schema):
-    """Checks whether `data` matches `schema`.
+class IngressRequirerUnitData(DatabagModel):
+    """Ingress requirer unit databag model."""
 
-    Will raise DataValidationError if the data is not valid, else return None.
-    """
-    if not DO_VALIDATION:
-        return
-    try:
-        jsonschema.validate(instance=data, schema=schema)
-    except jsonschema.ValidationError as e:
-        raise DataValidationError(data, schema) from e
+    host: str = Field(description="Hostname the unit wishes to be exposed.")
+
+    @validator("host", pre=True)
+    def validate_host(cls, host):  # noqa: N805  # pydantic wants 'cls' as first arg
+        """Validate host."""
+        assert isinstance(host, str), type(host)
+        return host
 
 
-class DataValidationError(RuntimeError):
+class RequirerSchema(BaseModel):
+    """Requirer schema for Ingress."""
+
+    app: IngressRequirerAppData
+    unit: IngressRequirerUnitData
+
+
+class IngressError(RuntimeError):
+    """Base class for custom errors raised by this library."""
+
+
+class NotReadyError(IngressError):
+    """Raised when a relation is not ready."""
+
+
+class DataValidationError(IngressError):
     """Raised when data validation fails on IPU relation data."""
 
 
@@ -156,7 +224,7 @@ class _IngressPerAppBase(Object):
     """Base class for IngressPerUnit interface classes."""
 
     def __init__(self, charm: CharmBase, relation_name: str = DEFAULT_RELATION_NAME):
-        super().__init__(charm, relation_name + "_V1")
+        super().__init__(charm, relation_name)
 
         self.charm: CharmBase = charm
         self.relation_name = relation_name
@@ -234,13 +302,13 @@ class _IPAEvent(RelationEvent):
 class IngressPerAppDataProvidedEvent(_IPAEvent):
     """Event representing that ingress data has been provided for an app."""
 
-    __args__ = ("name", "model", "port", "host", "strip_prefix", "redirect_https")
+    __args__ = ("name", "model", "hosts", "strip_prefix", "redirect_https")
 
     if typing.TYPE_CHECKING:
         name: Optional[str] = None
         model: Optional[str] = None
-        port: Optional[str] = None
-        host: Optional[str] = None
+        # sequence of hostname, port dicts
+        hosts: Sequence["IngressRequirerUnitData"] = ()
         strip_prefix: bool = False
         redirect_https: bool = False
 
@@ -256,12 +324,32 @@ class IngressPerAppProviderEvents(ObjectEvents):
     data_removed = EventSource(IngressPerAppDataRemovedEvent)
 
 
+@dataclass
+class IngressRequirerData:
+    """Data exposed by the ingress requirer to the provider."""
+
+    app: "IngressRequirerAppData"
+    units: List["IngressRequirerUnitData"]
+
+
+class TlsProviderType(typing.Protocol):
+    """Placeholder."""
+
+    @property
+    def enabled(self) -> bool:  # type: ignore
+        """Placeholder."""
+
+
 class IngressPerAppProvider(_IngressPerAppBase):
     """Implementation of the provider of ingress."""
 
     on = IngressPerAppProviderEvents()  # type: ignore
 
-    def __init__(self, charm: CharmBase, relation_name: str = DEFAULT_RELATION_NAME):
+    def __init__(
+        self,
+        charm: CharmBase,
+        relation_name: str = DEFAULT_RELATION_NAME,
+    ):
         """Constructor for IngressPerAppProvider.
 
         Args:
@@ -275,15 +363,14 @@ class IngressPerAppProvider(_IngressPerAppBase):
         # created, joined or changed: if remote side has sent the required data:
         # notify listeners.
         if self.is_ready(event.relation):
-            data = self._get_requirer_data(event.relation)
+            data = self.get_data(event.relation)
             self.on.data_provided.emit(  # type: ignore
                 event.relation,
-                data["name"],
-                data["model"],
-                data["port"],
-                data["host"],
-                data.get("strip-prefix", False),
-                data.get("redirect-https", False),
+                data.app.name,
+                data.app.model,
+                [unit.dict() for unit in data.units],
+                data.app.strip_prefix or False,
+                data.app.redirect_https or False,
             )
 
     def _handle_relation_broken(self, event):
@@ -303,32 +390,39 @@ class IngressPerAppProvider(_IngressPerAppBase):
             return
         del relation.data[self.app]["ingress"]
 
-    def _get_requirer_data(self, relation: Relation) -> RequirerData:  # type: ignore
-        """Fetch and validate the requirer's app databag.
+    def _get_requirer_units_data(self, relation: Relation) -> List["IngressRequirerUnitData"]:
+        """Fetch and validate the requirer's app databag."""
+        out: List["IngressRequirerUnitData"] = []
 
-        For convenience, we convert 'port' to integer.
-        """
-        if not relation.app or not relation.app.name:  # type: ignore
-            # Handle edge case where remote app name can be missing, e.g.,
-            # relation_broken events.
-            # FIXME https://github.com/canonical/traefik-k8s-operator/issues/34
-            return {}
+        unit: Unit
+        for unit in relation.units:
+            databag = relation.data[unit]
+            try:
+                data = IngressRequirerUnitData.load(databag)
+                out.append(data)
+            except pydantic.ValidationError:
+                log.info(f"failed to validate remote unit data for {unit}")
+                raise
+        return out
 
-        databag = relation.data[relation.app]
-        remote_data: Dict[str, Union[int, str]] = {}
-        for k in ("port", "host", "model", "name", "mode", "strip-prefix", "redirect-https"):
-            v = databag.get(k)
-            if v is not None:
-                remote_data[k] = v
-        _validate_data(remote_data, INGRESS_REQUIRES_APP_SCHEMA)
-        remote_data["port"] = int(remote_data["port"])
-        remote_data["strip-prefix"] = bool(remote_data.get("strip-prefix", "false") == "true")
-        remote_data["redirect-https"] = bool(remote_data.get("redirect-https", "false") == "true")
-        return typing.cast(RequirerData, remote_data)
+    @staticmethod
+    def _get_requirer_app_data(relation: Relation) -> "IngressRequirerAppData":
+        """Fetch and validate the requirer's app databag."""
+        app = relation.app
+        if app is None:
+            raise NotReadyError(relation)
 
-    def get_data(self, relation: Relation) -> RequirerData:  # type: ignore
-        """Fetch the remote app's databag, i.e. the requirer data."""
-        return self._get_requirer_data(relation)
+        databag = relation.data[app]
+        return IngressRequirerAppData.load(databag)
+
+    def get_data(self, relation: Relation) -> IngressRequirerData:
+        """Fetch the remote (requirer) app and units' databags."""
+        try:
+            return IngressRequirerData(
+                self._get_requirer_app_data(relation), self._get_requirer_units_data(relation)
+            )
+        except (pydantic.ValidationError, DataValidationError, json.JSONDecodeError) as e:
+            raise DataValidationError("failed to validate ingress requirer data") from e
 
     def is_ready(self, relation: Optional[Relation] = None):
         """The Provider is ready if the requirer has sent valid data."""
@@ -336,38 +430,35 @@ class IngressPerAppProvider(_IngressPerAppBase):
             return any(map(self.is_ready, self.relations))
 
         try:
-            return bool(self._get_requirer_data(relation))
-        except DataValidationError as e:
-            log.warning("Requirer not ready; validation error encountered: %s" % str(e))
+            self.get_data(relation)
+        except (DataValidationError, NotReadyError) as e:
+            log.debug("Provider not ready; validation error encountered: %s" % str(e))
             return False
+        return True
 
-    def _provided_url(self, relation: Relation) -> ProviderIngressData:  # type: ignore
+    def _published_url(self, relation: Relation) -> Optional["IngressProviderAppData"]:
         """Fetch and validate this app databag; return the ingress url."""
-        if not relation.app or not relation.app.name or not self.unit.is_leader():  # type: ignore
+        if not self.is_ready(relation) or not self.unit.is_leader():
             # Handle edge case where remote app name can be missing, e.g.,
             # relation_broken events.
             # Also, only leader units can read own app databags.
             # FIXME https://github.com/canonical/traefik-k8s-operator/issues/34
-            return typing.cast(ProviderIngressData, {})  # noqa
+            return None
 
         # fetch the provider's app databag
-        raw_data = relation.data[self.app].get("ingress")
-        if not raw_data:
-            raise RuntimeError("This application did not `publish_url` yet.")
+        databag = relation.data[self.app]
+        if not databag.get("ingress"):
+            raise NotReadyError("This application did not `publish_url` yet.")
 
-        ingress: ProviderIngressData = yaml.safe_load(raw_data)
-        _validate_data({"ingress": ingress}, INGRESS_PROVIDES_APP_SCHEMA)
-        return ingress
+        return IngressProviderAppData.load(databag)
 
     def publish_url(self, relation: Relation, url: str):
         """Publish to the app databag the ingress url."""
-        ingress = {"url": url}
-        ingress_data = {"ingress": ingress}
-        _validate_data(ingress_data, INGRESS_PROVIDES_APP_SCHEMA)
-        relation.data[self.app]["ingress"] = yaml.safe_dump(ingress)
+        ingress_url = {"url": url}
+        IngressProviderAppData.parse_obj({"ingress": ingress_url}).dump(relation.data[self.app])
 
     @property
-    def proxied_endpoints(self):
+    def proxied_endpoints(self) -> Dict[str, str]:
         """Returns the ingress settings provided to applications by this IngressPerAppProvider.
 
         For example, when this IngressPerAppProvider has provided the
@@ -385,11 +476,25 @@ class IngressPerAppProvider(_IngressPerAppBase):
         results = {}
 
         for ingress_relation in self.relations:
-            assert (
-                ingress_relation.app
-            ), "no app in relation (shouldn't happen)"  # for type checker
-            results[ingress_relation.app.name] = self._provided_url(ingress_relation)
+            if not ingress_relation.app:
+                log.warning(
+                    f"no app in relation {ingress_relation} when fetching proxied endpoints: skipping"
+                )
+                continue
+            try:
+                ingress_data = self._published_url(ingress_relation)
+            except NotReadyError:
+                log.warning(
+                    f"no published url found in {ingress_relation}: "
+                    f"traefik didn't publish_url yet to this relation."
+                )
+                continue
 
+            if not ingress_data:
+                log.warning(f"relation {ingress_relation} not ready yet: try again in some time.")
+                continue
+
+            results[ingress_relation.app.name] = ingress_data.ingress.dict()
         return results
 
 
@@ -430,6 +535,9 @@ class IngressPerAppRequirer(_IngressPerAppBase):
         port: Optional[int] = None,
         strip_prefix: bool = False,
         redirect_https: bool = False,
+        # fixme: this is horrible UX.
+        #  shall we switch to manually calling provide_ingress_requirements with all args when ready?
+        scheme: typing.Callable[[], str] = lambda: "http",
     ):
         """Constructor for IngressRequirer.
 
@@ -445,7 +553,8 @@ class IngressPerAppRequirer(_IngressPerAppBase):
             host: Hostname to be used by the ingress provider to address the requiring
                 application; if unspecified, the default Kubernetes service name will be used.
             strip_prefix: configure Traefik to strip the path prefix.
-            redirect_https: redirect incoming requests to the HTTPS.
+            redirect_https: redirect incoming requests to HTTPS.
+            scheme: callable returning the scheme to use when constructing the ingress url.
 
         Request Args:
             port: the port of the service
@@ -455,6 +564,7 @@ class IngressPerAppRequirer(_IngressPerAppBase):
         self.relation_name = relation_name
         self._strip_prefix = strip_prefix
         self._redirect_https = redirect_https
+        self._get_scheme = scheme
 
         self._stored.set_default(current_url=None)  # type: ignore
 
@@ -494,18 +604,16 @@ class IngressPerAppRequirer(_IngressPerAppBase):
         try:
             return bool(self._get_url_from_relation_data())
         except DataValidationError as e:
-            log.warning("Requirer not ready; validation error encountered: %s" % str(e))
+            log.debug("Requirer not ready; validation error encountered: %s" % str(e))
             return False
 
     def _publish_auto_data(self, relation: Relation):
-        if self._auto_data and self.unit.is_leader():
+        if self._auto_data:
             host, port = self._auto_data
             self.provide_ingress_requirements(host=host, port=port)
 
     def provide_ingress_requirements(self, *, host: Optional[str] = None, port: int):
         """Publishes the data that Traefik needs to provide ingress.
-
-        NB only the leader unit is supposed to do this.
 
         Args:
             host: Hostname to be used by the ingress provider to address the
@@ -515,27 +623,34 @@ class IngressPerAppRequirer(_IngressPerAppBase):
         # get only the leader to publish the data since we only
         # require one unit to publish it -- it will not differ between units,
         # unlike in ingress-per-unit.
-        assert self.unit.is_leader(), "only leaders should do this."
         assert self.relation, "no relation"
+
+        if self.unit.is_leader():
+            app_databag = self.relation.data[self.app]
+            try:
+                IngressRequirerAppData(  # type: ignore  # pyright does not like aliases
+                    model=self.model.name,
+                    name=self.app.name,
+                    scheme=self._get_scheme(),
+                    port=port,
+                    strip_prefix=self._strip_prefix,  # type: ignore  # pyright does not like aliases
+                    redirect_https=self._redirect_https,  # type: ignore  # pyright does not like aliases
+                ).dump(app_databag)
+            except pydantic.ValidationError as e:
+                msg = "failed to validate app data"
+                log.info(msg, exc_info=True)  # log to INFO because this might be expected
+                raise DataValidationError(msg) from e
 
         if not host:
             host = socket.getfqdn()
 
-        data = {
-            "model": self.model.name,
-            "name": self.app.name,
-            "host": host,
-            "port": str(port),
-        }
-
-        if self._strip_prefix:
-            data["strip-prefix"] = "true"
-
-        if self._redirect_https:
-            data["redirect-https"] = "true"
-
-        _validate_data(data, INGRESS_REQUIRES_APP_SCHEMA)
-        self.relation.data[self.app].update(data)
+        unit_databag = self.relation.data[self.unit]
+        try:
+            IngressRequirerUnitData(host=host).dump(unit_databag)
+        except pydantic.ValidationError as e:
+            msg = "failed to validate unit data"
+            log.info(msg, exc_info=True)  # log to INFO because this might be expected
+            raise DataValidationError(msg) from e
 
     @property
     def relation(self):
@@ -553,7 +668,7 @@ class IngressPerAppRequirer(_IngressPerAppBase):
 
         # fetch the provider's app databag
         try:
-            raw = relation.data.get(relation.app, {}).get("ingress")
+            databag = relation.data[relation.app]
         except ModelError as e:
             log.debug(
                 f"Error {e} attempting to read remote app data; "
@@ -561,12 +676,10 @@ class IngressPerAppRequirer(_IngressPerAppBase):
             )
             return None
 
-        if not raw:
+        if not databag:  # not ready yet
             return None
 
-        ingress: ProviderIngressData = yaml.safe_load(raw)
-        _validate_data({"ingress": ingress}, INGRESS_PROVIDES_APP_SCHEMA)
-        return ingress["url"]
+        return str(IngressProviderAppData.load(databag).ingress.url)
 
     @property
     def url(self) -> Optional[str]:
@@ -574,6 +687,8 @@ class IngressPerAppRequirer(_IngressPerAppBase):
 
         Returns None if the URL isn't available yet.
         """
-        data = self._stored.current_url or self._get_url_from_relation_data()  # type: ignore
-        assert isinstance(data, (str, type(None)))  # for static checker
+        data = (
+            typing.cast(Optional[str], self._stored.current_url)  # type: ignore
+            or self._get_url_from_relation_data()
+        )
         return data
