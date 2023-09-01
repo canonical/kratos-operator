@@ -30,7 +30,7 @@ jobs:
         uses: charmed-kubernetes/actions-operator@main
         with:
           provider: microk8s
-          channel: 1.26-strict/stable
+          channel: 1.28-strict/stable
           juju-channel: 3.2
           bootstrap-options: '--agent-version=3.2.0'
 
