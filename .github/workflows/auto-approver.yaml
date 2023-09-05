@@ -21,3 +21,5 @@ jobs:
           if [[ $(gh pr view --json body | grep "\*\*Automerge\*\*: Enabled") ]]; then
             gh pr merge --auto --merge
           fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
