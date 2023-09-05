@@ -26,6 +26,7 @@
       "matchManagers": ["pip_requirements"],
       "fileMatch": ["requirements\\.txt$"],
       "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
+      "automerge": true,
       "schedule": ["at any time"],
       "prPriority": 5
     },
