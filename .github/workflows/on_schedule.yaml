@@ -10,10 +10,6 @@ jobs:
       CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
 
-  update-deps:
-    name: Update Dependencies
-    uses: ./.github/workflows/renovate.yaml
-
   tests:
     name: Run Tests
     uses: ./.github/workflows/tests.yaml
