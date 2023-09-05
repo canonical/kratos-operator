@@ -2,5 +2,5 @@ pytest
 pytest-mock
 coverage[toml]
 ipdb
-pydantic<2.0
+pydantic<2.4
 -r requirements.txt
