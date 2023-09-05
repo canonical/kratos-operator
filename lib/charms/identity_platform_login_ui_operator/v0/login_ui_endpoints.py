@@ -63,7 +63,6 @@ RELATION_KEYS = [
     "error_url",
     "login_url",
     "oidc_error_url",
-    "default_url",
 ]
 
 
@@ -111,7 +110,6 @@ class LoginUIEndpointsProvider(Object):
                 "error_url": f"{endpoint}/ui/error",
                 "login_url": f"{endpoint}/ui/login",
                 "oidc_error_url": f"{endpoint}/ui/oidc_error",
-                "default_url": endpoint,
             }
         for relation in relations:
             relation.data[self._charm.app].update(endpoint_databag)
