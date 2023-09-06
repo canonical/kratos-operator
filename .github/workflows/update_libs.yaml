@@ -49,3 +49,4 @@ jobs:
           body: Update charm libs
           upsert: true
           ignore-no-changes: true
+          auto-merge: true
