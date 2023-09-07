@@ -98,11 +98,8 @@ def setup_login_ui_relation(harness: Harness) -> tuple[int, dict]:
     databag = {
         "consent_url": f"{endpoint}/ui/consent",
         "error_url": f"{endpoint}/ui/error",
-        "index_url": f"{endpoint}/ui/index",
         "login_url": f"{endpoint}/ui/login",
         "oidc_error_url": f"{endpoint}/ui/oidc_error",
-        "registration_url": f"{endpoint}/ui/registration",
-        "default_url": endpoint,
     }
     harness.update_relation_data(
         relation_id,
@@ -339,7 +336,7 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness: Ha
         },
         "selfservice": {
             "allowed_return_urls": [login_databag["login_url"]],
-            "default_browser_return_url": login_databag["default_url"],
+            "default_browser_return_url": login_databag["login_url"],
             "flows": {
                 "error": {
                     "ui_url": login_databag["error_url"],
@@ -347,10 +344,7 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(harness: Ha
                 "login": {
                     "ui_url": login_databag["login_url"],
                 },
-                "registration": {
-                    "enabled": True,
-                    "ui_url": login_databag["registration_url"],
-                },
+                "registration": None,
             },
         },
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
@@ -697,7 +691,7 @@ def test_on_client_config_changed_with_ingress(
         },
         "selfservice": {
             "allowed_return_urls": [login_databag["login_url"]],
-            "default_browser_return_url": login_databag["default_url"],
+            "default_browser_return_url": login_databag["login_url"],
             "flows": {
                 "error": {
                     "ui_url": login_databag["error_url"],
@@ -706,9 +700,15 @@ def test_on_client_config_changed_with_ingress(
                     "ui_url": login_databag["login_url"],
                 },
                 "registration": {
-                    "enabled": True,
-                    "ui_url": login_databag["registration_url"],
-                    "after": {"oidc": {"hooks": [{"hook": "session"}]}},
+                    "after": {
+                        "oidc": {
+                            "hooks": [
+                                {
+                                    "hook": "session",
+                                },
+                            ],
+                        },
+                    },
                 },
             },
             "methods": {
@@ -785,7 +785,7 @@ def test_on_client_config_changed_with_hydra(harness: Harness) -> None:
         },
         "selfservice": {
             "allowed_return_urls": [login_databag["login_url"]],
-            "default_browser_return_url": login_databag["default_url"],
+            "default_browser_return_url": login_databag["login_url"],
             "flows": {
                 "error": {
                     "ui_url": login_databag["error_url"],
@@ -793,10 +793,7 @@ def test_on_client_config_changed_with_hydra(harness: Harness) -> None:
                 "login": {
                     "ui_url": login_databag["login_url"],
                 },
-                "registration": {
-                    "enabled": True,
-                    "ui_url": login_databag["registration_url"],
-                },
+                "registration": None,
             },
         },
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
@@ -849,7 +846,7 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harn
         },
         "selfservice": {
             "allowed_return_urls": [login_databag["login_url"]],
-            "default_browser_return_url": login_databag["default_url"],
+            "default_browser_return_url": login_databag["login_url"],
             "flows": {
                 "error": {
                     "ui_url": login_databag["error_url"],
@@ -857,10 +854,7 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(harness: Harn
                 "login": {
                     "ui_url": login_databag["login_url"],
                 },
-                "registration": {
-                    "enabled": True,
-                    "ui_url": login_databag["registration_url"],
-                },
+                "registration": None,
             },
         },
         "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
