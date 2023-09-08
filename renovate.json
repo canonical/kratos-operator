@@ -19,14 +19,23 @@
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
       "automerge": true,
-      "schedule": ["at any time"]
+      "schedule": ["at any time"],
+      "additionalBranchPrefix": "auto-"
     },
     {
       "groupName": "operator pip deps",
       "matchManagers": ["pip_requirements"],
       "fileMatch": ["requirements\\.txt$"],
-      "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
-      "automerge": true,
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "schedule": ["at any time"],
+      "prPriority": 5,
+      "additionalBranchPrefix": "auto-"
+    },
+    {
+      "groupName": "operator pip deps",
+      "matchManagers": ["pip_requirements"],
+      "fileMatch": ["requirements\\.txt$"],
+      "matchUpdateTypes": ["major"],
       "schedule": ["at any time"],
       "prPriority": 5
     },
@@ -36,21 +45,24 @@
       "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
       "automerge": true,
       "schedule": ["at any time"],
-      "prPriority": 4
+      "prPriority": 4,
+      "additionalBranchPrefix": "auto-"
     },
     {
       "groupName": "testing deps",
       "matchFiles": ["tox.ini"],
       "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
       "automerge": true,
-      "schedule": ["on monday"]
+      "schedule": ["on monday"],
+      "additionalBranchPrefix": "auto-"
     },
     {
       "groupName": "renovate packages",
       "matchSourceUrlPrefixes": ["https://github.com/renovatebot/"],
       "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
       "automerge": true,
-      "schedule": ["at any time"]
+      "schedule": ["at any time"],
+      "additionalBranchPrefix": "auto-"
     }
   ]
 }
