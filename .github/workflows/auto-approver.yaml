@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - "renovate/**"
+      - "automated-update-charm-libs"
 
 jobs:
   autoapprove:
