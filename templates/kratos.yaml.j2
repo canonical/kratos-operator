@@ -18,6 +18,10 @@ selfservice:
         - https://10.64.140.43:443/test-bundle-zinc-k8s/version
         - https://10.64.140.44:443/test-bundle-zinc-k8s
         - https://10.64.140.44:443/test-bundle-zinc-k8s/version
+        - http://10.64.140.43:80/test-bundle-zinc-k8s
+        - http://10.64.140.43:80/test-bundle-zinc-k8s/version
+        - http://10.64.140.44:80/test-bundle-zinc-k8s
+        - http://10.64.140.44:80/test-bundle-zinc-k8s/version
     {%- endif %}
     default_browser_return_url:
         {{ default_browser_return_url | d("http://example-default-return-url.com", true) }}
