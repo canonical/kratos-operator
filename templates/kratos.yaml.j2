@@ -14,18 +14,14 @@ selfservice:
     {%- for return_url in allowed_return_urls %}
         - {{ return_url }}
     {%- endfor %}
-        - https://10.64.140.43:443/test-bundle-zinc-k8s
-        - https://10.64.140.43:443/test-bundle-zinc-k8s/version
-        - https://10.64.140.44:443/test-bundle-zinc-k8s
-        - https://10.64.140.44:443/test-bundle-zinc-k8s/version
-        - http://10.64.140.43:80/test-bundle-zinc-k8s
-        - http://10.64.140.43:80/test-bundle-zinc-k8s/version
-        - http://10.64.140.44:80/test-bundle-zinc-k8s
-        - http://10.64.140.44:80/test-bundle-zinc-k8s/version
+        - https://10.64.140.43/test-bundle-zinc-k8s
+        - https://10.64.140.43/test-bundle-zinc-k8s/version
+        - https://10.64.140.44/test-bundle-zinc-k8s
+        - https://10.64.140.44/test-bundle-zinc-k8s/version
     {%- endif %}
     default_browser_return_url:
         {{ default_browser_return_url | d("http://example-default-return-url.com", true) }}
-    {%- if error_ui_url or login_ui_url or registration_ui_url %}
+    {%- if error_ui_url or login_ui_url or oidc_providers %}
     flows:
         {%- if error_ui_url %}
         error:
@@ -35,13 +31,13 @@ selfservice:
         login:
             ui_url: {{ login_ui_url }}
         {%- endif %}
+        {%- if oidc_providers %}
         registration:
-            {%- if oidc_providers %}
             after:
                 oidc:
                     hooks:
                     - hook: session
-            {%- endif %}
+        {%- endif %}
     {%- endif %}
     {%- if oidc_providers %}
     methods:
