@@ -298,6 +298,19 @@ class KratosCharm(CharmBase):
         return normalise_url(url) if url else None
 
     @property
+    def _dsn(self) -> Optional[str]:
+        db_info = self._get_database_relation_info()
+        if not db_info:
+            return None
+
+        return "postgres://{username}:{password}@{endpoints}/{database_name}".format(
+            username=db_info.get("username"),
+            password=db_info.get("password"),
+            endpoints=db_info.get("endpoints"),
+            database_name=db_info.get("database_name"),
+        )
+
+    @property
     def _log_level(self) -> str:
         return self.config["log_level"]
 
@@ -436,11 +449,13 @@ class KratosCharm(CharmBase):
             default_schema_id, schemas = self._get_default_identity_schema_config()
         return default_schema_id, schemas
 
-    def _get_database_relation_info(self) -> dict:
+    def _get_database_relation_info(self) -> Optional[Dict]:
         """Get database info from relation data bag."""
+        if not self.database.relations:
+            return None
+
         relation_id = self.database.relations[0].id
         relation_data = self.database.fetch_relation_data()[relation_id]
-
         return {
             "username": relation_data.get("username"),
             "password": relation_data.get("password"),
@@ -454,7 +469,7 @@ class KratosCharm(CharmBase):
         Returns True if migration was run successfully, else returns false.
         """
         try:
-            stdout = self.kratos.run_migration()
+            stdout = self.kratos.run_migration(self._dsn)
             logger.info(f"Successfully executed the database migration: {stdout}")
             return True
         except Error as err:
@@ -848,14 +863,14 @@ class KratosCharm(CharmBase):
         event.set_results(res)
 
     def _on_run_migration_action(self, event: ActionEvent) -> None:
-        if not self._kratos_service_is_running:
+        if not self._container.can_connect():
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
         timeout = float(event.params.get("timeout", 120))
         event.log("Migrating database.")
         try:
-            self.kratos.run_migration(timeout=timeout)
+            self.kratos.run_migration(timeout=timeout, dsn=self._dsn)
         except Error as e:
             err_msg = e.stderr if isinstance(e, ExecError) else e
             event.fail(f"Database migration action failed: {err_msg}")

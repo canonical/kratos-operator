@@ -690,14 +690,17 @@ def test_on_client_config_changed_when_no_dns_available(harness: Harness) -> Non
 
 
 def test_on_client_config_changed_with_ingress(
-    harness: Harness, mocked_container: Container
+    harness: Harness, mocked_container: Container, mocked_migration_is_needed: MagicMock
 ) -> None:
+    setup_peer_relation(harness)
     setup_postgres_relation(harness)
     setup_ingress_relation(harness, "public")
     (_, login_databag) = setup_login_ui_relation(harness)
 
     relation_id, data = setup_external_provider_relation(harness)
     container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
+    harness.charm.on.kratos_pebble_ready.emit(container)
 
     expected_config = {
         "log": {
