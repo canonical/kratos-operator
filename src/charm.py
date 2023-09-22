@@ -654,8 +654,7 @@ class KratosCharm(CharmBase):
             return
 
         if not self._migration_is_needed():
-            self._container.start(self._container_name)
-            self.unit.status = ActiveStatus()
+            self._handle_status_update_config(event)
             return
 
         if not self.unit.is_leader():
@@ -670,8 +669,7 @@ class KratosCharm(CharmBase):
             return
 
         self._set_peer_data(PEER_KEY_DB_MIGRATE_VERSION, self.kratos.get_version())
-        self._container.start(self._container_name)
-        self.unit.status = ActiveStatus()
+        self._handle_status_update_config(event)
 
     def _on_database_changed(self, event: DatabaseEndpointsChangedEvent) -> None:
         """Event Handler for database changed event."""
