@@ -5,6 +5,7 @@
 
 import json
 import logging
+import re
 from os.path import join
 from typing import Dict, List, Optional
 
@@ -124,18 +125,23 @@ class KratosAPI:
 
         return r.json()
 
-    def run_migration(self, timeout: float = 120) -> str:
+    def run_migration(self, dsn=None, timeout: float = 120) -> str:
         """Run an sql migration."""
         cmd = [
             "kratos",
             "migrate",
             "sql",
             "-e",
-            "--config",
-            self.config_file_path,
             "--yes",
         ]
-        return self._run_cmd(cmd, timeout=timeout)
+        if dsn:
+            env = {"DSN": dsn}
+        else:
+            cmd.append("--config")
+            cmd.append(self.config_file_path)
+            env = None
+
+        return self._run_cmd(cmd, timeout=timeout, environment=env)
 
     def get_version(self) -> str:
         """Get the version of the kratos binary."""
@@ -152,9 +158,15 @@ class KratosAPI:
 
         return versions[0]
 
-    def _run_cmd(self, cmd: List[str], timeout: float = 20, input_: Optional[str] = None) -> str:
+    def _run_cmd(
+        self,
+        cmd: List[str],
+        timeout: float = 20,
+        input_: Optional[str] = None,
+        environment: Optional[Dict] = None,
+    ) -> str:
         logger.debug(f"Running cmd: {cmd}")
-        process = self.container.exec(cmd, timeout=timeout)
+        process = self.container.exec(cmd, environment=environment, timeout=timeout)
         if input_:
             process.stdin.write(input_)
             process.stdin.close()
