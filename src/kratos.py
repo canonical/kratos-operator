@@ -137,6 +137,21 @@ class KratosAPI:
         ]
         return self._run_cmd(cmd, timeout=timeout)
 
+    def get_version(self) -> str:
+        """Get the version of the kratos binary."""
+        cmd = ["kratos", "version"]
+
+        stdout = self._run_cmd(cmd)
+
+        # Output has the format:
+        # Version:    {version}
+        # Build Commit:   {hash}
+        # Build Timestamp: {time}
+        out_re = r"Version:\s*(.+)\nBuild Commit:\s*(.+)\nBuild Timestamp:\s*(.+)"
+        versions = re.findall(out_re, stdout)[0]
+
+        return versions[0]
+
     def _run_cmd(self, cmd: List[str], timeout: float = 20, input_: Optional[str] = None) -> str:
         logger.debug(f"Running cmd: {cmd}")
         process = self.container.exec(cmd, timeout=timeout)
