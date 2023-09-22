@@ -131,6 +131,27 @@ def kratos_identity_json() -> Dict:
 
 
 @pytest.fixture()
+def mocked_migration_is_needed(mocker: MockerFixture) -> MagicMock:
+    return mocker.patch("charm.KratosCharm._migration_is_needed", return_value=False)
+
+
+@pytest.fixture()
+def mocked_get_secret(mocker: MockerFixture) -> MagicMock:
+    return mocker.patch("charm.KratosCharm._get_secret", return_value={"cookie": "secret"})
+
+
+@pytest.fixture(autouse=True)
+def mocked_get_version(mocker: MockerFixture) -> MagicMock:
+    mock = mocker.patch("charm.KratosAPI.get_version", return_value=None)
+    mock.return_value = {
+        "version": "1.0.1",
+        "git_hash": "fasd23541235123321dfsdgsadg",
+        "build_time": "2023-06-13 16:42:24.609532580+03:00",
+    }
+    return mock
+
+
+@pytest.fixture()
 def mocked_get_identity(mocker: MockerFixture, kratos_identity_json: Dict) -> MagicMock:
     mock = mocker.patch("charm.KratosAPI.get_identity", return_value=kratos_identity_json)
     return mock
