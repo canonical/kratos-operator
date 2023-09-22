@@ -199,6 +199,9 @@ class KratosCharm(CharmBase):
         )
         self.framework.observe(self.database.on.database_created, self._on_database_created)
         self.framework.observe(self.database.on.endpoints_changed, self._on_database_changed)
+        self.framework.observe(
+            self.on[self._db_relation_name].relation_broken, self._on_database_removed
+        )
         self.framework.observe(self.admin_ingress.on.ready, self._on_admin_ingress_ready)
         self.framework.observe(self.admin_ingress.on.revoked, self._on_ingress_revoked)
         self.framework.observe(self.public_ingress.on.ready, self._on_public_ingress_ready)
@@ -672,6 +675,11 @@ class KratosCharm(CharmBase):
 
     def _on_database_changed(self, event: DatabaseEndpointsChangedEvent) -> None:
         """Event Handler for database changed event."""
+        self._handle_status_update_config(event)
+
+    def _on_database_removed(self, event: DatabaseEndpointsChangedEvent) -> None:
+        """Event Handler for database changed event."""
+        self._pop_peer_data(PEER_KEY_DB_MIGRATE_VERSION)
         self._handle_status_update_config(event)
 
     def _on_admin_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
