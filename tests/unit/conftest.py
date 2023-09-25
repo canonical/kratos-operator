@@ -143,11 +143,7 @@ def mocked_get_secret(mocker: MockerFixture) -> MagicMock:
 @pytest.fixture(autouse=True)
 def mocked_get_version(mocker: MockerFixture) -> MagicMock:
     mock = mocker.patch("charm.KratosAPI.get_version", return_value=None)
-    mock.return_value = {
-        "version": "1.0.1",
-        "git_hash": "fasd23541235123321dfsdgsadg",
-        "build_time": "2023-06-13 16:42:24.609532580+03:00",
-    }
+    mock.return_value = "1.0.1"
     return mock
 
 

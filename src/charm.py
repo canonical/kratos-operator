@@ -452,6 +452,10 @@ class KratosCharm(CharmBase):
             default_schema_id, schemas = self._get_default_identity_schema_config()
         return default_schema_id, schemas
 
+    def _set_version(self) -> None:
+        version = self.kratos.get_version()
+        self.unit.set_workload_version(version)
+
     def _get_database_relation_info(self) -> Optional[Dict]:
         """Get database info from relation data bag."""
         if not self.database.relations:
@@ -605,6 +609,7 @@ class KratosCharm(CharmBase):
             logger.info(f"Created directory {self._log_dir}")
 
         self._push_default_files()
+        self._set_version()
         self._handle_status_update_config(event)
 
     def _on_config_changed(self, event: ConfigChangedEvent) -> None:
