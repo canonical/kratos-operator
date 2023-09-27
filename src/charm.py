@@ -55,6 +55,7 @@ from ops.charm import (
     InstallEvent,
     LeaderElectedEvent,
     PebbleReadyEvent,
+    RelationDepartedEvent,
     RelationEvent,
 )
 from ops.main import main
@@ -200,7 +201,7 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.database.on.database_created, self._on_database_created)
         self.framework.observe(self.database.on.endpoints_changed, self._on_database_changed)
         self.framework.observe(
-            self.on[self._db_relation_name].relation_broken, self._on_database_removed
+            self.on[self._db_relation_name].relation_departed, self._on_database_relation_departed
         )
         self.framework.observe(self.admin_ingress.on.ready, self._on_admin_ingress_ready)
         self.framework.observe(self.admin_ingress.on.revoked, self._on_ingress_revoked)
@@ -487,6 +488,12 @@ class KratosCharm(CharmBase):
         return False
 
     @property
+    def _migration_peer_data_key(self) -> Optional[str]:
+        if not self.database.relations:
+            return None
+        return f"{PEER_KEY_DB_MIGRATE_VERSION}_{self.database.relations[0].id}"
+
+    @property
     def _peers(self) -> Optional[Relation]:
         """Fetch the peer relation."""
         return self.model.get_relation(PEER_RELATION_NAME)
@@ -530,7 +537,7 @@ class KratosCharm(CharmBase):
         if not self._peers:
             return None
 
-        return self._get_peer_data(PEER_KEY_DB_MIGRATE_VERSION) != self.kratos.get_version()
+        return self._get_peer_data(self._migration_peer_data_key) != self.kratos.get_version()
 
     def _handle_status_update_config(self, event: HookEvent) -> None:
         if not self._container.can_connect():
@@ -569,6 +576,7 @@ class KratosCharm(CharmBase):
             event.defer()
             return
 
+        self._cleanup_peer_data()
         self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
         # We need to push the layer because this may run before _on_pebble_ready
         self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
@@ -673,17 +681,30 @@ class KratosCharm(CharmBase):
             logger.error("Automigration job failed, please use the run-migration action")
             return
 
-        self._set_peer_data(PEER_KEY_DB_MIGRATE_VERSION, self.kratos.get_version())
+        self._set_peer_data(self._migration_peer_data_key, self.kratos.get_version())
         self._handle_status_update_config(event)
 
     def _on_database_changed(self, event: DatabaseEndpointsChangedEvent) -> None:
         """Event Handler for database changed event."""
         self._handle_status_update_config(event)
 
-    def _on_database_removed(self, event: DatabaseEndpointsChangedEvent) -> None:
+    def _on_database_relation_departed(self, event: RelationDepartedEvent) -> None:
         """Event Handler for database changed event."""
-        self._pop_peer_data(PEER_KEY_DB_MIGRATE_VERSION)
-        self._handle_status_update_config(event)
+        self.unit.status = BlockedStatus("Missing required relation with postgresql")
+
+    def _cleanup_peer_data(self) -> None:
+        if not self._peers:
+            return
+        # We need to remove the migration key from peer data. We can't do that in relation
+        # departed as we can't tell if the event was triggered from a unit dying of the
+        # relation being actually departed.
+        extra_keys = [
+            k
+            for k in self._peers.data[self.app].keys()
+            if k.startswith(PEER_KEY_DB_MIGRATE_VERSION) and k != self._migration_peer_data_key
+        ]
+        for k in extra_keys:
+            self._pop_peer_data(k)
 
     def _on_admin_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
         if self.unit.is_leader():
@@ -891,7 +912,7 @@ class KratosCharm(CharmBase):
         if not self._peers:
             event.fail("Peer relation not ready. Failed to store migration version")
             return
-        self._set_peer_data(PEER_KEY_DB_MIGRATE_VERSION, self.kratos.get_version())
+        self._set_peer_data(self._migration_peer_data_key, self.kratos.get_version())
         event.log("Updated migration version in peer data.")
 
     def _promtail_error(self, event: PromtailDigestError) -> None:

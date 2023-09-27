@@ -277,3 +277,16 @@ async def test_kratos_scale_up(ops_test: OpsTest) -> None:
         timeout=1000,
         wait_for_exact_units=3,
     )
+
+
+async def test_kratos_scale_down(ops_test: OpsTest) -> None:
+    """Check that kratos works after it is scaled down."""
+    app = ops_test.model.applications[KRATOS_APP]
+
+    await app.scale(1)
+
+    await ops_test.model.wait_for_idle(
+        apps=[KRATOS_APP],
+        status="active",
+        timeout=1000,
+    )
