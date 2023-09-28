@@ -1323,6 +1323,7 @@ def test_run_migration_action(
     harness: Harness, mocked_kratos_service: MagicMock, mocked_run_migration: MagicMock
 ) -> None:
     setup_peer_relation(harness)
+    setup_postgres_relation(harness)
     event = MagicMock()
 
     harness.charm._on_run_migration_action(event)
