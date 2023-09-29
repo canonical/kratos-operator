@@ -13,7 +13,7 @@ from functools import cached_property
 from os.path import join
 from pathlib import Path
 from secrets import token_hex
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 import requests
 from charms.data_platform_libs.v0.data_interfaces import (
@@ -55,6 +55,7 @@ from ops.charm import (
     InstallEvent,
     LeaderElectedEvent,
     PebbleReadyEvent,
+    RelationDepartedEvent,
     RelationEvent,
 )
 from ops.main import main
@@ -63,6 +64,7 @@ from ops.model import (
     BlockedStatus,
     MaintenanceStatus,
     ModelError,
+    Relation,
     Secret,
     SecretNotFoundError,
     WaitingStatus,
@@ -83,7 +85,6 @@ PEER_RELATION_NAME = "kratos-peers"
 SECRET_LABEL = "cookie_secret"
 COOKIE_SECRET_KEY = "cookiesecret"
 PEER_KEY_DB_MIGRATE_VERSION = "db_migrate_version"
-DB_MIGRATE_VERSION = "0.11.1"
 DEFAULT_SCHEMA_ID_FILE_NAME = "default.schema"
 LOG_LEVELS = ["panic", "fatal", "error", "warn", "info", "debug", "trace"]
 
@@ -199,6 +200,9 @@ class KratosCharm(CharmBase):
         )
         self.framework.observe(self.database.on.database_created, self._on_database_created)
         self.framework.observe(self.database.on.endpoints_changed, self._on_database_changed)
+        self.framework.observe(
+            self.on[self._db_relation_name].relation_departed, self._on_database_relation_departed
+        )
         self.framework.observe(self.admin_ingress.on.ready, self._on_admin_ingress_ready)
         self.framework.observe(self.admin_ingress.on.revoked, self._on_ingress_revoked)
         self.framework.observe(self.public_ingress.on.ready, self._on_public_ingress_ready)
@@ -296,6 +300,19 @@ class KratosCharm(CharmBase):
     def _admin_url(self) -> Optional[str]:
         url = self.admin_ingress.url
         return normalise_url(url) if url else None
+
+    @property
+    def _dsn(self) -> Optional[str]:
+        db_info = self._get_database_relation_info()
+        if not db_info:
+            return None
+
+        return "postgres://{username}:{password}@{endpoints}/{database_name}".format(
+            username=db_info.get("username"),
+            password=db_info.get("password"),
+            endpoints=db_info.get("endpoints"),
+            database_name=db_info.get("database_name"),
+        )
 
     @property
     def _log_level(self) -> str:
@@ -436,11 +453,17 @@ class KratosCharm(CharmBase):
             default_schema_id, schemas = self._get_default_identity_schema_config()
         return default_schema_id, schemas
 
-    def _get_database_relation_info(self) -> dict:
+    def _set_version(self) -> None:
+        version = self.kratos.get_version()
+        self.unit.set_workload_version(version)
+
+    def _get_database_relation_info(self) -> Optional[Dict]:
         """Get database info from relation data bag."""
+        if not self.database.relations:
+            return None
+
         relation_id = self.database.relations[0].id
         relation_data = self.database.fetch_relation_data()[relation_id]
-
         return {
             "username": relation_data.get("username"),
             "password": relation_data.get("password"),
@@ -454,7 +477,7 @@ class KratosCharm(CharmBase):
         Returns True if migration was run successfully, else returns false.
         """
         try:
-            stdout = self.kratos.run_migration()
+            stdout = self.kratos.run_migration(self._dsn)
             logger.info(f"Successfully executed the database migration: {stdout}")
             return True
         except Error as err:
@@ -463,6 +486,37 @@ class KratosCharm(CharmBase):
             logger.error(f"Database migration failed: {err_msg}")
 
         return False
+
+    @property
+    def _migration_peer_data_key(self) -> Optional[str]:
+        if not self.database.relations:
+            return None
+        return f"{PEER_KEY_DB_MIGRATE_VERSION}_{self.database.relations[0].id}"
+
+    @property
+    def _peers(self) -> Optional[Relation]:
+        """Fetch the peer relation."""
+        return self.model.get_relation(PEER_RELATION_NAME)
+
+    def _set_peer_data(self, key: str, data: Union[Dict, str]) -> None:
+        """Put information into the peer data bucket."""
+        if not (peers := self._peers):
+            return
+        peers.data[self.app][key] = json.dumps(data)
+
+    def _get_peer_data(self, key: str) -> Union[Dict, str]:
+        """Retrieve information from the peer data bucket."""
+        if not (peers := self._peers):
+            return {}
+        data = peers.data[self.app].get(key, "")
+        return json.loads(data) if data else {}
+
+    def _pop_peer_data(self, key: str) -> Union[Dict, str]:
+        """Retrieve and remove information from the peer data bucket."""
+        if not (peers := self._peers):
+            return {}
+        data = peers.data[self.app].pop(key, "")
+        return json.loads(data) if data else {}
 
     def _get_secret(self) -> Optional[str]:
         try:
@@ -479,6 +533,12 @@ class KratosCharm(CharmBase):
         juju_secret = self.model.app.add_secret(secret, label=SECRET_LABEL)
         return juju_secret
 
+    def _migration_is_needed(self) -> Optional[bool]:
+        if not self._peers:
+            return None
+
+        return self._get_peer_data(self._migration_peer_data_key) != self.kratos.get_version()
+
     def _handle_status_update_config(self, event: HookEvent) -> None:
         if not self._container.can_connect():
             event.defer()
@@ -490,7 +550,6 @@ class KratosCharm(CharmBase):
             return
 
         self.unit.status = MaintenanceStatus("Configuring resources")
-        self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
 
         if not self.model.relations[self._db_relation_name]:
             self.unit.status = BlockedStatus("Missing required relation with postgresql")
@@ -502,13 +561,25 @@ class KratosCharm(CharmBase):
             event.defer()
             return
 
+        if not self._peers:
+            self.unit.status = WaitingStatus("Waiting for peer relation")
+            event.defer()
+            return
+
         if not self._get_secret():
             self.unit.status = WaitingStatus("Waiting for secret creation")
             event.defer()
             return
 
+        if self._migration_is_needed():
+            self.unit.status = WaitingStatus("Waiting for database migration")
+            event.defer()
+            return
+
+        self._cleanup_peer_data()
         self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
         # We need to push the layer because this may run before _on_pebble_ready
+        self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
         try:
             self._container.restart(self._container_name)
         except ChangeError as err:
@@ -546,6 +617,7 @@ class KratosCharm(CharmBase):
             logger.info(f"Created directory {self._log_dir}")
 
         self._push_default_files()
+        self._set_version()
         self._handle_status_update_config(event)
 
     def _on_config_changed(self, event: ConfigChangedEvent) -> None:
@@ -580,57 +652,59 @@ class KratosCharm(CharmBase):
         """Event Handler for database created event."""
         if not self._container.can_connect():
             event.defer()
-            logger.info("Cannot connect to Kratos container. Deferring event.")
+            logger.info("Cannot connect to Kratos container. Deferring the event.")
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
 
-        self.unit.status = MaintenanceStatus(
-            "Configuring container and resources for database connection"
-        )
-
-        try:
-            self._container.get_service(self._container_name)
-        except (ModelError, RuntimeError):
+        if not self._peers:
+            self.unit.status = WaitingStatus("Waiting for peer relation")
             event.defer()
-            self.unit.status = WaitingStatus("Waiting for Kratos service")
-            logger.info("Kratos service is absent. Deferring database created event.")
             return
 
-        logger.info("Updating Kratos config and restarting service")
-        self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
-        self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
-
-        peer_relation = self.model.relations[PEER_RELATION_NAME]
-        if not peer_relation:
+        if not self._get_secret():
+            self.unit.status = WaitingStatus("Waiting for secret creation")
             event.defer()
-            self.unit.status = WaitingStatus("Waiting for peer relation.")
             return
 
-        if self.unit.is_leader():
-            if not self._run_sql_migration():
-                self.unit.status = BlockedStatus("Database migration failed.")
-            else:
-                peer_relation[0].data[self.app].update(
-                    {
-                        PEER_KEY_DB_MIGRATE_VERSION: DB_MIGRATE_VERSION,
-                    }
-                )
-                self._container.start(self._container_name)
-                self.unit.status = ActiveStatus()
-        else:
-            if (
-                peer_relation[0].data[self.app].get(PEER_KEY_DB_MIGRATE_VERSION)
-                == DB_MIGRATE_VERSION
-            ):
-                self._container.start(self._container_name)
-                self.unit.status = ActiveStatus()
-            else:
-                event.defer()
-                self.unit.status = WaitingStatus("Waiting for database migration to complete.")
+        if not self._migration_is_needed():
+            self._handle_status_update_config(event)
+            return
+
+        if not self.unit.is_leader():
+            logger.info("Unit does not have leadership")
+            self.unit.status = WaitingStatus("Unit waiting for leadership to run the migration")
+            event.defer()
+            return
+
+        if not self._run_sql_migration():
+            self.unit.status = BlockedStatus("Database migration job failed")
+            logger.error("Automigration job failed, please use the run-migration action")
+            return
+
+        self._set_peer_data(self._migration_peer_data_key, self.kratos.get_version())
+        self._handle_status_update_config(event)
 
     def _on_database_changed(self, event: DatabaseEndpointsChangedEvent) -> None:
         """Event Handler for database changed event."""
         self._handle_status_update_config(event)
+
+    def _on_database_relation_departed(self, event: RelationDepartedEvent) -> None:
+        """Event Handler for database changed event."""
+        self.unit.status = BlockedStatus("Missing required relation with postgresql")
+
+    def _cleanup_peer_data(self) -> None:
+        if not self._peers:
+            return
+        # We need to remove the migration key from peer data. We can't do that in relation
+        # departed as we can't tell if the event was triggered from a unit dying of the
+        # relation being actually departed.
+        extra_keys = [
+            k
+            for k in self._peers.data[self.app].keys()
+            if k.startswith(PEER_KEY_DB_MIGRATE_VERSION) and k != self._migration_peer_data_key
+        ]
+        for k in extra_keys:
+            self._pop_peer_data(k)
 
     def _on_admin_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
         if self.unit.is_leader():
@@ -665,10 +739,8 @@ class KratosCharm(CharmBase):
 
         self.unit.status = MaintenanceStatus(f"Adding external provider: {event.provider}")
 
-        if self.database.is_resource_created():
-            self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
-            self._container.restart(self._container_name)
-            self.unit.status = ActiveStatus()
+        if not self._migration_is_needed():
+            self._handle_status_update_config(event)
 
             self.external_provider.set_relation_registered_provider(
                 join(public_url, f"self-service/methods/oidc/callback/{event.provider_id}"),
@@ -823,18 +895,25 @@ class KratosCharm(CharmBase):
         event.set_results(res)
 
     def _on_run_migration_action(self, event: ActionEvent) -> None:
-        if not self._kratos_service_is_running:
+        if not self._container.can_connect():
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
         timeout = float(event.params.get("timeout", 120))
         event.log("Migrating database.")
         try:
-            self.kratos.run_migration(timeout=timeout)
-            event.log("Successfully migrated the database.")
+            self.kratos.run_migration(timeout=timeout, dsn=self._dsn)
         except Error as e:
             err_msg = e.stderr if isinstance(e, ExecError) else e
             event.fail(f"Database migration action failed: {err_msg}")
+            return
+        event.log("Successfully migrated the database.")
+
+        if not self._peers:
+            event.fail("Peer relation not ready. Failed to store migration version")
+            return
+        self._set_peer_data(self._migration_peer_data_key, self.kratos.get_version())
+        event.log("Updated migration version in peer data.")
 
     def _promtail_error(self, event: PromtailDigestError) -> None:
         logger.error(event.message)

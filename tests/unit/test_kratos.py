@@ -211,9 +211,9 @@ def test_run_migration(kratos_api: KratosAPI, mocked_kratos_process: MagicMock) 
         "migrate",
         "sql",
         "-e",
+        "--yes",
         "--config",
         kratos_api.config_file_path,
-        "--yes",
     ]
 
     assert expected_output == cmd_output
