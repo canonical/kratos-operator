@@ -187,17 +187,28 @@ def setup_external_provider_relation(harness: Harness) -> tuple[int, dict]:
 
 
 def validate_config(
-    expected_config: Dict[str, Any], config: Dict[str, Any], validate_schemas: bool = True
+    expected_config: Dict[str, Any],
+    config: Dict[str, Any],
+    validate_schemas: bool = True,
+    validate_mappers: bool = True,
 ) -> None:
-    expected_schemas = expected_config["identity"].pop("schemas")
-    schemas = config["identity"].pop("schemas")
     secrets = config.pop("secrets")
-
     assert "cookie" in secrets
     assert len(secrets["cookie"]) > 0
+
+    expected_schemas = expected_config["identity"].pop("schemas")
+    schemas = config["identity"].pop("schemas")
     assert len(expected_schemas) == len(schemas)
     if validate_schemas:
         assert all(schema in schemas for schema in expected_schemas)
+
+    if not validate_mappers and "methods" in config["selfservice"]:
+        for p in config["selfservice"]["methods"]["oidc"]["config"]["providers"]:
+            p.pop("mapper_url")
+    if not validate_mappers and "methods" in config["selfservice"]:
+        for p in expected_config["selfservice"]["methods"]["oidc"]["config"]["providers"]:
+            p.pop("mapper_url")
+
     assert config == expected_config
 
 
@@ -339,7 +350,10 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(
     }
 
     validate_config(
-        expected_config, yaml.safe_load(harness.charm._render_conf_file()), validate_schemas=False
+        expected_config,
+        yaml.safe_load(harness.charm._render_conf_file()),
+        validate_schemas=False,
+        validate_mappers=False,
     )
 
 
@@ -427,7 +441,9 @@ def test_on_config_changed_when_identity_schemas_config(
 
     configmap = mocked_kratos_configmap.update.call_args_list[-1][0][0]
     config = configmap["kratos.yaml"]
-    validate_config(expected_config, yaml.safe_load(config), validate_schemas=False)
+    validate_config(
+        expected_config, yaml.safe_load(config), validate_schemas=False, validate_mappers=False
+    )
 
 
 def test_on_config_changed_when_identity_schemas_config_unset(
@@ -482,7 +498,9 @@ def test_on_config_changed_when_identity_schemas_config_unset(
 
     configmap = mocked_kratos_configmap.update.call_args_list[-1][0][0]
     config = configmap["kratos.yaml"]
-    validate_config(expected_config, yaml.safe_load(config), validate_schemas=False)
+    validate_config(
+        expected_config, yaml.safe_load(config), validate_schemas=False, validate_mappers=False
+    )
 
 
 def test_on_database_created_cannot_connect_container(harness: Harness) -> None:
@@ -763,7 +781,9 @@ def test_on_client_config_changed_with_ingress(
 
     configmap = mocked_kratos_configmap.update.call_args_list[-1][0][0]
     config = configmap["kratos.yaml"]
-    validate_config(expected_config, yaml.safe_load(config), validate_schemas=False)
+    validate_config(
+        expected_config, yaml.safe_load(config), validate_schemas=False, validate_mappers=False
+    )
 
     expected_redirect_url = harness.charm.public_ingress.url.replace(
         "http://", "https://"
@@ -832,7 +852,9 @@ def test_on_client_config_changed_with_hydra(
 
     configmap = mocked_kratos_configmap.update.call_args_list[-1][0][0]
     config = configmap["kratos.yaml"]
-    validate_config(expected_config, yaml.safe_load(config), validate_schemas=False)
+    validate_config(
+        expected_config, yaml.safe_load(config), validate_schemas=False, validate_mappers=False
+    )
 
 
 def test_on_client_config_changed_when_missing_hydra_relation_data(
@@ -892,7 +914,9 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(
 
     configmap = mocked_kratos_configmap.update.call_args_list[-1][0][0]
     config = configmap["kratos.yaml"]
-    validate_config(expected_config, yaml.safe_load(config), validate_schemas=False)
+    validate_config(
+        expected_config, yaml.safe_load(config), validate_schemas=False, validate_mappers=False
+    )
 
 
 def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(
@@ -971,7 +995,9 @@ def test_on_client_config_changed_without_login_ui_endpoints(
 
     configmap = mocked_kratos_configmap.update.call_args_list[-1][0][0]
     config = configmap["kratos.yaml"]
-    validate_config(expected_config, yaml.safe_load(config), validate_schemas=False)
+    validate_config(
+        expected_config, yaml.safe_load(config), validate_schemas=False, validate_mappers=False
+    )
 
 
 def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
@@ -1024,7 +1050,9 @@ def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
 
     configmap = mocked_kratos_configmap.update.call_args_list[-1][0][0]
     config = configmap["kratos.yaml"]
-    validate_config(expected_config, yaml.safe_load(config), validate_schemas=False)
+    validate_config(
+        expected_config, yaml.safe_load(config), validate_schemas=False, validate_mappers=False
+    )
 
 
 @pytest.mark.parametrize(

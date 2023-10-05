@@ -60,6 +60,7 @@ from ops.charm import (
     RelationDepartedEvent,
     RelationEvent,
     RemoveEvent,
+    UpgradeCharmEvent,
 )
 from ops.main import main
 from ops.model import (
@@ -197,6 +198,7 @@ class KratosCharm(CharmBase):
         )
 
         self.framework.observe(self.on.install, self._on_install)
+        self.framework.observe(self.on.upgrade_charm, self._on_upgrade)
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.leader_elected, self._on_leader_elected)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
@@ -353,10 +355,11 @@ class KratosCharm(CharmBase):
         default_schema_id, schemas = self._get_identity_schema_config()
         oidc_providers = self._get_oidc_providers()
         login_ui_url = self._get_login_ui_endpoint_info("login_url")
+        mappers = self._get_claims_mappers()
         rendered = template.render(
             cookie_secrets=[self._get_secret()],
             log_level=self._log_level,
-            mappers_path=str(self._mappers_dir_path),
+            mappers=mappers,
             default_browser_return_url=self._get_login_ui_endpoint_info("login_url"),
             allowed_return_urls=[login_ui_url] if login_ui_url else [],
             identity_schemas=schemas,
@@ -492,6 +495,17 @@ class KratosCharm(CharmBase):
     def _set_version(self) -> None:
         version = self.kratos.get_version()
         self.unit.set_workload_version(version)
+
+    def _get_claims_mappers(self) -> str:
+        mappers = {}
+        for file in self._mappers_local_dir_path.glob("*.jsonnet"):
+            with open(file) as f:
+                mapper = f.read()
+            mappers[file.stem] = mapper
+        return {
+            provider_id: f"base64://{base64.b64encode(mapper.encode()).decode()}"
+            for provider_id, mapper in mappers.items()
+        }
 
     def _get_oidc_providers(self) -> Optional[List]:
         providers = self.external_provider.get_providers()
@@ -632,12 +646,12 @@ class KratosCharm(CharmBase):
         self.unit.status = ActiveStatus()
 
     def _on_install(self, event: InstallEvent) -> None:
-        if not self._container.can_connect():
-            event.defer()
-            logger.info("Cannot connect to Kratos container. Deferring install event.")
-            self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
-            return
+        config_map.create_all()
+        # We populate the kratos-config configmap with defaults. This way the service can
+        # start without having to wait for the configMap to be updated later on.
+        self._update_config()
 
+    def _on_upgrade(self, event: UpgradeCharmEvent) -> None:
         config_map.create_all()
 
     def _on_leader_elected(self, event: LeaderElectedEvent) -> None:

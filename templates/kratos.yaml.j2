@@ -47,10 +47,8 @@ selfservice:
                     - {% for key, value in config.items() -%}
                       {{ key }}: {{ value }}
                       {% endfor -%}
-                      {%- if not config["mapper_url"] and provider.provider in available_mappers %}
-                      mapper_url: "file://{{ mappers_path }}/{{ provider.provider }}_schema.jsonnet"
-                      {%- elif not config["mapper_url"] %}
-                      mapper_url: "file://{{ mappers_path }}/default_schema.jsonnet"
+                      {%- if not config["mapper_url"] %}
+                      mapper_url: "{{ mappers[provider.provider] | d(mappers['default']) }}"
                       {%- endif %}
                 {%- endfor %}
             enabled: True
