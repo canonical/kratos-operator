@@ -53,7 +53,9 @@ selfservice:
                 {%- endfor %}
             enabled: True
     {%- endif %}
-dsn: postgres://{{ db_info.get('username') }}:{{ db_info.get('password') }}@{{ db_info.get('endpoints') }}/{{ db_info.get('database_name') }}
+{%- if dsn %}
+dsn: {{ dsn }}
+{%- endif %}
 secrets:
     cookie:
     {%- for secret in cookie_secrets %}
@@ -66,7 +68,9 @@ serve:
     public:
         cors:
             enabled: true
+{%- if public_base_url %}
         base_url: {{ public_base_url }}
+{%- endif %}
 {%- if oauth2_provider_url %}
 oauth2_provider:
     url: {{ oauth2_provider_url }}

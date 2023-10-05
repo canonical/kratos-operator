@@ -341,7 +341,6 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(
         },
         "serve": {
             "public": {
-                "base_url": "None",
                 "cors": {
                     "enabled": True,
                 },
@@ -431,7 +430,6 @@ def test_on_config_changed_when_identity_schemas_config(
         },
         "serve": {
             "public": {
-                "base_url": "None",
                 "cors": {
                     "enabled": True,
                 },
@@ -488,7 +486,6 @@ def test_on_config_changed_when_identity_schemas_config_unset(
         },
         "serve": {
             "public": {
-                "base_url": "None",
                 "cors": {
                     "enabled": True,
                 },
@@ -839,7 +836,6 @@ def test_on_client_config_changed_with_hydra(
         },
         "serve": {
             "public": {
-                "base_url": "None",
                 "cors": {
                     "enabled": True,
                 },
@@ -904,7 +900,6 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(
         },
         "serve": {
             "public": {
-                "base_url": "None",
                 "cors": {
                     "enabled": True,
                 },
@@ -982,7 +977,6 @@ def test_on_client_config_changed_without_login_ui_endpoints(
         },
         "serve": {
             "public": {
-                "base_url": "None",
                 "cors": {
                     "enabled": True,
                 },
@@ -1040,7 +1034,6 @@ def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
         },
         "serve": {
             "public": {
-                "base_url": "None",
                 "cors": {
                     "enabled": True,
                 },

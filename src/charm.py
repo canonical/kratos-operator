@@ -369,7 +369,7 @@ class KratosCharm(CharmBase):
             error_ui_url=self._get_login_ui_endpoint_info("error_url"),
             oidc_providers=oidc_providers,
             available_mappers=self._get_available_mappers,
-            db_info=self._get_database_relation_info(),
+            dsn=self._dsn,
             oauth2_provider_url=self._get_hydra_endpoint_info(),
             smtp_connection_uri=self.config.get("smtp_connection_uri"),
         )
@@ -379,7 +379,7 @@ class KratosCharm(CharmBase):
         wait=wait_exponential(multiplier=3, min=1, max=10),
         stop=stop_after_attempt(5),
         reraise=True,
-        before=before_log(logger, logging.INFO),
+        before=before_log(logger, logging.DEBUG),
     )
     def _update_config(self) -> None:
         conf = self._render_conf_file()
@@ -653,6 +653,9 @@ class KratosCharm(CharmBase):
 
     def _on_upgrade(self, event: UpgradeCharmEvent) -> None:
         config_map.create_all()
+        # We populate the kratos-config configmap with defaults. This way the service can
+        # start, without having to wait for the configMap to be updated later on.
+        self._update_config()
 
     def _on_leader_elected(self, event: LeaderElectedEvent) -> None:
         if not self.unit.is_leader():
