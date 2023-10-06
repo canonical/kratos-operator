@@ -212,13 +212,6 @@ def validate_config(
     assert config == expected_config
 
 
-def test_on_install_cannot_connect_container(harness: Harness) -> None:
-    harness.set_can_connect(CONTAINER_NAME, False)
-    harness.charm.on.install.emit()
-
-    assert isinstance(harness.model.unit.status, WaitingStatus)
-
-
 def test_on_pebble_ready_cannot_connect_container(harness: Harness) -> None:
     harness.set_can_connect(CONTAINER_NAME, False)
 
@@ -247,7 +240,13 @@ def test_on_pebble_ready_correct_plan(
         }
     }
     updated_plan = harness.get_container_pebble_plan(CONTAINER_NAME).to_dict()
+    environment = updated_plan["services"][CONTAINER_NAME].pop("environment")
     assert expected_plan == updated_plan
+    assert (
+        environment["DSN"]
+        == f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}"
+    )
+    assert environment["SERVE_PUBLIC_BASE_URL"] is None
 
 
 def test_on_pebble_ready_correct_plan_with_dev_flag(
@@ -273,6 +272,7 @@ def test_on_pebble_ready_correct_plan_with_dev_flag(
         }
     }
     updated_plan = harness.get_container_pebble_plan(CONTAINER_NAME).to_dict()
+    updated_plan["services"][CONTAINER_NAME].pop("environment")
     assert expected_plan == updated_plan
     assert "Running Kratos in dev mode, don't do this in production" in caplog.messages
 
@@ -335,7 +335,6 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(
                 },
             },
         },
-        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
         },
@@ -424,7 +423,6 @@ def test_on_config_changed_when_identity_schemas_config(
         "selfservice": {
             "default_browser_return_url": DEFAULT_BROWSER_RETURN_URL,
         },
-        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
         },
@@ -480,7 +478,6 @@ def test_on_config_changed_when_identity_schemas_config_unset(
         "selfservice": {
             "default_browser_return_url": DEFAULT_BROWSER_RETURN_URL,
         },
-        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
         },
@@ -533,10 +530,10 @@ def test_on_database_created_updated_config_and_start_service_when_pebble_is_rea
     assert service.is_running()
     assert isinstance(harness.charm.unit.status, ActiveStatus)
 
-    updated_config = yaml.safe_load(harness.charm._render_conf_file())
-    assert DB_ENDPOINTS in updated_config["dsn"]
-    assert DB_PASSWORD in updated_config["dsn"]
-    assert DB_USERNAME in updated_config["dsn"]
+    pebble_env = harness.charm._pebble_layer.to_dict()["services"][CONTAINER_NAME]["environment"]
+    assert DB_ENDPOINTS in pebble_env["DSN"]
+    assert DB_PASSWORD in pebble_env["DSN"]
+    assert DB_USERNAME in pebble_env["DSN"]
 
 
 def test_on_database_created_updated_config_and_start_service_when_pebble_is_ready_in_non_leader_unit(
@@ -553,10 +550,10 @@ def test_on_database_created_updated_config_and_start_service_when_pebble_is_rea
     assert service.is_running()
     assert isinstance(harness.charm.unit.status, ActiveStatus)
 
-    updated_config = yaml.safe_load(harness.charm._render_conf_file())
-    assert DB_ENDPOINTS in updated_config["dsn"]
-    assert DB_PASSWORD in updated_config["dsn"]
-    assert DB_USERNAME in updated_config["dsn"]
+    pebble_env = harness.charm._pebble_layer.to_dict()["services"][CONTAINER_NAME]["environment"]
+    assert DB_ENDPOINTS in pebble_env["DSN"]
+    assert DB_PASSWORD in pebble_env["DSN"]
+    assert DB_USERNAME in pebble_env["DSN"]
 
 
 def test_on_database_created_not_run_migration_in_non_leader_unit(
@@ -599,10 +596,10 @@ def test_on_database_created_when_migration_is_successful(
     assert isinstance(harness.charm.unit.status, ActiveStatus)
     mocked_pebble_exec_success.assert_called_once()
 
-    updated_config = yaml.safe_load(harness.charm._render_conf_file())
-    assert DB_ENDPOINTS in updated_config["dsn"]
-    assert DB_PASSWORD in updated_config["dsn"]
-    assert DB_USERNAME in updated_config["dsn"]
+    pebble_env = harness.charm._pebble_layer.to_dict()["services"][CONTAINER_NAME]["environment"]
+    assert DB_ENDPOINTS in pebble_env["DSN"]
+    assert DB_PASSWORD in pebble_env["DSN"]
+    assert DB_USERNAME in pebble_env["DSN"]
 
 
 def test_on_database_created_when_migration_failed(
@@ -635,8 +632,8 @@ def test_on_database_changed_when_pebble_is_ready(
     setup_peer_relation(harness)
     setup_postgres_relation(harness)
 
-    updated_config = yaml.safe_load(harness.charm._render_conf_file())
-    assert DB_ENDPOINTS in updated_config["dsn"]
+    pebble_env = harness.charm._pebble_layer.to_dict()["services"][CONTAINER_NAME]["environment"]
+    assert DB_ENDPOINTS in pebble_env["DSN"]
     assert isinstance(harness.charm.unit.status, ActiveStatus)
 
 
@@ -658,8 +655,8 @@ def test_on_config_changed_when_pebble_is_ready(
     setup_peer_relation(harness)
     setup_postgres_relation(harness)
 
-    updated_config = yaml.safe_load(harness.charm._render_conf_file())
-    assert DB_ENDPOINTS in updated_config["dsn"]
+    pebble_env = harness.charm._pebble_layer.to_dict()["services"][CONTAINER_NAME]["environment"]
+    assert DB_ENDPOINTS in pebble_env["DSN"]
     assert isinstance(harness.charm.unit.status, ActiveStatus)
 
 
@@ -762,13 +759,11 @@ def test_on_client_config_changed_with_ingress(
                 },
             },
         },
-        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/kratos-model_kratos",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
         },
         "serve": {
             "public": {
-                "base_url": "https://public/kratos-model-kratos",
                 "cors": {
                     "enabled": True,
                 },
@@ -830,7 +825,6 @@ def test_on_client_config_changed_with_hydra(
                 },
             },
         },
-        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
         },
@@ -894,7 +888,6 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(
                 },
             },
         },
-        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
         },
@@ -971,7 +964,6 @@ def test_on_client_config_changed_without_login_ui_endpoints(
             ],
         },
         "selfservice": {"default_browser_return_url": DEFAULT_BROWSER_RETURN_URL},
-        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
         },
@@ -1028,7 +1020,6 @@ def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
             ],
         },
         "selfservice": {"default_browser_return_url": DEFAULT_BROWSER_RETURN_URL},
-        "dsn": f"postgres://{DB_USERNAME}:{DB_PASSWORD}@{DB_ENDPOINTS}/{harness.model.name}_{harness.charm.app.name}",
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
         },

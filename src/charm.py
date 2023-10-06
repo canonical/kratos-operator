@@ -277,15 +277,19 @@ class KratosCharm(CharmBase):
                 self._kratos_service_params,
                 str(self._log_path),
             ),
+            "environment": {
+                "DSN": self._dsn,
+                "SERVE_PUBLIC_BASE_URL": self._public_url,
+            },
         }
 
         if self._tracing_ready:
-            container["environment"] = {
-                "TRACING_PROVIDER": "otel",
-                "TRACING_PROVIDERS_OTLP_SERVER_URL": self._get_tracing_endpoint_info(),
-                "TRACING_PROVIDERS_OTLP_INSECURE": True,
-                "TRACING_PROVIDERS_OTLP_SAMPLING_SAMPLING_RATIO": 1,
-            }
+            container["environment"]["TRACING_PROVIDER"] = "otel"
+            container["environment"][
+                "TRACING_PROVIDERS_OTLP_SERVER_URL"
+            ] = self._get_tracing_endpoint_info()
+            container["environment"]["TRACING_PROVIDERS_OTLP_INSECURE"] = True
+            container["environment"]["TRACING_PROVIDERS_OTLP_SAMPLING_SAMPLING_RATIO"] = 1
 
         pebble_layer: LayerDict = {
             "summary": "kratos layer",
@@ -364,12 +368,10 @@ class KratosCharm(CharmBase):
             allowed_return_urls=[login_ui_url] if login_ui_url else [],
             identity_schemas=schemas,
             default_identity_schema_id=default_schema_id,
-            public_base_url=self._public_url,
             login_ui_url=login_ui_url,
             error_ui_url=self._get_login_ui_endpoint_info("error_url"),
             oidc_providers=oidc_providers,
             available_mappers=self._get_available_mappers,
-            dsn=self._dsn,
             oauth2_provider_url=self._get_hydra_endpoint_info(),
             smtp_connection_uri=self.config.get("smtp_connection_uri"),
         )
@@ -654,7 +656,7 @@ class KratosCharm(CharmBase):
     def _on_upgrade(self, event: UpgradeCharmEvent) -> None:
         config_map.create_all()
         # We populate the kratos-config configmap with defaults. This way the service can
-        # start, without having to wait for the configMap to be updated later on.
+        # start without having to wait for the configMap to be updated later on.
         self._update_config()
 
     def _on_leader_elected(self, event: LeaderElectedEvent) -> None:
@@ -666,6 +668,8 @@ class KratosCharm(CharmBase):
 
     def _on_pebble_ready(self, event: PebbleReadyEvent) -> None:
         """Event Handler for pebble ready event."""
+        self._patch_statefulset()
+
         # Necessary directory for log forwarding
         if not self._container.can_connect():
             event.defer()
@@ -675,7 +679,6 @@ class KratosCharm(CharmBase):
             self._container.make_dir(path=str(self._log_dir), make_parents=True)
             logger.info(f"Created directory {self._log_dir}")
 
-        self._patch_statefulset()
         self._set_version()
         self._handle_status_update_config(event)
 
@@ -782,7 +785,15 @@ class KratosCharm(CharmBase):
 
     def _on_database_relation_departed(self, event: RelationDepartedEvent) -> None:
         """Event Handler for database changed event."""
+        if event.departing_unit == self.unit:
+            return
+
         self.unit.status = BlockedStatus("Missing required relation with postgresql")
+        try:
+            self._container.stop(self._container_name)
+        except ChangeError as err:
+            logger.error(str(err))
+            return
 
     def _cleanup_peer_data(self) -> None:
         if not self._peers:
