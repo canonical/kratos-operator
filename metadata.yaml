@@ -53,3 +53,7 @@ provides:
     description: |
       Forwards the built-in grafana dashboard(s) for monitoring kratos.
     interface: grafana_dashboard
+  session_authentication:
+    interface: session_auth
+    description: |
+      Provides authentication to Oathkeeper

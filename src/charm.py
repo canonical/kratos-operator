@@ -33,6 +33,7 @@ from charms.identity_platform_login_ui_operator.v0.login_ui_endpoints import (
     LoginUITooManyRelatedAppsError,
 )
 from charms.kratos.v0.kratos_endpoints import KratosEndpointsProvider
+from charms.kratos.v0.session_auth import SessionAuthProvider
 from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ClientConfigChangedEvent,
     ExternalIdpRequirer,
@@ -114,6 +115,7 @@ class KratosCharm(CharmBase):
         self._kratos_service_command = "kratos serve all"
         self._log_dir = Path("/var/log")
         self._log_path = self._log_dir / "kratos.log"
+        self._session_auth_relation_name = "session_authentication"
 
         self.kratos = KratosAPI(
             f"http://127.0.0.1:{KRATOS_ADMIN_PORT}", self._container, str(self._config_file_path)
@@ -185,6 +187,10 @@ class KratosCharm(CharmBase):
             self, relation_name=self._grafana_dashboard_relation_name
         )
 
+        self.session_auth = SessionAuthProvider(
+            self, relation_name=self._session_auth_relation_name
+        )
+
         self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.leader_elected, self._on_leader_elected)
@@ -227,6 +233,9 @@ class KratosCharm(CharmBase):
 
         self.framework.observe(self.tracing.on.endpoint_changed, self._on_config_changed)
         self.framework.observe(self.tracing.on.endpoint_removed, self._on_config_changed)
+
+        self.framework.observe(self.session_auth.on.allowed_urls_updated, self._on_config_changed)
+        self.framework.observe(self.session_auth.on.ready, self._on_session_auth_endpoints_updated)
 
     @property
     def _kratos_service_params(self) -> str:
@@ -340,12 +349,17 @@ class KratosCharm(CharmBase):
 
         default_schema_id, schemas = self._get_identity_schema_config()
         login_ui_url = self._get_login_ui_endpoint_info("login_url")
+        allowed_urls = (
+            self.session_auth.get_allowed_return_urls().append(login_ui_url)
+            if login_ui_url
+            else self.session_auth.get_allowed_return_urls()
+        )
         rendered = template.render(
             cookie_secrets=[self._get_secret()],
             log_level=self._log_level,
             mappers_path=str(self._mappers_dir_path),
             default_browser_return_url=self._get_login_ui_endpoint_info("login_url"),
-            allowed_return_urls=[login_ui_url] if login_ui_url else [],
+            allowed_return_urls=allowed_urls,
             identity_schemas=schemas,
             default_identity_schema_id=default_schema_id,
             public_base_url=self._public_url,
@@ -719,6 +733,7 @@ class KratosCharm(CharmBase):
 
         self._handle_status_update_config(event)
         self._update_kratos_endpoints_relation_data(event)
+        self._on_session_auth_endpoints_updated(event)
 
     def _on_ingress_revoked(self, event: IngressPerAppRevokedEvent) -> None:
         if self.unit.is_leader():
@@ -726,6 +741,7 @@ class KratosCharm(CharmBase):
 
         self._handle_status_update_config(event)
         self._update_kratos_endpoints_relation_data(event)
+        self._on_session_auth_endpoints_updated(event)
 
     def _on_client_config_changed(self, event: ClientConfigChangedEvent) -> None:
         public_url = self._public_url
@@ -917,6 +933,18 @@ class KratosCharm(CharmBase):
 
     def _promtail_error(self, event: PromtailDigestError) -> None:
         logger.error(event.message)
+
+    def _on_session_auth_endpoints_updated(self, event: RelationEvent) -> None:
+        logger.info("Sending endpoints info to Oathkeeper")
+
+        endpoint = (
+            self._public_url
+            or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
+        )
+
+        endpoint = (endpoint.replace("https", "http"),)
+
+        self.session_auth.set_endpoints(endpoint)
 
 
 if __name__ == "__main__":
