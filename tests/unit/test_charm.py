@@ -192,9 +192,10 @@ def validate_config(
     validate_schemas: bool = True,
     validate_mappers: bool = True,
 ) -> None:
-    secrets = config.pop("secrets")
-    assert "cookie" in secrets
-    assert len(secrets["cookie"]) > 0
+    secrets = config.pop("secrets", None)
+    if secrets:
+        assert "cookie" in secrets
+        assert len(secrets["cookie"]) > 0
 
     expected_schemas = expected_config["identity"].pop("schemas")
     schemas = config["identity"].pop("schemas")

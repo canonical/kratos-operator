@@ -53,11 +53,13 @@ selfservice:
                 {%- endfor %}
             enabled: True
     {%- endif %}
+{%- if cookie_secrets %}
 secrets:
     cookie:
     {%- for secret in cookie_secrets %}
         - {{ secret }}
     {%- endfor %}
+{%- endif %}
 courier:
     smtp:
         connection_uri: {{ smtp_connection_uri }}

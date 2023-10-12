@@ -360,8 +360,9 @@ class KratosCharm(CharmBase):
         oidc_providers = self._get_oidc_providers()
         login_ui_url = self._get_login_ui_endpoint_info("login_url")
         mappers = self._get_claims_mappers()
+        cookie_secrets = self._get_secret()
         rendered = template.render(
-            cookie_secrets=[self._get_secret()],
+            cookie_secrets=[cookie_secrets] if cookie_secrets else None,
             log_level=self._log_level,
             mappers=mappers,
             default_browser_return_url=self._get_login_ui_endpoint_info("login_url"),
@@ -669,7 +670,6 @@ class KratosCharm(CharmBase):
     def _on_pebble_ready(self, event: PebbleReadyEvent) -> None:
         """Event Handler for pebble ready event."""
         self._patch_statefulset()
-
         # Necessary directory for log forwarding
         if not self._container.can_connect():
             event.defer()
