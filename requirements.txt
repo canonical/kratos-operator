@@ -5,3 +5,4 @@ lightkube-models
 Jinja2
 jsonschema
 requests
+tenacity==8.2.2

@@ -25,6 +25,12 @@ def harness(mocked_kubernetes_service_patcher: MagicMock) -> Harness:
     return harness
 
 
+@pytest.fixture(autouse=True)
+def lk_client(mocker: MockerFixture) -> None:
+    mock_lightkube = mocker.patch("charm.Client", autospec=True)
+    return mock_lightkube.return_value
+
+
 @pytest.fixture()
 def mocked_kratos_process() -> MagicMock:
     mock = MagicMock()
@@ -220,6 +226,25 @@ def mocked_create_identity(mocker: MockerFixture, kratos_identity_json: Dict) ->
 def mocked_run_migration(mocker: MockerFixture) -> MagicMock:
     mock = mocker.patch("charm.KratosAPI.run_migration", return_value=(None, None))
     return mock
+
+
+@pytest.fixture(autouse=True)
+def mocked_kratos_configmap(mocker: MockerFixture) -> MagicMock:
+    mock = mocker.patch("charm.KratosConfigMap", autospec=True)
+    return mock.return_value
+
+
+@pytest.fixture(autouse=True)
+def mocked_schemas_configmap(mocker: MockerFixture) -> MagicMock:
+    mock = mocker.patch("charm.IdentitySchemaConfigMap", autospec=True)
+    mock.return_value.get.return_value = {}
+    return mock.return_value
+
+
+@pytest.fixture(autouse=True)
+def mocked_providers_configmap(mocker: MockerFixture) -> MagicMock:
+    mock = mocker.patch("charm.ProvidersConfigMap", autospec=True)
+    return mock.return_value
 
 
 @pytest.fixture(autouse=True)

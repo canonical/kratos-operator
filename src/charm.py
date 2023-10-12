@@ -47,6 +47,8 @@ from charms.traefik_k8s.v2.ingress import (
     IngressPerAppRevokedEvent,
 )
 from jinja2 import Template
+from lightkube import Client
+from lightkube.resources.apps_v1 import StatefulSet
 from ops.charm import (
     ActionEvent,
     CharmBase,
@@ -57,6 +59,8 @@ from ops.charm import (
     PebbleReadyEvent,
     RelationDepartedEvent,
     RelationEvent,
+    RemoveEvent,
+    UpgradeCharmEvent,
 )
 from ops.main import main
 from ops.model import (
@@ -70,7 +74,10 @@ from ops.model import (
     WaitingStatus,
 )
 from ops.pebble import ChangeError, Error, ExecError, Layer
+from tenacity import before_log, retry, stop_after_attempt, wait_exponential
 
+import config_map
+from config_map import IdentitySchemaConfigMap, KratosConfigMap, ProvidersConfigMap
 from kratos import KratosAPI
 from utils import dict_to_action_output, normalise_url
 
@@ -96,12 +103,12 @@ class KratosCharm(CharmBase):
         super().__init__(*args)
         self._container_name = "kratos"
         self._container = self.unit.get_container(self._container_name)
-        self._config_dir_path = Path("/etc/config")
+        self._config_dir_path = Path("/etc/config/kratos")
         self._config_file_path = self._config_dir_path / "kratos.yaml"
-        self._identity_schemas_default_dir_path = self._config_dir_path / "schemas" / "default"
+        self._identity_schemas_default_dir_path = self._config_dir_path
         self._identity_schemas_config_dir_path = self._config_dir_path / "schemas" / "juju"
         self._identity_schemas_local_dir_path = Path("identity_schemas")
-        self._mappers_dir_path = self._config_dir_path / "claim_mappers"
+        self._mappers_dir_path = self._config_dir_path
         self._mappers_local_dir_path = Path("claim_mappers")
         self._db_name = f"{self.model.name}_{self.app.name}"
         self._db_relation_name = "pg-database"
@@ -114,10 +121,15 @@ class KratosCharm(CharmBase):
         self._kratos_service_command = "kratos serve all"
         self._log_dir = Path("/var/log")
         self._log_path = self._log_dir / "kratos.log"
+        self._kratos_config_map_name = "kratos-config"
 
+        self.client = Client(field_manager=self.app.name, namespace=self.model.name)
         self.kratos = KratosAPI(
             f"http://127.0.0.1:{KRATOS_ADMIN_PORT}", self._container, str(self._config_file_path)
         )
+        self.kratos_configmap = KratosConfigMap(self.client, self)
+        self.schemas_configmap = IdentitySchemaConfigMap(self.client, self)
+        self.providers_configmap = ProvidersConfigMap(self.client, self)
         self.service_patcher = KubernetesServicePatch(
             self, [("admin", KRATOS_ADMIN_PORT), ("public", KRATOS_PUBLIC_PORT)]
         )
@@ -186,9 +198,11 @@ class KratosCharm(CharmBase):
         )
 
         self.framework.observe(self.on.install, self._on_install)
+        self.framework.observe(self.on.upgrade_charm, self._on_upgrade)
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.leader_elected, self._on_leader_elected)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
+        self.framework.observe(self.on.remove, self._on_remove)
         self.framework.observe(
             self.endpoints_provider.on.ready, self._update_kratos_endpoints_relation_data
         )
@@ -263,15 +277,19 @@ class KratosCharm(CharmBase):
                 self._kratos_service_params,
                 str(self._log_path),
             ),
+            "environment": {
+                "DSN": self._dsn,
+                "SERVE_PUBLIC_BASE_URL": self._public_url,
+            },
         }
 
         if self._tracing_ready:
-            container["environment"] = {
-                "TRACING_PROVIDER": "otel",
-                "TRACING_PROVIDERS_OTLP_SERVER_URL": self._get_tracing_endpoint_info(),
-                "TRACING_PROVIDERS_OTLP_INSECURE": True,
-                "TRACING_PROVIDERS_OTLP_SAMPLING_SAMPLING_RATIO": 1,
-            }
+            container["environment"]["TRACING_PROVIDER"] = "otel"
+            container["environment"][
+                "TRACING_PROVIDERS_OTLP_SERVER_URL"
+            ] = self._get_tracing_endpoint_info()
+            container["environment"]["TRACING_PROVIDERS_OTLP_INSECURE"] = True
+            container["environment"]["TRACING_PROVIDERS_OTLP_SAMPLING_SAMPLING_RATIO"] = 1
 
         pebble_layer: LayerDict = {
             "summary": "kratos layer",
@@ -339,44 +357,36 @@ class KratosCharm(CharmBase):
             template = Template(file.read())
 
         default_schema_id, schemas = self._get_identity_schema_config()
+        oidc_providers = self._get_oidc_providers()
         login_ui_url = self._get_login_ui_endpoint_info("login_url")
+        mappers = self._get_claims_mappers()
+        cookie_secrets = self._get_secret()
         rendered = template.render(
-            cookie_secrets=[self._get_secret()],
+            cookie_secrets=[cookie_secrets] if cookie_secrets else None,
             log_level=self._log_level,
-            mappers_path=str(self._mappers_dir_path),
+            mappers=mappers,
             default_browser_return_url=self._get_login_ui_endpoint_info("login_url"),
             allowed_return_urls=[login_ui_url] if login_ui_url else [],
             identity_schemas=schemas,
             default_identity_schema_id=default_schema_id,
-            public_base_url=self._public_url,
             login_ui_url=login_ui_url,
             error_ui_url=self._get_login_ui_endpoint_info("error_url"),
-            oidc_providers=self.external_provider.get_providers(),
+            oidc_providers=oidc_providers,
             available_mappers=self._get_available_mappers,
-            db_info=self._get_database_relation_info(),
             oauth2_provider_url=self._get_hydra_endpoint_info(),
             smtp_connection_uri=self.config.get("smtp_connection_uri"),
         )
         return rendered
 
-    def _push_file(
-        self, dst: Path, src: Optional[Path] = None, content: Optional[str] = None
-    ) -> None:
-        if not content:
-            if not src:
-                raise ValueError("`src` or `content` must be provided.")
-            with open(src) as f:
-                content = f.read()
-        self._container.push(dst, content, make_dirs=True)
-
-    def _push_default_files(self) -> None:
-        for schema_file in self._mappers_local_dir_path.iterdir():
-            self._push_file(self._mappers_dir_path / schema_file.name, src=schema_file)
-
-        for schema_file in self._identity_schemas_local_dir_path.iterdir():
-            self._push_file(
-                self._identity_schemas_default_dir_path / schema_file.name, src=schema_file
-            )
+    @retry(
+        wait=wait_exponential(multiplier=3, min=1, max=10),
+        stop=stop_after_attempt(5),
+        reraise=True,
+        before=before_log(logger, logging.DEBUG),
+    )
+    def _update_config(self) -> None:
+        conf = self._render_conf_file()
+        self.kratos_configmap.update({"kratos.yaml": conf})
 
     def _get_hydra_endpoint_info(self) -> Optional[str]:
         oauth2_provider_url = None
@@ -402,8 +412,20 @@ class KratosCharm(CharmBase):
             logger.info("Too many ui-endpoint-info relation found")
         return None
 
+    def _get_juju_config_identity_schemas(self) -> Optional[Dict]:
+        identity_schemas = self.config.get("identity_schemas")
+        if not identity_schemas:
+            return None
+        try:
+            schemas = json.loads(identity_schemas)
+        except json.JSONDecodeError as e:
+            logger.error(f"identity_schemas is not a valid json: {e}")
+            logger.warning("Ignoring `identity_schemas` configuration")
+            return None
+        return {name: json.dumps(s) for name, s in schemas.items()}
+
     def _get_juju_config_identity_schema_config(self) -> Optional[Tuple[str, Dict]]:
-        if identity_schemas := self.config.get("identity_schemas"):
+        if identity_schemas := self._get_juju_config_identity_schemas():
             default_schema_id = self.config.get("default_identity_schema_id")
             if not default_schema_id:
                 logger.error(
@@ -412,25 +434,39 @@ class KratosCharm(CharmBase):
                 logger.warning("Ignoring `identity_schemas` configuration")
                 return None
 
-            try:
-                schemas = json.loads(identity_schemas)
-            except json.JSONDecodeError as e:
-                logger.error(f"identity_schemas is not a valid json: {e}")
-                logger.warning("Ignoring `identity_schemas` configuration")
-                return None
-
             schemas = {
-                schema_id: f"base64://{base64.b64encode(json.dumps(schema).encode()).decode()}"
-                for schema_id, schema in schemas.items()
+                schema_id: f"base64://{base64.b64encode(schema.encode()).decode()}"
+                for schema_id, schema in identity_schemas.items()
             }
             return default_schema_id, schemas
         return None
 
-    def _get_default_identity_schema_config(self) -> Tuple[Optional[str], Optional[Dict]]:
+    def _get_configmap_identity_schema_config(self) -> Optional[Tuple[str, Dict]]:
+        identity_schemas = self.schemas_configmap.get()
+        if not identity_schemas:
+            return None
+
+        default_schema_id = identity_schemas.pop("default.schema")
+        if not default_schema_id:
+            logger.error("`configMap with identity schemas contains no `default.schema`")
+            return None
+
         schemas = {
-            schema_file.stem: f"file://{self._identity_schemas_default_dir_path / schema_file.name}"
-            for schema_file in self._identity_schemas_local_dir_path.glob("*.json")
+            schema_id: f"base64://{base64.b64encode(schema.encode()).decode()}"
+            for schema_id, schema in identity_schemas.items()
         }
+        return default_schema_id, schemas
+
+    def _get_default_identity_schemas(self) -> Dict:
+        schemas = {}
+        for schema_file in self._identity_schemas_local_dir_path.glob("*.json"):
+            with open(schema_file) as f:
+                schema = f.read()
+            schemas[schema_file.stem] = schema
+        return schemas
+
+    def _get_default_identity_schema_config(self) -> Tuple[str, Dict]:
+        schemas = self._get_default_identity_schemas()
         default_schema_id_file = (
             self._identity_schemas_local_dir_path / DEFAULT_SCHEMA_ID_FILE_NAME
         )
@@ -438,9 +474,13 @@ class KratosCharm(CharmBase):
             default_schema_id = f.read()
         if default_schema_id not in schemas:
             raise RuntimeError(f"Default schema `{default_schema_id}` can't be found")
+        schemas = {
+            schema_id: f"base64://{base64.b64encode(schema.encode()).decode()}"
+            for schema_id, schema in schemas.items()
+        }
         return default_schema_id, schemas
 
-    def _get_identity_schema_config(self) -> Optional[Tuple[str, Dict]]:
+    def _get_identity_schema_config(self) -> Tuple[str, Dict]:
         """Get the the default schema id and the identity schemas.
 
         The identity schemas can come from 2 different sources. We chose them in this order:
@@ -449,6 +489,8 @@ class KratosCharm(CharmBase):
         """
         if config_schemas := self._get_juju_config_identity_schema_config():
             default_schema_id, schemas = config_schemas
+        elif config_schemas := self._get_configmap_identity_schema_config():
+            default_schema_id, schemas = config_schemas
         else:
             default_schema_id, schemas = self._get_default_identity_schema_config()
         return default_schema_id, schemas
@@ -456,6 +498,23 @@ class KratosCharm(CharmBase):
     def _set_version(self) -> None:
         version = self.kratos.get_version()
         self.unit.set_workload_version(version)
+
+    def _get_claims_mappers(self) -> str:
+        mappers = {}
+        for file in self._mappers_local_dir_path.glob("*.jsonnet"):
+            with open(file) as f:
+                mapper = f.read()
+            mappers[file.stem] = mapper
+        return {
+            provider_id: f"base64://{base64.b64encode(mapper.encode()).decode()}"
+            for provider_id, mapper in mappers.items()
+        }
+
+    def _get_oidc_providers(self) -> Optional[List]:
+        providers = self.external_provider.get_providers()
+        if p := self.providers_configmap.get():
+            providers.extend(p.values())
+        return providers
 
     def _get_database_relation_info(self) -> Optional[Dict]:
         """Get database info from relation data bag."""
@@ -577,7 +636,7 @@ class KratosCharm(CharmBase):
             return
 
         self._cleanup_peer_data()
-        self._container.push(self._config_file_path, self._render_conf_file(), make_dirs=True)
+        self._update_config()
         # We need to push the layer because this may run before _on_pebble_ready
         self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
         try:
@@ -590,13 +649,16 @@ class KratosCharm(CharmBase):
         self.unit.status = ActiveStatus()
 
     def _on_install(self, event: InstallEvent) -> None:
-        if not self._container.can_connect():
-            event.defer()
-            logger.info("Cannot connect to Kratos container. Deferring install event.")
-            self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
-            return
+        config_map.create_all()
+        # We populate the kratos-config configmap with defaults. This way the service can
+        # start without having to wait for the configMap to be updated later on.
+        self._update_config()
 
-        self._push_default_files()
+    def _on_upgrade(self, event: UpgradeCharmEvent) -> None:
+        config_map.create_all()
+        # We populate the kratos-config configmap with defaults. This way the service can
+        # start without having to wait for the configMap to be updated later on.
+        self._update_config()
 
     def _on_leader_elected(self, event: LeaderElectedEvent) -> None:
         if not self.unit.is_leader():
@@ -607,6 +669,7 @@ class KratosCharm(CharmBase):
 
     def _on_pebble_ready(self, event: PebbleReadyEvent) -> None:
         """Event Handler for pebble ready event."""
+        self._patch_statefulset()
         # Necessary directory for log forwarding
         if not self._container.can_connect():
             event.defer()
@@ -616,13 +679,18 @@ class KratosCharm(CharmBase):
             self._container.make_dir(path=str(self._log_dir), make_parents=True)
             logger.info(f"Created directory {self._log_dir}")
 
-        self._push_default_files()
         self._set_version()
         self._handle_status_update_config(event)
 
     def _on_config_changed(self, event: ConfigChangedEvent) -> None:
         """Event Handler for config changed event."""
         self._handle_status_update_config(event)
+
+    def _on_remove(self, event: RemoveEvent) -> None:
+        if not self.unit.is_leader():
+            return
+
+        config_map.delete_all()
 
     def _get_tracing_endpoint_info(self) -> str:
         if not self._tracing_ready:
@@ -647,6 +715,33 @@ class KratosCharm(CharmBase):
             public_endpoint.replace("https", "http"),
         )
         self.endpoints_provider.send_endpoint_relation_data(admin_endpoint, public_endpoint)
+
+    def _patch_statefulset(self) -> None:
+        if not self.unit.is_leader():
+            return
+
+        pod_spec_patch = {
+            "containers": [
+                {
+                    "name": self._container_name,
+                    "volumeMounts": [
+                        {
+                            "mountPath": str(self._config_dir_path),
+                            "name": "config",
+                            "readOnly": True,
+                        },
+                    ],
+                },
+            ],
+            "volumes": [
+                {
+                    "name": "config",
+                    "configMap": {"name": self._kratos_config_map_name},
+                },
+            ],
+        }
+        patch = {"spec": {"template": {"spec": pod_spec_patch}}}
+        self.client.patch(StatefulSet, name=self.meta.name, namespace=self.model.name, obj=patch)
 
     def _on_database_created(self, event: DatabaseCreatedEvent) -> None:
         """Event Handler for database created event."""
@@ -690,7 +785,15 @@ class KratosCharm(CharmBase):
 
     def _on_database_relation_departed(self, event: RelationDepartedEvent) -> None:
         """Event Handler for database changed event."""
+        if event.departing_unit == self.unit:
+            return
+
         self.unit.status = BlockedStatus("Missing required relation with postgresql")
+        try:
+            self._container.stop(self._container_name)
+        except ChangeError as err:
+            logger.error(str(err))
+            return
 
     def _cleanup_peer_data(self) -> None:
         if not self._peers:
