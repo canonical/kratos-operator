@@ -6,6 +6,7 @@ description: |
   Charmed Ory Kratos
 summary: |
   Identity and user management system
+docs: https://discourse.charmhub.io/t/kratos-docs-index/12136
 containers:
   kratos:
     resource: oci-image
