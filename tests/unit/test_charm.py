@@ -325,7 +325,6 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(
             ],
         },
         "selfservice": {
-            "allowed_return_urls": [login_databag["login_url"]],
             "default_browser_return_url": login_databag["login_url"],
             "flows": {
                 "error": {
@@ -717,7 +716,9 @@ def test_on_client_config_changed_with_ingress(
             ],
         },
         "selfservice": {
-            "allowed_return_urls": [login_databag["login_url"]],
+            "allowed_return_urls": [
+                "https://public/*",
+            ],
             "default_browser_return_url": login_databag["login_url"],
             "flows": {
                 "error": {
@@ -815,7 +816,6 @@ def test_on_client_config_changed_with_hydra(
             ],
         },
         "selfservice": {
-            "allowed_return_urls": [login_databag["login_url"]],
             "default_browser_return_url": login_databag["login_url"],
             "flows": {
                 "error": {
@@ -878,7 +878,6 @@ def test_on_client_config_changed_when_missing_hydra_relation_data(
             ],
         },
         "selfservice": {
-            "allowed_return_urls": [login_databag["login_url"]],
             "default_browser_return_url": login_databag["login_url"],
             "flows": {
                 "error": {

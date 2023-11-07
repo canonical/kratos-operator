@@ -14,6 +14,7 @@ from os.path import join
 from pathlib import Path
 from secrets import token_hex
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+from urllib.parse import urlparse
 
 import requests
 from charms.data_platform_libs.v0.data_interfaces import (
@@ -361,12 +362,21 @@ class KratosCharm(CharmBase):
         login_ui_url = self._get_login_ui_endpoint_info("login_url")
         mappers = self._get_claims_mappers()
         cookie_secrets = self._get_secret()
+
+        allowed_return_urls = []
+        if self._public_url:
+            allowed_return_urls.append(
+                urlparse(self._public_url)
+                ._replace(path="*", params="", query="", fragment="")
+                .geturl()
+            )
+
         rendered = template.render(
             cookie_secrets=[cookie_secrets] if cookie_secrets else None,
             log_level=self._log_level,
             mappers=mappers,
-            default_browser_return_url=self._get_login_ui_endpoint_info("login_url"),
-            allowed_return_urls=[login_ui_url] if login_ui_url else [],
+            default_browser_return_url=login_ui_url,
+            allowed_return_urls=allowed_return_urls,
             identity_schemas=schemas,
             default_identity_schema_id=default_schema_id,
             login_ui_url=login_ui_url,
