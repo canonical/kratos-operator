@@ -1,5 +1,7 @@
 # Charmed Ory Kratos
 
+[![CharmHub Badge](https://charmhub.io/kratos/badge.svg)](https://charmhub.io/kratos)
+
 ## Description
 
 This repository hosts the Kubernetes Python Operator for Ory Kratos -  an API-first identity and user management system.
