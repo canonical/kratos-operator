@@ -1,3 +1,4 @@
+pytest-asyncio==0.21.1
 pytest
 juju
 pytest-operator==0.29.0
