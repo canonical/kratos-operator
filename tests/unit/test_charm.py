@@ -677,14 +677,14 @@ def test_ingress_relation_created(
     }
 
 
-def test_on_client_config_changed_when_no_dns_available(harness: Harness) -> None:
+def test_on_config_changed_when_no_dns_available(harness: Harness) -> None:
     setup_postgres_relation(harness)
     setup_external_provider_relation(harness)
 
     assert isinstance(harness.charm.unit.status, BlockedStatus)
 
 
-def test_on_client_config_changed_with_ingress(
+def test_on_config_changed_with_ingress(
     harness: Harness,
     mocked_container: Container,
     mocked_migration_is_needed: MagicMock,
@@ -787,7 +787,7 @@ def test_on_client_config_changed_with_ingress(
     assert app_data[0]["redirect_uri"].startswith(expected_redirect_url)
 
 
-def test_on_client_config_changed_with_hydra(
+def test_on_config_changed_with_hydra(
     harness: Harness, mocked_migration_is_needed: MagicMock, mocked_kratos_configmap: MagicMock
 ) -> None:
     setup_peer_relation(harness)
@@ -848,7 +848,7 @@ def test_on_client_config_changed_with_hydra(
     )
 
 
-def test_on_client_config_changed_when_missing_hydra_relation_data(
+def test_on_config_changed_when_missing_hydra_relation_data(
     harness: Harness, mocked_kratos_configmap: MagicMock, mocked_migration_is_needed: MagicMock
 ) -> None:
     setup_postgres_relation(harness)
@@ -931,7 +931,7 @@ def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(
     assert harness.get_relation_data(endpoint_info_relation_id, "kratos") == expected_data
 
 
-def test_on_client_config_changed_without_login_ui_endpoints(
+def test_on_changed_without_login_ui_endpoints(
     harness: Harness, mocked_migration_is_needed: MagicMock, mocked_kratos_configmap: MagicMock
 ) -> None:
     setup_peer_relation(harness)
@@ -986,7 +986,7 @@ def test_on_client_config_changed_without_login_ui_endpoints(
     )
 
 
-def test_on_client_config_changed_when_missing_login_ui_and_hydra_relation_data(
+def test_on_config_changed_when_missing_login_ui_and_hydra_relation_data(
     harness: Harness, mocked_kratos_configmap: MagicMock, mocked_migration_is_needed: MagicMock
 ) -> None:
     setup_postgres_relation(harness)
