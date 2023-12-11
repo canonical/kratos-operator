@@ -365,11 +365,12 @@ class KratosCharm(CharmBase):
 
         allowed_return_urls = []
         if self._public_url:
-            allowed_return_urls.append(
+            allowed_return_urls = [
                 urlparse(self._public_url)
-                ._replace(path="*", params="", query="", fragment="")
+                ._replace(path="", params="", query="", fragment="")
                 .geturl()
-            )
+                + "/"
+            ]
 
         rendered = template.render(
             cookie_secrets=[cookie_secrets] if cookie_secrets else None,

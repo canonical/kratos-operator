@@ -717,7 +717,7 @@ def test_on_client_config_changed_with_ingress(
         },
         "selfservice": {
             "allowed_return_urls": [
-                "https://public/*",
+                "https://public/",
             ],
             "default_browser_return_url": login_databag["login_url"],
             "flows": {
