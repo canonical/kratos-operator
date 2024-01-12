@@ -54,3 +54,7 @@ provides:
     description: |
       Forwards the built-in grafana dashboard(s) for monitoring kratos.
     interface: grafana_dashboard
+  kratos-admin-endpoint:
+    description: |
+      Provides information to the Identity Platform Admin UI to manage Kratos resources
+    interface: admin_ui_service

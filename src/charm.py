@@ -27,6 +27,9 @@ from charms.hydra.v0.hydra_endpoints import (
     HydraEndpointsRelationDataMissingError,
     HydraEndpointsRequirer,
 )
+from charms.identity_platform_admin_ui_operator.v0.admin_ui_service import (
+    KratosAdminUIServiceProvider,
+)
 from charms.identity_platform_login_ui_operator.v0.login_ui_endpoints import (
     LoginUIEndpointsRelationDataMissingError,
     LoginUIEndpointsRelationMissingError,
@@ -115,6 +118,7 @@ class KratosCharm(CharmBase):
         self._db_relation_name = "pg-database"
         self._hydra_relation_name = "hydra-endpoint-info"
         self._login_ui_relation_name = "ui-endpoint-info"
+        self._admin_ui_relation_name = "kratos-admin-endpoint"
         self._prometheus_scrape_relation_name = "metrics-endpoint"
         self._loki_push_api_relation_name = "logging"
         self._grafana_dashboard_relation_name = "grafana-dashboard"
@@ -123,6 +127,12 @@ class KratosCharm(CharmBase):
         self._log_dir = Path("/var/log")
         self._log_path = self._log_dir / "kratos.log"
         self._kratos_config_map_name = "kratos-config"
+        self._admin_k8s_service_url = (
+            f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
+        )
+        self._public_k8s_service_url = (
+            f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
+        )
 
         self.client = Client(field_manager=self.app.name, namespace=self.model.name)
         self.kratos = KratosAPI(
@@ -164,6 +174,10 @@ class KratosCharm(CharmBase):
 
         self.login_ui_endpoints = LoginUIEndpointsRequirer(
             self, relation_name=self._login_ui_relation_name
+        )
+
+        self.admin_ui_provider = KratosAdminUIServiceProvider(
+            self, relation_name=self._admin_ui_relation_name
         )
 
         self.endpoints_provider = KratosEndpointsProvider(self)
@@ -212,6 +226,9 @@ class KratosCharm(CharmBase):
         )
         self.framework.observe(
             self.on[self._login_ui_relation_name].relation_changed, self._on_config_changed
+        )
+        self.framework.observe(
+            self.admin_ui_provider.on.ready, self._update_admin_ui_relation_data
         )
         self.framework.observe(self.database.on.database_created, self._on_database_created)
         self.framework.observe(self.database.on.endpoints_changed, self._on_database_changed)
@@ -712,20 +729,32 @@ class KratosCharm(CharmBase):
     def _update_kratos_endpoints_relation_data(self, event: RelationEvent) -> None:
         logger.info("Sending endpoints info")
 
-        admin_endpoint = (
-            self._admin_url
-            or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
-        )
-        public_endpoint = (
-            self._public_url
-            or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
-        )
+        admin_endpoint = self._admin_url or self._admin_k8s_service_url
+        public_endpoint = self._public_url or self._public_k8s_service_url
 
         admin_endpoint, public_endpoint = (
             admin_endpoint.replace("https", "http"),
             public_endpoint.replace("https", "http"),
         )
         self.endpoints_provider.send_endpoint_relation_data(admin_endpoint, public_endpoint)
+
+    def _update_admin_ui_relation_data(self, event: RelationEvent) -> None:
+        logger.info("Sending endpoints and k8s resources info to Admin UI")
+        admin_endpoint = self._admin_url or self._admin_k8s_service_url
+        public_endpoint = self._public_url or self._public_k8s_service_url
+
+        admin_endpoint, public_endpoint = (
+            admin_endpoint.replace("https", "http"),
+            public_endpoint.replace("https", "http"),
+        )
+
+        self.admin_ui_provider.send_relation_data_for_admin_ui(
+            admin_endpoint=admin_endpoint,
+            public_endpoint=public_endpoint,
+            model_name=self.model.name,
+            idp_configmap="providers",
+            schemas_configmap="identity-schemas",
+        )
 
     def _patch_statefulset(self) -> None:
         if not self.unit.is_leader():
