@@ -16,6 +16,7 @@ from ops.testing import Harness
 
 CONFIG_DIR = Path("/etc/config")
 CONTAINER_NAME = "kratos"
+ADMIN_PORT = "4434"
 DB_USERNAME = "fake_relation_id_1"
 DB_PASSWORD = "fake-password"
 DB_ENDPOINTS = "postgresql-k8s-primary.namespace.svc.cluster.local:5432"
@@ -231,6 +232,16 @@ def test_on_pebble_ready_correct_plan(
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     expected_plan = {
+        "checks": {
+            "kratos-alive": {
+                "http": {"url": f"http://localhost:{ADMIN_PORT}/admin/health/alive"},
+                "override": "replace",
+            },
+            "kratos-ready": {
+                "http": {"url": f"http://localhost:{ADMIN_PORT}/admin/health/ready"},
+                "override": "replace",
+            },
+        },
         "services": {
             CONTAINER_NAME: {
                 "override": "replace",
@@ -238,7 +249,7 @@ def test_on_pebble_ready_correct_plan(
                 "startup": "disabled",
                 "command": '/bin/sh -c "kratos serve all --config /etc/config/kratos/kratos.yaml 2>&1 | tee -a /var/log/kratos.log"',
             }
-        }
+        },
     }
     updated_plan = harness.get_container_pebble_plan(CONTAINER_NAME).to_dict()
     environment = updated_plan["services"][CONTAINER_NAME].pop("environment")
@@ -263,6 +274,16 @@ def test_on_pebble_ready_correct_plan_with_dev_flag(
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     expected_plan = {
+        "checks": {
+            "kratos-alive": {
+                "http": {"url": "http://localhost:4434/admin/health/alive"},
+                "override": "replace",
+            },
+            "kratos-ready": {
+                "http": {"url": "http://localhost:4434/admin/health/ready"},
+                "override": "replace",
+            },
+        },
         "services": {
             CONTAINER_NAME: {
                 "override": "replace",
@@ -270,7 +291,7 @@ def test_on_pebble_ready_correct_plan_with_dev_flag(
                 "startup": "disabled",
                 "command": '/bin/sh -c "kratos serve all --config /etc/config/kratos/kratos.yaml --dev 2>&1 | tee -a /var/log/kratos.log"',
             }
-        }
+        },
     }
     updated_plan = harness.get_container_pebble_plan(CONTAINER_NAME).to_dict()
     updated_plan["services"][CONTAINER_NAME].pop("environment")
