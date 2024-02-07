@@ -5,11 +5,13 @@ import base64
 import json
 from pathlib import Path
 from typing import Any, Dict
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, Mock
 
 import pytest
 import requests
 import yaml
+from charms.harness_extensions.v0.capture_events import capture_events
+from charms.kratos.v0.kratos_info import KratosInfoRelationReadyEvent
 from ops.model import ActiveStatus, BlockedStatus, Container, WaitingStatus
 from ops.pebble import ExecError, TimeoutError
 from ops.testing import Harness
@@ -149,6 +151,26 @@ def setup_tempo_relation(harness: Harness) -> int:
         "tempo-k8s",
         trace_databag,
     )
+    return relation_id
+
+
+def setup_kratos_info_relation(harness: Harness) -> int:
+    relation_id = harness.add_relation("kratos-info", "requirer")
+    harness.add_relation_unit(relation_id, "requirer/0")
+    harness.update_relation_data(
+        relation_id,
+        "requirer",
+        {
+            "admin_endpoint": "https://admin-endpoint.com",
+            "public_endpoint": "https://public-endpoint.com",
+            "login_browser_endpoint": "https://public-endpoint.com/self-service/login/browser",
+            "sessions_endpoint": "https://public-endpoint.com/sessions/whoami",
+            "providers_cofigmap_name": "providers",
+            "schemas_cofigmap_name": "identity-schemas",
+            "configmaps_namespace": harness.model.name,
+        },
+    )
+
     return relation_id
 
 
@@ -1437,3 +1459,24 @@ def test_layer_updated_with_tracing_endpoint_info(harness: Harness) -> None:
     assert pebble_env["TRACING_PROVIDERS_OTLP_INSECURE"]
     assert pebble_env["TRACING_PROVIDERS_OTLP_SAMPLING_SAMPLING_RATIO"] == 1
     assert pebble_env["TRACING_PROVIDER"] == "otel"
+
+
+def test_kratos_info_ready_event_emitted_when_relation_created(harness: Harness) -> None:
+    with capture_events(harness.charm, KratosInfoRelationReadyEvent) as captured:
+        relation_id = harness.add_relation("kratos-info", "requirer")
+        harness.add_relation_unit(relation_id, "requirer/0")
+
+    assert any(isinstance(e, KratosInfoRelationReadyEvent) for e in captured)
+
+
+def test_kratos_info_updated_on_relation_ready(harness: Harness) -> None:
+    harness.charm.info_provider.send_info_relation_data = mocked_handle = Mock(return_value=None)
+    _ = setup_kratos_info_relation(harness)
+
+    mocked_handle.assert_called_with(
+        "http://kratos.kratos-model.svc.cluster.local:4434",
+        "http://kratos.kratos-model.svc.cluster.local:4433",
+        "providers",
+        "identity-schemas",
+        "kratos-model",
+    )
