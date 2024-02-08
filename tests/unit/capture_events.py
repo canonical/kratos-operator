@@ -1,4 +1,4 @@
-'''This is a library providing a utility for unittesting events fired on a
+"""This is a library providing a utility for unittesting events fired on a
 Harness-ed Charm.
 
 Example usage:
@@ -7,7 +7,7 @@ Example usage:
 >>> with capture(RelationEvent) as captured:
 >>>     harness.add_relation('foo', 'remote')
 >>> assert captured.event.unit.name == 'remote'
-'''
+"""
 
 # The unique Charmhub library identifier, never change it
 LIBID = "9fcdab70e26d4eee9797c0e542ab397a"
@@ -83,4 +83,3 @@ def capture(charm: CharmBase, typ_: Type[_T] = EventBase) -> Iterator[Captured[_
     event = captured[0]
     assert isinstance(event, typ_), f"expected {typ_}, not {type(event)}"
     result.event = event
-

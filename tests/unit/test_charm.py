@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, Mock
 import pytest
 import requests
 import yaml
-from charms.harness_extensions.v0.capture_events import capture_events
+from capture_events import capture_events
 from charms.kratos.v0.kratos_info import KratosInfoRelationReadyEvent
 from ops.model import ActiveStatus, BlockedStatus, Container, WaitingStatus
 from ops.pebble import ExecError, TimeoutError
