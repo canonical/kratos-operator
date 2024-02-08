@@ -742,7 +742,7 @@ class KratosCharm(CharmBase):
             admin_endpoint,
             public_endpoint,
             providers_configmap_name,
-            schemas_cnofigmap_name,
+            schemas_configmap_name,
             configmaps_namespace,
         )
 
