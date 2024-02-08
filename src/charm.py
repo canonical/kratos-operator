@@ -206,6 +206,7 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.on.leader_elected, self._on_leader_elected)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.remove, self._on_remove)
+        # TODO: Remove once all charms use kratos-info instead of kratos-endpoints-info
         self.framework.observe(
             self.endpoints_provider.on.ready, self._update_kratos_endpoints_relation_data
         )
@@ -733,15 +734,15 @@ class KratosCharm(CharmBase):
         logger.info("Sending kratos info")
 
         (admin_endpoint, public_endpoint) = self._kratos_endpoints
-        providers_cofigmap_name = "providers"
-        schemas_cofigmap_name = "identity-schemas"
+        providers_configmap_name = self.providers_configmap.name
+        schemas_configmap_name = self.schemas_configmap.name
         configmaps_namespace = self.model.name
 
         self.info_provider.send_info_relation_data(
             admin_endpoint,
             public_endpoint,
-            providers_cofigmap_name,
-            schemas_cofigmap_name,
+            providers_configmap_name,
+            schemas_cnofigmap_name,
             configmaps_namespace,
         )
 

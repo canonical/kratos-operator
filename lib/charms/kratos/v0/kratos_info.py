@@ -92,8 +92,8 @@ class KratosInfoProvider(Object):
         self,
         admin_endpoint: str,
         public_endpoint: str,
-        providers_cofigmap_name: str,
-        schemas_cofigmap_name: str,
+        providers_configmap_name: str,
+        schemas_configmap_name: str,
         configmaps_namespace: str,
     ) -> None:
         """Updates relation with endpoints and configmaps info."""
@@ -106,8 +106,8 @@ class KratosInfoProvider(Object):
             "public_endpoint": public_endpoint,
             "login_browser_endpoint": f"{public_endpoint}/self-service/login/browser",
             "sessions_endpoint": f"{public_endpoint}/sessions/whoami",
-            "providers_configmap_name": providers_cofigmap_name,
-            "schemas_configmap_name": schemas_cofigmap_name,
+            "providers_configmap_name": providers_configmap_name,
+            "schemas_configmap_name": schemas_configmap_name,
             "configmaps_namespace": configmaps_namespace,
         }
 
