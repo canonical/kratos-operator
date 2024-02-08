@@ -144,6 +144,13 @@ class KratosInfoRequirer(Object):
         self.charm = charm
         self.relation_name = relation_name
 
+    def is_ready(self) -> bool:
+        relation = self.model.get_relation(self.relation_name)
+        if not relation or not relation.app or not relation.data[relation.app]:
+            return False
+        return True
+
+
     def get_kratos_info(self) -> Optional[Dict]:
         """Get the kratos info."""
         info = self.model.relations[self.relation_name]
