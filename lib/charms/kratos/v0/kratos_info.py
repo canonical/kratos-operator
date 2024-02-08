@@ -157,6 +157,6 @@ class KratosInfoRequirer(Object):
 
         if not data:
             logger.info("No relation data available.")
-            return
+            raise KratosInfoRelationDataMissingError("Missing relation data")
 
         return data

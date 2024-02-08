@@ -147,7 +147,7 @@ class KratosEndpointsRequirer(Object):
 
         if not data:
             logger.info("No relation data available.")
-            return
+            raise KratosEndpointsRelationDataMissingError("Missing relation data")
 
         if "public_endpoint" not in data:
             raise KratosEndpointsRelationDataMissingError(
