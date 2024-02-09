@@ -2,7 +2,8 @@
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Interface library for sharing kratos endpoints.
+"""This interface is deprecated in favor of kratos_info.
+Interface library for sharing kratos endpoints.
 This library provides a Python API for both requesting and providing public and admin endpoints.
 ## Getting Started
 To get started using the library, you need to fetch the library using `charmcraft`.
@@ -51,7 +52,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 4
+LIBPATCH = 5
 
 RELATION_NAME = "kratos-endpoint-info"
 INTERFACE_NAME = "kratos_endpoints"
@@ -146,7 +147,7 @@ class KratosEndpointsRequirer(Object):
 
         if not data:
             logger.info("No relation data available.")
-            return
+            raise KratosEndpointsRelationDataMissingError("Missing relation data")
 
         if "public_endpoint" not in data:
             raise KratosEndpointsRelationDataMissingError(

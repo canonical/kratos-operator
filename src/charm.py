@@ -34,6 +34,7 @@ from charms.identity_platform_login_ui_operator.v0.login_ui_endpoints import (
     LoginUITooManyRelatedAppsError,
 )
 from charms.kratos.v0.kratos_endpoints import KratosEndpointsProvider
+from charms.kratos.v0.kratos_info import KratosInfoProvider
 from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ClientConfigChangedEvent,
     ExternalIdpRequirer,
@@ -167,6 +168,7 @@ class KratosCharm(CharmBase):
         )
 
         self.endpoints_provider = KratosEndpointsProvider(self)
+        self.info_provider = KratosInfoProvider(self)
 
         self.metrics_endpoint = MetricsEndpointProvider(
             self,
@@ -204,9 +206,11 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.on.leader_elected, self._on_leader_elected)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.remove, self._on_remove)
+        # TODO: Remove once all charms use kratos-info instead of kratos-endpoints-info
         self.framework.observe(
             self.endpoints_provider.on.ready, self._update_kratos_endpoints_relation_data
         )
+        self.framework.observe(self.info_provider.on.ready, self._update_kratos_info_relation_data)
         self.framework.observe(
             self.on[self._hydra_relation_name].relation_changed, self._on_config_changed
         )
@@ -319,6 +323,23 @@ class KratosCharm(CharmBase):
     def _admin_url(self) -> Optional[str]:
         url = self.admin_ingress.url
         return normalise_url(url) if url else None
+
+    @property
+    def _kratos_endpoints(self) -> Tuple[str, str]:
+        admin_endpoint = (
+            self._admin_url
+            or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
+        )
+        public_endpoint = (
+            self._public_url
+            or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
+        )
+
+        admin_endpoint, public_endpoint = (
+            admin_endpoint.replace("https", "http"),
+            public_endpoint.replace("https", "http"),
+        )
+        return admin_endpoint, public_endpoint
 
     @property
     def _dsn(self) -> Optional[str]:
@@ -510,7 +531,7 @@ class KratosCharm(CharmBase):
         version = self.kratos.get_version()
         self.unit.set_workload_version(version)
 
-    def _get_claims_mappers(self) -> str:
+    def _get_claims_mappers(self) -> Dict[str, str]:
         mappers = {}
         for file in self._mappers_local_dir_path.glob("*.jsonnet"):
             with open(file) as f:
@@ -709,22 +730,26 @@ class KratosCharm(CharmBase):
 
         return self.tracing.otlp_http_endpoint() or ""
 
+    def _update_kratos_info_relation_data(self, event: RelationEvent) -> None:
+        logger.info("Sending kratos info")
+
+        (admin_endpoint, public_endpoint) = self._kratos_endpoints
+        providers_configmap_name = self.providers_configmap.name
+        schemas_configmap_name = self.schemas_configmap.name
+        configmaps_namespace = self.model.name
+
+        self.info_provider.send_info_relation_data(
+            admin_endpoint,
+            public_endpoint,
+            providers_configmap_name,
+            schemas_configmap_name,
+            configmaps_namespace,
+        )
+
     def _update_kratos_endpoints_relation_data(self, event: RelationEvent) -> None:
         logger.info("Sending endpoints info")
 
-        admin_endpoint = (
-            self._admin_url
-            or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
-        )
-        public_endpoint = (
-            self._public_url
-            or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
-        )
-
-        admin_endpoint, public_endpoint = (
-            admin_endpoint.replace("https", "http"),
-            public_endpoint.replace("https", "http"),
-        )
+        (admin_endpoint, public_endpoint) = self._kratos_endpoints
         self.endpoints_provider.send_endpoint_relation_data(admin_endpoint, public_endpoint)
 
     def _patch_statefulset(self) -> None:
@@ -826,6 +851,7 @@ class KratosCharm(CharmBase):
 
         self._handle_status_update_config(event)
         self._update_kratos_endpoints_relation_data(event)
+        self._update_kratos_info_relation_data(event)
 
     def _on_public_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
         if self.unit.is_leader():
@@ -833,6 +859,7 @@ class KratosCharm(CharmBase):
 
         self._handle_status_update_config(event)
         self._update_kratos_endpoints_relation_data(event)
+        self._update_kratos_info_relation_data(event)
 
     def _on_ingress_revoked(self, event: IngressPerAppRevokedEvent) -> None:
         if self.unit.is_leader():
@@ -840,6 +867,7 @@ class KratosCharm(CharmBase):
 
         self._handle_status_update_config(event)
         self._update_kratos_endpoints_relation_data(event)
+        self._update_kratos_info_relation_data(event)
 
     def _on_client_config_changed(self, event: ClientConfigChangedEvent) -> None:
         public_url = self._public_url

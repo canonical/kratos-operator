@@ -46,6 +46,10 @@ provides:
     interface: kratos_endpoints
     description: |
       Provides API endpoints to a related application
+  kratos-info:
+    interface: kratos_info
+    description: |
+      Provides kratos deployment info to a related application
   metrics-endpoint:
     interface: prometheus_scrape
     description: |

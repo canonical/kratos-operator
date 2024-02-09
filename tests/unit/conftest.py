@@ -238,12 +238,14 @@ def mocked_kratos_configmap(mocker: MockerFixture) -> MagicMock:
 def mocked_schemas_configmap(mocker: MockerFixture) -> MagicMock:
     mock = mocker.patch("charm.IdentitySchemaConfigMap", autospec=True)
     mock.return_value.get.return_value = {}
+    mock.return_value.name = "identity-schemas"
     return mock.return_value
 
 
 @pytest.fixture(autouse=True)
 def mocked_providers_configmap(mocker: MockerFixture) -> MagicMock:
     mock = mocker.patch("charm.ProvidersConfigMap", autospec=True)
+    mock.return_value.name = "providers"
     return mock.return_value
 
 
