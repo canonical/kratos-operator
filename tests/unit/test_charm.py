@@ -157,19 +157,6 @@ def setup_tempo_relation(harness: Harness) -> int:
 def setup_kratos_info_relation(harness: Harness) -> int:
     relation_id = harness.add_relation("kratos-info", "requirer")
     harness.add_relation_unit(relation_id, "requirer/0")
-    harness.update_relation_data(
-        relation_id,
-        "requirer",
-        {
-            "admin_endpoint": "https://admin-endpoint.com",
-            "public_endpoint": "https://public-endpoint.com",
-            "login_browser_endpoint": "https://public-endpoint.com/self-service/login/browser",
-            "sessions_endpoint": "https://public-endpoint.com/sessions/whoami",
-            "providers_cofigmap_name": "providers",
-            "schemas_cofigmap_name": "identity-schemas",
-            "configmaps_namespace": harness.model.name,
-        },
-    )
 
     return relation_id
 
@@ -1463,8 +1450,7 @@ def test_layer_updated_with_tracing_endpoint_info(harness: Harness) -> None:
 
 def test_kratos_info_ready_event_emitted_when_relation_created(harness: Harness) -> None:
     with capture_events(harness.charm, KratosInfoRelationReadyEvent) as captured:
-        relation_id = harness.add_relation("kratos-info", "requirer")
-        harness.add_relation_unit(relation_id, "requirer/0")
+        _ = setup_kratos_info_relation(harness)
 
     assert any(isinstance(e, KratosInfoRelationReadyEvent) for e in captured)
 
