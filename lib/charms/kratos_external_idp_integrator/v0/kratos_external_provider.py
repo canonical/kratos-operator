@@ -129,7 +129,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 5
+LIBPATCH = 7
 
 DEFAULT_RELATION_NAME = "kratos-external-idp"
 logger = logging.getLogger(__name__)
@@ -172,6 +172,7 @@ PROVIDER_PROVIDERS_JSON_SCHEMA = {
                     "scope": {"type": "string"},
                     "team_id": {"type": "string"},
                     "provider_id": {"type": "string"},
+                    "label": {"type": "string"},
                     "jsonnet_mapper": {"type": "string"},
                 },
                 "additionalProperties": True,
@@ -259,9 +260,10 @@ def _validate_data(data: Dict, schema: Dict) -> None:
 class BaseProviderConfigHandler:
     """The base class for parsing a provider's config."""
 
-    mandatory_fields = {"provider", "client_id", "secret_backend", "scope"}
-    optional_fields = {"provider_id", "jsonnet_mapper"}
+    mandatory_fields = {"provider", "client_id", "secret_backend"}
+    optional_fields = {"provider_id", "jsonnet_mapper", "label", "scope"}
     excluded_fields = {"enabled"}
+    default_scope = "profile email address phone"
     providers: List[str] = []
 
     @classmethod
@@ -307,7 +309,7 @@ class BaseProviderConfigHandler:
             "client_id": config["client_id"],
             "provider": config["provider"],
             "secret_backend": config["secret_backend"],
-            "scope": config["scope"],
+            "scope": config.get("scope", cls.default_scope),
         }
         ret.update({k: config[k] for k in cls.optional_fields if k in config})
         ret.update(cls._parse_provider_config(config))
@@ -340,7 +342,6 @@ class SocialConfigHandler(BaseProviderConfigHandler):
     providers = [
         "google",
         "facebook",
-        "github",
         "gitlab",
         "slack",
         "spotify",
@@ -382,6 +383,13 @@ class MicrosoftConfigHandler(SocialConfigHandler):
         }
 
 
+class GithubConfigHandler(SocialConfigHandler):
+    """The class for parsing a 'github' provider's config."""
+
+    default_scope = "user:email"
+    providers = ["github"]
+
+
 class AppleConfigHandler(BaseProviderConfigHandler):
     """The class for parsing an 'apple' provider's config."""
 
@@ -406,6 +414,7 @@ _config_handlers = [
     GenericConfigHandler,
     SocialConfigHandler,
     MicrosoftConfigHandler,
+    GithubConfigHandler,
     AppleConfigHandler,
 ]
 allowed_providers = {
@@ -586,6 +595,7 @@ class Provider:
     provider: str
     relation_id: str
     scope: str = "profile email address phone"
+    label: Optional[str] = None
     client_secret: Optional[str] = None
     issuer_url: Optional[str] = None
     tenant_id: Optional[str] = None
@@ -619,6 +629,7 @@ class Provider:
             "id": self.provider_id,
             "client_id": self.client_id,
             "provider": self.provider,
+            "label": self.label or self.provider,
             "client_secret": self.client_secret,
             "issuer_url": self.issuer_url,
             "scope": self.scope.split(" "),
