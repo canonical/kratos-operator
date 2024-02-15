@@ -781,6 +781,7 @@ def test_on_config_changed_with_ingress(
                                 "client_id": data["client_id"],
                                 "client_secret": data["client_secret"],
                                 "issuer_url": data["issuer_url"],
+                                "label": "generic",
                                 "mapper_url": "file:///etc/config/kratos/default_schema.jsonnet",
                                 "provider": data["provider"],
                                 "scope": data["scope"].split(" "),

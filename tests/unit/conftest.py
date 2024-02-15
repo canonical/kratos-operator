@@ -22,6 +22,7 @@ def harness(mocked_kubernetes_service_patcher: MagicMock) -> Harness:
     harness.set_can_connect("kratos", True)
     harness.set_leader(True)
     harness.begin()
+    harness.add_network("10.0.0.10")
     return harness
 
 
