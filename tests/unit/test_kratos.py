@@ -132,7 +132,10 @@ def test_delete_identity(
 def test_list_identities(
     kratos_api: KratosAPI, kratos_identity_json: Dict, mocked_kratos_process: MagicMock
 ) -> None:
-    mocked_kratos_process.wait_output.return_value = (json.dumps([kratos_identity_json]), None)
+    mocked_kratos_process.wait_output.return_value = (
+        json.dumps(dict(identities=[kratos_identity_json])),
+        None,
+    )
 
     kratos_api.list_identities()
 
@@ -150,7 +153,10 @@ def test_list_identities(
 def test_get_identity_from_email(
     kratos_api: KratosAPI, kratos_identity_json: Dict, mocked_kratos_process: MagicMock
 ) -> None:
-    mocked_kratos_process.wait_output.return_value = (json.dumps([kratos_identity_json]), None)
+    mocked_kratos_process.wait_output.return_value = (
+        json.dumps(dict(identities=[kratos_identity_json])),
+        None,
+    )
 
     identity = kratos_api.get_identity_from_email(kratos_identity_json["traits"]["email"])
 
@@ -169,7 +175,10 @@ def test_get_identity_from_email(
 def test_get_identity_from_email_with_wrong_mail(
     kratos_api: KratosAPI, kratos_identity_json: Dict, mocked_kratos_process: MagicMock
 ) -> None:
-    mocked_kratos_process.wait_output.return_value = (json.dumps([kratos_identity_json]), None)
+    mocked_kratos_process.wait_output.return_value = (
+        json.dumps(dict(identities=[kratos_identity_json])),
+        None,
+    )
 
     identity = kratos_api.get_identity_from_email("mail")
 
