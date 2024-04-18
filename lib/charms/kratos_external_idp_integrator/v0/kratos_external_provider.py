@@ -5,8 +5,8 @@
 """# Interface library for Kratos external OIDC providers.
 
 This library wraps relation endpoints using the `kratos-external-idp` interface
-and provides a Python API for both requesting Kratos to register the the client credentials for
-communicating with an external provider.
+and provides a Python API for both requesting Kratos to register the client credentials
+and for communicating with an external provider.
 
 ## Getting Started
 
@@ -26,9 +26,6 @@ provides:
         interface: external_provider
         limit: 1
 ```
-
-Next add the `jsonschema` python package to your charm's `requirements.txt`, so that the
-library can validate the incoming relation databags.
 
 Then, to initialise the library:
 
@@ -129,7 +126,9 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 5
+LIBPATCH = 8
+
+PYDEPS = ["jsonschema"]
 
 DEFAULT_RELATION_NAME = "kratos-external-idp"
 logger = logging.getLogger(__name__)
@@ -172,6 +171,7 @@ PROVIDER_PROVIDERS_JSON_SCHEMA = {
                     "scope": {"type": "string"},
                     "team_id": {"type": "string"},
                     "provider_id": {"type": "string"},
+                    "label": {"type": "string"},
                     "jsonnet_mapper": {"type": "string"},
                 },
                 "additionalProperties": True,
@@ -259,9 +259,10 @@ def _validate_data(data: Dict, schema: Dict) -> None:
 class BaseProviderConfigHandler:
     """The base class for parsing a provider's config."""
 
-    mandatory_fields = {"provider", "client_id", "secret_backend", "scope"}
-    optional_fields = {"provider_id", "jsonnet_mapper"}
+    mandatory_fields = {"provider", "client_id", "secret_backend"}
+    optional_fields = {"provider_id", "jsonnet_mapper", "label", "scope"}
     excluded_fields = {"enabled"}
+    default_scope = "profile email address phone"
     providers: List[str] = []
 
     @classmethod
@@ -307,7 +308,7 @@ class BaseProviderConfigHandler:
             "client_id": config["client_id"],
             "provider": config["provider"],
             "secret_backend": config["secret_backend"],
-            "scope": config["scope"],
+            "scope": config.get("scope", cls.default_scope),
         }
         ret.update({k: config[k] for k in cls.optional_fields if k in config})
         ret.update(cls._parse_provider_config(config))
@@ -340,7 +341,6 @@ class SocialConfigHandler(BaseProviderConfigHandler):
     providers = [
         "google",
         "facebook",
-        "github",
         "gitlab",
         "slack",
         "spotify",
@@ -382,6 +382,13 @@ class MicrosoftConfigHandler(SocialConfigHandler):
         }
 
 
+class GithubConfigHandler(SocialConfigHandler):
+    """The class for parsing a 'github' provider's config."""
+
+    default_scope = "user:email"
+    providers = ["github"]
+
+
 class AppleConfigHandler(BaseProviderConfigHandler):
     """The class for parsing an 'apple' provider's config."""
 
@@ -406,6 +413,7 @@ _config_handlers = [
     GenericConfigHandler,
     SocialConfigHandler,
     MicrosoftConfigHandler,
+    GithubConfigHandler,
     AppleConfigHandler,
 ]
 allowed_providers = {
@@ -586,6 +594,7 @@ class Provider:
     provider: str
     relation_id: str
     scope: str = "profile email address phone"
+    label: Optional[str] = None
     client_secret: Optional[str] = None
     issuer_url: Optional[str] = None
     tenant_id: Optional[str] = None
@@ -619,12 +628,15 @@ class Provider:
             "id": self.provider_id,
             "client_id": self.client_id,
             "provider": self.provider,
+            "label": self.label or self.provider,
             "client_secret": self.client_secret,
             "issuer_url": self.issuer_url,
             "scope": self.scope.split(" "),
-            "mapper_url": base64.b64encode(self.jsonnet_mapper.encode()).decode()
-            if self.jsonnet_mapper
-            else None,
+            "mapper_url": (
+                base64.b64encode(self.jsonnet_mapper.encode()).decode()
+                if self.jsonnet_mapper
+                else None
+            ),
             "microsoft_tenant": self.tenant_id,
             "apple_team_id": self.team_id,
             "apple_private_key_id": self.private_key_id,
@@ -667,10 +679,28 @@ class ClientConfigChangedEvent(EventBase):
         self.relation_id = snapshot["relation_id"]
 
 
+class ClientConfigRemovedEvent(EventBase):
+    """Event to notify the charm that a provider's client config was removed."""
+
+    def __init__(self, handle: Handle, relation_id: str) -> None:
+        super().__init__(handle)
+        self.relation_id = relation_id
+
+    def snapshot(self) -> Dict:
+        """Save event."""
+        return {
+            "relation_id": self.relation_id,
+        }
+
+    def restore(self, snapshot: Dict) -> None:
+        """Restore event."""
+        self.relation_id = snapshot["relation_id"]
+
 class ExternalIdpRequirerEvents(ObjectEvents):
     """Event descriptor for events raised by `ExternalIdpRequirerEvents`."""
 
     client_config_changed = EventSource(ClientConfigChangedEvent)
+    client_config_removed = EventSource(ClientConfigRemovedEvent)
 
 
 class ExternalIdpRequirer(Object):
@@ -700,6 +730,7 @@ class ExternalIdpRequirer(Object):
         providers = data["providers"]
 
         if len(providers) == 0:
+            self.on.client_config_removed.emit(event.relation.id)
             return
 
         p = self._get_provider(providers[0], event.relation)
@@ -729,6 +760,20 @@ class ExternalIdpRequirer(Object):
         if not relation:
             return
         relation.data[self.model.app].update(data)
+
+    def remove_relation_registered_provider(
+        self, relation_id: int
+    ) -> None:
+        """Delete the provider info from the databag."""
+        if not self._charm.unit.is_leader():
+            return
+
+        relation = self.model.get_relation(
+            relation_name=self._relation_name, relation_id=relation_id
+        )
+        if not relation:
+            return
+        relation.data[self.model.app].clear()
 
     def get_providers(self) -> List:
         """Iterate over the relations and fetch all providers."""
