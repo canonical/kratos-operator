@@ -178,6 +178,7 @@ def setup_external_provider_relation(harness: Harness) -> tuple[int, dict]:
     data = {
         "client_id": "client_id",
         "provider": "generic",
+        "label": "generic",
         "secret_backend": "relation",
         "client_secret": "client_secret",
         "issuer_url": "https://example.com/oidc",
@@ -714,7 +715,7 @@ def test_on_config_changed_when_no_dns_available(harness: Harness) -> None:
     assert isinstance(harness.charm.unit.status, BlockedStatus)
 
 
-def test_on_config_changed_with_ingress(
+def test_on_client_config_changed_with_ingress(
     harness: Harness,
     mocked_container: Container,
     mocked_migration_is_needed: MagicMock,
@@ -781,9 +782,9 @@ def test_on_config_changed_with_ingress(
                                 "client_id": data["client_id"],
                                 "client_secret": data["client_secret"],
                                 "issuer_url": data["issuer_url"],
-                                "label": "generic",
                                 "mapper_url": "file:///etc/config/kratos/default_schema.jsonnet",
                                 "provider": data["provider"],
+                                "label": data["label"],
                                 "scope": data["scope"].split(" "),
                             },
                         ],
@@ -816,6 +817,138 @@ def test_on_config_changed_with_ingress(
     app_data = json.loads(harness.get_relation_data(relation_id, harness.charm.app)["providers"])
 
     assert app_data[0]["redirect_uri"].startswith(expected_redirect_url)
+
+
+def test_on_client_config_relation_removed_with_ingress(
+    harness: Harness,
+    mocked_container: Container,
+    mocked_migration_is_needed: MagicMock,
+    mocked_kratos_configmap: MagicMock,
+) -> None:
+    setup_peer_relation(harness)
+    setup_postgres_relation(harness)
+    setup_ingress_relation(harness, "public")
+    (_, login_databag) = setup_login_ui_relation(harness)
+
+    relation_id, _ = setup_external_provider_relation(harness)
+    harness.remove_relation(relation_id)
+    harness.set_leader(True)
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    expected_config = {
+        "log": {
+            "level": "info",
+            "format": "json",
+        },
+        "identity": {
+            "default_schema_id": "social_user_v0",
+            "schemas": [
+                {"id": "admin_v0", "url": "base64://something"},
+                {
+                    "id": "social_user_v0",
+                    "url": "base64://something",
+                },
+            ],
+        },
+        "selfservice": {
+            "allowed_return_urls": [
+                "https://public/",
+            ],
+            "default_browser_return_url": login_databag["login_url"],
+            "flows": {
+                "error": {
+                    "ui_url": login_databag["error_url"],
+                },
+                "login": {
+                    "ui_url": login_databag["login_url"],
+                },
+            },
+        },
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+    }
+
+    configmap = mocked_kratos_configmap.update.call_args_list[-1][0][0]
+    config = configmap["kratos.yaml"]
+    validate_config(
+        expected_config, yaml.safe_load(config), validate_schemas=False, validate_mappers=False
+    )
+
+
+def test_on_client_config_data_removed_with_ingress(
+    harness: Harness,
+    mocked_container: Container,
+    mocked_migration_is_needed: MagicMock,
+    mocked_kratos_configmap: MagicMock,
+) -> None:
+    setup_peer_relation(harness)
+    setup_postgres_relation(harness)
+    setup_ingress_relation(harness, "public")
+    (_, login_databag) = setup_login_ui_relation(harness)
+
+    relation_id, _ = setup_external_provider_relation(harness)
+    harness.update_relation_data(relation_id, "kratos-external-idp-integrator", {"providers": ""})
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    expected_config = {
+        "log": {
+            "level": "info",
+            "format": "json",
+        },
+        "identity": {
+            "default_schema_id": "social_user_v0",
+            "schemas": [
+                {"id": "admin_v0", "url": "base64://something"},
+                {
+                    "id": "social_user_v0",
+                    "url": "base64://something",
+                },
+            ],
+        },
+        "selfservice": {
+            "allowed_return_urls": [
+                "https://public/",
+            ],
+            "default_browser_return_url": login_databag["login_url"],
+            "flows": {
+                "error": {
+                    "ui_url": login_databag["error_url"],
+                },
+                "login": {
+                    "ui_url": login_databag["login_url"],
+                },
+            },
+        },
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+    }
+
+    configmap = mocked_kratos_configmap.update.call_args_list[-1][0][0]
+    config = configmap["kratos.yaml"]
+    validate_config(
+        expected_config, yaml.safe_load(config), validate_schemas=False, validate_mappers=False
+    )
+
+    assert harness.get_relation_data(relation_id, harness.charm.app) == {}
 
 
 def test_on_config_changed_with_hydra(
