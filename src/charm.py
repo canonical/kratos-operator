@@ -37,6 +37,7 @@ from charms.kratos.v0.kratos_endpoints import KratosEndpointsProvider
 from charms.kratos.v0.kratos_info import KratosInfoProvider
 from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ClientConfigChangedEvent,
+    ClientConfigRemovedEvent,
     ExternalIdpRequirer,
 )
 from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer, PromtailDigestError
@@ -228,6 +229,9 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.public_ingress.on.revoked, self._on_ingress_revoked)
         self.framework.observe(
             self.external_provider.on.client_config_changed, self._on_client_config_changed
+        )
+        self.framework.observe(
+            self.external_provider.on.client_config_removed, self._on_client_config_removed
         )
 
         self.framework.observe(self.on.get_identity_action, self._on_get_identity_action)
@@ -881,17 +885,22 @@ class KratosCharm(CharmBase):
 
         self.unit.status = MaintenanceStatus(f"Adding external provider: {event.provider}")
 
-        if not self._migration_is_needed():
-            self._handle_status_update_config(event)
-
-            self.external_provider.set_relation_registered_provider(
-                join(public_url, f"self-service/methods/oidc/callback/{event.provider_id}"),
-                event.provider_id,
-                event.relation_id,
-            )
-        else:
+        if self._migration_is_needed():
             event.defer()
             logger.info("Database is not created. Deferring event.")
+            return
+
+        self._handle_status_update_config(event)
+        self.external_provider.set_relation_registered_provider(
+            join(public_url, f"self-service/methods/oidc/callback/{event.provider_id}"),
+            event.provider_id,
+            event.relation_id,
+        )
+
+    def _on_client_config_removed(self, event: ClientConfigRemovedEvent) -> None:
+        self.unit.status = MaintenanceStatus("Removing external provider")
+        self._handle_status_update_config(event)
+        self.external_provider.remove_relation_registered_provider(event.relation_id)
 
     def _on_get_identity_action(self, event: ActionEvent) -> None:
         if not self._kratos_service_is_running:
