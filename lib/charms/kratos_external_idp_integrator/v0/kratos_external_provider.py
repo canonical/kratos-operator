@@ -126,7 +126,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 8
+LIBPATCH = 9
 
 PYDEPS = ["jsonschema"]
 
@@ -570,7 +570,7 @@ class ExternalIdpProvider(Object):
         # Do we need to iterate on the relations? There should never be more
         # than one
         for relation in self._charm.model.relations[self._relation_name]:
-            relation.data[self._charm.app].update(providers=json.dumps(provider_config))
+            relation.data[self._charm.app]["providers"] = json.dumps(provider_config)
 
     def _create_secrets(self, provider_config: List) -> None:
         for conf in provider_config:
