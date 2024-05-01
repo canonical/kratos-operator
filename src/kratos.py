@@ -93,10 +93,8 @@ class KratosAPI:
 
         # TODO: Consider reading from the stream instead of waiting for output
         cmd_output = json.loads(self._run_cmd(cmd))
-        identities = cmd_output.get("identities")
         logger.info("Successfully fetched all identities")
-
-        return identities
+        return cmd_output
 
     def get_identity_from_email(self, email: str) -> Optional[Dict]:
         """Get an identity using an email.
