@@ -952,8 +952,7 @@ class KratosCharm(CharmBase):
 
         if email:
             identity = self.kratos.get_identity_from_email(email)
-            identity_id = identity.get("id")
-            if not identity_id:
+            if not identity:
                 event.fail("Couldn't retrieve identity_id from email.")
                 return
 
