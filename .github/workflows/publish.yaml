@@ -59,3 +59,6 @@ jobs:
           credentials: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           channel: ${{ steps.parse-inputs.outputs.destination_channel }}
+          # We pin the kratos image version to 389 due to https://github.com/canonical/charming-actions/issues/139
+          # The image defined in the metadata is not respected
+          resource-overrides: "oci-image:389"
