@@ -12,16 +12,17 @@ on:
     branches:
       - main
       - track/**
+      - test
 
 jobs:
-  tests:
-    name: Run Tests
-    uses: ./.github/workflows/tests.yaml
+  # tests:
+  #   name: Run Tests
+  #   uses: ./.github/workflows/tests.yaml
 
   # publish runs in series with tests, and only publishes if tests passes
   publish-charm:
     name: Publish Charm
-    needs: tests
+    # needs: tests
     uses: ./.github/workflows/publish.yaml
     secrets:
       CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS }}

@@ -38,24 +38,24 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.source_branch }}
 
-      - name: Select charmhub channel
-        uses: canonical/charming-actions/channel@631c2d944da2bd12430f1f3a954c8fffcf2385cd # 2.4.0
-        id: select-channel
-        if: ${{ inputs.destination_channel == '' }}
+      # - name: Select charmhub channel
+      #   uses: canonical/charming-actions/channel@631c2d944da2bd12430f1f3a954c8fffcf2385cd # 2.4.0
+      #   id: select-channel
+      #   if: ${{ inputs.destination_channel == '' }}
 
       # Combine inputs from different sources to a single canonical value so later steps don't
       # need logic for picking the right one
-      - name: Parse and combine inputs
-        id: parse-inputs
-        run: |
-          # destination_channel
-          destination_channel="${{ inputs.destination_channel || steps.select-channel.outputs.name }}"
-          echo "setting output of destination_channel=$destination_channel"
-          echo "::set-output name=destination_channel::$destination_channel"
+      # - name: Parse and combine inputs
+      #   id: parse-inputs
+      #   run: |
+      #     # destination_channel
+      #     destination_channel="${{ inputs.destination_channel || steps.select-channel.outputs.name }}"
+      #     echo "setting output of destination_channel=$destination_channel"
+      #     echo "::set-output name=destination_channel::$destination_channel"
 
       - name: Upload charm to charmhub
-        uses: canonical/charming-actions/upload-charm@631c2d944da2bd12430f1f3a954c8fffcf2385cd # 2.4.0
+        uses: nsklikas/charming-actions/upload-charm@main # 2.4.0
         with:
           credentials: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          channel: ${{ steps.parse-inputs.outputs.destination_channel }}
+          channel: 0.2/edge
