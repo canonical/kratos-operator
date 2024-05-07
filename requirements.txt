@@ -5,7 +5,7 @@ ops==2.10.0
 lightkube===0.15.0
 lightkube-models==1.29.0.6
 Jinja2==3.1.3
-jsonschema==4.21.1
+jsonschema
 requests==2.31.0
 tenacity==8.2.3
 serialized-data-interface==0.7.0
