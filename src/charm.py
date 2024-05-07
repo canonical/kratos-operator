@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 import requests
+from charms.istio_pilot.v0.istio_gateway_info import GatewayRelationError, GatewayRequirer
 from charms.data_platform_libs.v0.data_interfaces import (
     DatabaseCreatedEvent,
     DatabaseEndpointsChangedEvent,
@@ -153,6 +154,8 @@ class KratosCharm(CharmBase):
             redirect_https=False,
         )
 
+        self.gateway = GatewayRequirer(self)
+
         self.database = DatabaseRequires(
             self,
             relation_name=self._db_relation_name,
@@ -256,6 +259,29 @@ class KratosCharm(CharmBase):
         self.framework.observe(
             self.on["istio-public-ingress"].relation_changed, self._handle_istio_ingress
         )
+        self.framework.observe(self.on["gateway-info"].relation_changed, self._handle_istio_gateway)
+
+    def _handle_istio_gateway(self, event):
+        ip = self._get_gateway_dns()
+
+        if self.unit.is_leader():
+            logger.info("This app's public ingress URL: %s", ip)
+        self._handle_status_update_config(event)
+        self._update_kratos_endpoints_relation_data(event)
+        self._update_kratos_info_relation_data(event)
+    
+    def _get_gateway_dns(self) -> str:
+        """Retrieve gateway namespace and name from relation data."""
+        if not self.gateway:
+            return ""
+
+        try:
+            gateway_data = self.gateway.get_relation_data()
+        except GatewayRelationError as e:
+            return ""
+
+        return gateway_data["gateway_dns"] or gateway_data["gateway_ip"]
+
 
     # TODO @shipperizer Event is not used, see if that's ok
     def _handle_istio_ingress(self, _):
@@ -342,6 +368,10 @@ class KratosCharm(CharmBase):
 
     @property
     def _public_url(self) -> Optional[str]:
+        dns = self._get_gateway_dns()
+        if dns:
+            return normalise_url("https://"+dns)
+
         url = self.public_ingress.url
         return normalise_url(url) if url else None
 
@@ -357,14 +387,14 @@ class KratosCharm(CharmBase):
             or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
         )
         public_endpoint = (
-            self._public_url
-            or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
+            # self._public_url
+            # or 
+            f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
         )
 
-        admin_endpoint, public_endpoint = (
-            admin_endpoint.replace("https", "http"),
-            public_endpoint.replace("https", "http"),
-        )
+        admin_endpoint = admin_endpoint.replace("https", "http")
+        public_endpoint = public_endpoint.replace("https", "http") if not self._public_url else public_endpoint
+        
         return admin_endpoint, public_endpoint
 
     @property

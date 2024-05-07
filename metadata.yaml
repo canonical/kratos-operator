@@ -96,7 +96,10 @@ requires:
             - port
             - prefix
     versions: [v3]
-    __schema_source: https://raw.githubusercontent.com/shipperizer/istio-operators/patch/identity/hack/ingress.yaml 
+    __schema_source: https://raw.githubusercontent.com/shipperizer/istio-operators/patch/identity/hack/ingress.yaml
+  gateway-info:
+    interface: istio-gateway-info
+    limit: 1  
 peers:
   kratos-peers:
     interface: kratos-peers
