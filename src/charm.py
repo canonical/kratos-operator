@@ -77,6 +77,7 @@ from ops.model import (
     WaitingStatus,
 )
 from ops.pebble import ChangeError, Error, ExecError, Layer
+from serialized_data_interface import NoCompatibleVersions, NoVersionsListed, get_interface
 from tenacity import before_log, retry, stop_after_attempt, wait_exponential
 
 import config_map
@@ -97,7 +98,8 @@ COOKIE_SECRET_KEY = "cookiesecret"
 PEER_KEY_DB_MIGRATE_VERSION = "db_migrate_version"
 DEFAULT_SCHEMA_ID_FILE_NAME = "default.schema"
 LOG_LEVELS = ["panic", "fatal", "error", "warn", "info", "debug", "trace"]
-
+# TODO @shipperizer make a constants.py
+KRATOS_PUBLIC_URI_REGEXP = "(^/self-service/.*)|(^/sessions/.*)|(^/sessions)"
 
 class KratosCharm(CharmBase):
     """Charmed Ory Kratos."""
@@ -250,6 +252,26 @@ class KratosCharm(CharmBase):
 
         self.framework.observe(self.tracing.on.endpoint_changed, self._on_config_changed)
         self.framework.observe(self.tracing.on.endpoint_removed, self._on_config_changed)
+        
+        self.framework.observe(
+            self.on["istio-public-ingress"].relation_changed, self._handle_istio_ingress
+        )
+
+    # TODO @shipperizer Event is not used, see if that's ok
+    def _handle_istio_ingress(self, _):
+        interface = get_interface(self, "istio-public-ingress")
+
+        if not interface:
+            return
+
+        interface.send_data(
+            {
+                "prefix": "", # TODO @shipperizer needs to be passed as empty to avoid failure in the required validation 
+                "regex": KRATOS_PUBLIC_URI_REGEXP,
+                "service": self.model.app.name,
+                "port": KRATOS_PUBLIC_PORT,
+            }
+        )
 
     @property
     def _kratos_service_params(self) -> str:

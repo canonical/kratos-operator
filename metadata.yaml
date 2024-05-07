@@ -38,6 +38,52 @@ requires:
     limit: 1
     description: |
       Provides traces to COS Tempo instance
+  istio-public-ingress:
+      interface: ingress
+      schema:
+        v2:
+          requires:
+            type: object
+            properties:
+              service:
+                type: string
+              port:
+                type: integer
+              namespace:
+                type: string
+              prefix:
+                type: string
+              rewrite:
+                type: string
+              regex:
+                type: string
+            required:
+              - service
+              - port
+              - namespace
+              - prefix
+              - regex
+        v1:
+          requires:
+            type: object
+            properties:
+              service:
+                type: string
+              port:
+                type: integer
+              prefix:
+                type: string
+              rewrite:
+                type: string
+              regex:
+                type: string        
+            required:
+              - service
+              - port
+              - prefix
+              - regex
+      versions: [v1]
+      __schema_source: https://raw.githubusercontent.com/shipperizer/istio-operators/patch/identity/hack/ingress.yaml      
 peers:
   kratos-peers:
     interface: kratos-peers
