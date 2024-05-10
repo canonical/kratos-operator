@@ -17,9 +17,9 @@ enhancements to this operator.
   will help you a lot when working on new features or bug fixes.
 - All enhancements require review before being merged. Code review typically
   examines:
-    - code quality
-    - test coverage
-    - user experience for Juju administrators of this charm.
+  - code quality
+  - test coverage
+  - user experience for Juju administrators of this charm.
 - Please help us out in ensuring easy to review branches by rebasing your pull
   request branch onto the `main` branch. This also avoids merge commits and
   creates a linear Git
@@ -27,14 +27,15 @@ enhancements to this operator.
 
 ## Developing
 
-You can use the environments created by `tox` for development:
+You can use the environments created by `tox` for development. It helps
+install `pre-commit` and `mypy` type checker.
 
 ```shell
-tox --notest -e unit
-source .tox/unit/bin/activate
+tox -e dev
+source .tox/dev/bin/activate
 ```
 
-### Testing
+## Testing
 
 ```shell
 tox -e fmt           # update your code according to linting rules
@@ -44,7 +45,7 @@ tox -e integration   # integration tests
 tox                  # runs 'fmt', 'lint', and 'unit' environments
 ```
 
-## Build charm
+## Building
 
 Build the charm in this git repository using:
 
@@ -52,7 +53,7 @@ Build the charm in this git repository using:
 charmcraft pack
 ```
 
-### Deploy
+## Deploying
 
 ```shell
 # Create a model
