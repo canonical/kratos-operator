@@ -229,12 +229,10 @@ async def test_identity_schemas_config(ops_test: OpsTest) -> None:
     original_resp = resp.json()
 
     schema_id = "user_v1"
-    await ops_test.model.applications[KRATOS_APP].set_config(
-        dict(
-            identity_schemas=json.dumps({schema_id: IDENTITY_SCHEMA}),
-            default_identity_schema_id=schema_id,
-        )
-    )
+    await ops_test.model.applications[KRATOS_APP].set_config({
+        "identity_schemas": json.dumps({schema_id: IDENTITY_SCHEMA}),
+        "default_identity_schema_id": schema_id,
+    })
 
     await ops_test.model.wait_for_idle(
         apps=[KRATOS_APP],
@@ -254,12 +252,10 @@ async def test_identity_schemas_config(ops_test: OpsTest) -> None:
     assert len(resp.json()) == 1
     assert resp.json()[0]["id"] == schema_id
 
-    await ops_test.model.applications[KRATOS_APP].set_config(
-        dict(
-            identity_schemas="",
-            default_identity_schema_id="",
-        )
-    )
+    await ops_test.model.applications[KRATOS_APP].set_config({
+        "identity_schemas": "",
+        "default_identity_schema_id": "",
+    })
 
     await ops_test.model.wait_for_idle(
         apps=[KRATOS_APP],

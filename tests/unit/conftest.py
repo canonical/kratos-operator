@@ -35,7 +35,7 @@ def lk_client(mocker: MockerFixture) -> None:
 @pytest.fixture()
 def mocked_kratos_process() -> MagicMock:
     mock = MagicMock()
-    mock.wait_output.return_value = (json.dumps(dict(identity_id=1234)), None)
+    mock.wait_output.return_value = (json.dumps({"identity_id": 1234}), None)
     return mock
 
 
