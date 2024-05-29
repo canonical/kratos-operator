@@ -12,32 +12,59 @@ show_missing = true
 minversion = "6.0"
 log_cli_level = "INFO"
 
-# Formatting tools configuration
-[tool.black]
-line-length = 99
-target-version = ["py38"]
+# Linting and formatting tools configuration
+[tool.codespell]
+# https://github.com/codespell-project/codespell
+skip = ".git,.tox,build,lib,venv,.venv,.mypy_cache,icon.svg,__pycache__"
 
 [tool.isort]
+# Profiles: https://pycqa.github.io/isort/docs/configuration/profiles.html
 line_length = 99
 profile = "black"
 
-# Linting tools configuration
-[tool.flake8]
-max-line-length = 99
-max-doc-length = 99
+[tool.ruff]
+# Default settings: https://docs.astral.sh/ruff/configuration/
+# Settings: https://docs.astral.sh/ruff/settings/
+line-length = 99
+include = ["pyproject.toml", "src/**/*.py", "tests/**/*.py", "lib/charms/kratos/**/*.py"]
+extend-exclude = ["__pycache__", "*.egg_info", "tests/unit/capture_events.py"]
+target-version = "py38"
+preview = true
+
+[tool.ruff.lint]
+# Rules: https://docs.astral.sh/ruff/rules/
+select = ["E", "W", "F", "C", "N", "D", "CPY"]
+ignore = [
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D105",
+    "D107",
+    "D203",
+    "D204",
+    "D213",
+    "D215",
+    "D400",
+    "D404",
+    "D406",
+    "D407",
+    "D408",
+    "D409",
+    "D413",
+    "E501",
+    "N818"
+]
+per-file-ignores = {"tests/*" = ["D100","D101","D102","D103","D104"]}
+
+[tool.ruff.lint.flake8-copyright]
+author = "Canonical Ltd."
+
+[tool.ruff.lint.mccabe]
 max-complexity = 10
-exclude = [".git", "__pycache__", ".tox", "build", "dist", "*.egg_info", "venv", "tests/unit/capture_events.py"]
-select = ["E", "W", "F", "C", "N", "R", "D", "H"]
-# Ignore W503, E501 because using black creates errors with this
-# Ignore D107 Missing docstring in __init__
-ignore = ["W503", "E501", "D107"]
-# D100, D101, D102, D103: Ignore missing docstrings in tests
-per-file-ignores = ["tests/*:D100,D101,D102,D103,D104"]
-docstring-convention = "google"
-# Check for properly formatted copyright header in each file
-copyright-check = "True"
-copyright-author = "Canonical Ltd."
-copyright-regexp = "Copyright\\s\\d{4}([-,]\\d{4})*\\s+%(author)s"
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.mypy]
 pretty = true

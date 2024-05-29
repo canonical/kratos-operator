@@ -28,7 +28,7 @@ enhancements to this operator.
 ## Developing
 
 You can use the environments created by `tox` for development. It helps
-install `pre-commit` and `mypy` type checker.
+install `pre-commit`, `mypy` type checker, linting tools, and formatting tools.
 
 ```shell
 tox -e dev

@@ -3,6 +3,7 @@
 # See LICENSE file for licensing details.
 
 """This interface is deprecated in favor of kratos_info.
+
 Interface library for sharing kratos endpoints.
 This library provides a Python API for both requesting and providing public and admin endpoints.
 ## Getting Started

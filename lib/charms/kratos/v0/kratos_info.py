@@ -3,6 +3,7 @@
 # See LICENSE file for licensing details.
 
 """Interface library for sharing kratos info.
+
 This library provides a Python API for both requesting and providing kratos deployment info,
 such as endpoints, namespace and ConfigMap details.
 ## Getting Started
@@ -81,9 +82,7 @@ class KratosInfoProvider(Object):
         self._relation_name = relation_name
 
         events = self._charm.on[relation_name]
-        self.framework.observe(
-            events.relation_created, self._on_info_provider_relation_created
-        )
+        self.framework.observe(events.relation_created, self._on_info_provider_relation_created)
 
     def _on_info_provider_relation_created(self, event: RelationCreatedEvent) -> None:
         self.on.ready.emit()
@@ -117,6 +116,7 @@ class KratosInfoProvider(Object):
 
 class KratosInfoRelationError(Exception):
     """Base class for the relation exceptions."""
+
     pass
 
 
@@ -149,7 +149,6 @@ class KratosInfoRequirer(Object):
         if not relation or not relation.app or not relation.data[relation.app]:
             return False
         return True
-
 
     def get_kratos_info(self) -> Optional[Dict]:
         """Get the kratos info."""

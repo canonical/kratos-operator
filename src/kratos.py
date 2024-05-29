@@ -108,7 +108,7 @@ class KratosAPI:
     def recover_password_with_code(self, identity_id: str, expires_in: str = "1h") -> Dict:
         """Create a one time code for recovering an identity's password."""
         url = join(self.kratos_admin_url, "admin/recovery/code")
-        data = dict(identity_id=identity_id, expires_in=expires_in)
+        data = {"identity_id": identity_id, "expires_in": expires_in}
 
         r = requests.post(url, json=data)
         r.raise_for_status()
@@ -118,7 +118,7 @@ class KratosAPI:
     def recover_password_with_link(self, identity_id: str, expires_in: str = "1h") -> Dict:
         """Create a magic link for recovering an identity's password."""
         url = join(self.kratos_admin_url, "admin/recovery/link")
-        data = dict(identity_id=identity_id, expires_in=expires_in)
+        data = {"identity_id": identity_id, "expires_in": expires_in}
 
         r = requests.post(url, json=data)
         r.raise_for_status()

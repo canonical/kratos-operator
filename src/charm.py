@@ -294,9 +294,9 @@ class KratosCharm(CharmBase):
 
         if self._tracing_ready:
             container["environment"]["TRACING_PROVIDER"] = "otel"
-            container["environment"][
-                "TRACING_PROVIDERS_OTLP_SERVER_URL"
-            ] = self._get_tracing_endpoint_info()
+            container["environment"]["TRACING_PROVIDERS_OTLP_SERVER_URL"] = (
+                self._get_tracing_endpoint_info()
+            )
             container["environment"]["TRACING_PROVIDERS_OTLP_INSECURE"] = True
             container["environment"]["TRACING_PROVIDERS_OTLP_SAMPLING_SAMPLING_RATIO"] = 1
 

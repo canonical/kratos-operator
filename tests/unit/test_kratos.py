@@ -44,7 +44,7 @@ def test_create_identity(
         "email": kratos_identity_json["traits"]["email"],
     }
     schema_id = "user"
-    expected_stdin = json.dumps(dict(traits=traits, schema_id=schema_id))
+    expected_stdin = json.dumps({"traits": traits, "schema_id": schema_id})
 
     kratos_api.create_identity(traits, schema_id)
 
@@ -69,13 +69,11 @@ def test_create_identity_with_password(
     }
     schema_id = "user"
     password = "pass"
-    expected_stdin = json.dumps(
-        dict(
-            traits=traits,
-            schema_id=schema_id,
-            credentials={"password": {"config": {"password": password}}},
-        )
-    )
+    expected_stdin = json.dumps({
+        "traits": traits,
+        "schema_id": schema_id,
+        "credentials": {"password": {"config": {"password": password}}},
+    })
 
     kratos_api.create_identity(traits, schema_id, password=password)
 

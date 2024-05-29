@@ -108,23 +108,19 @@ def setup_loki_relation(harness: Harness) -> int:
     relation_id = harness.add_relation("logging", "loki-k8s")
     harness.add_relation_unit(relation_id, "loki-k8s/0")
     databag = {
-        "promtail_binary_zip_url": json.dumps(
-            {
-                "amd64": {
-                    "filename": "promtail-static-amd64",
-                    "zipsha": "543e333b0184e14015a42c3c9e9e66d2464aaa66eca48b29e185a6a18f67ab6d",
-                    "binsha": "17e2e271e65f793a9fbe81eab887b941e9d680abe82d5a0602888c50f5e0cac9",
-                    "url": "https://github.com/canonical/loki-k8s-operator/releases/download/promtail-v2.5.0/promtail-static-amd64.gz",
-                }
+        "promtail_binary_zip_url": json.dumps({
+            "amd64": {
+                "filename": "promtail-static-amd64",
+                "zipsha": "543e333b0184e14015a42c3c9e9e66d2464aaa66eca48b29e185a6a18f67ab6d",
+                "binsha": "17e2e271e65f793a9fbe81eab887b941e9d680abe82d5a0602888c50f5e0cac9",
+                "url": "https://github.com/canonical/loki-k8s-operator/releases/download/promtail-v2.5.0/promtail-static-amd64.gz",
             }
-        ),
+        }),
     }
     unit_databag = {
-        "endpoint": json.dumps(
-            {
-                "url": "http://loki-k8s-0.loki-k8s-endpoints.model0.svc.cluster.local:3100/loki/api/v1/push"
-            }
-        )
+        "endpoint": json.dumps({
+            "url": "http://loki-k8s-0.loki-k8s-endpoints.model0.svc.cluster.local:3100/loki/api/v1/push"
+        })
     }
     harness.update_relation_data(
         relation_id,
@@ -335,7 +331,7 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(
     harness: Harness, lk_client: MagicMock
 ) -> None:
     setup_postgres_relation(harness)
-    (login_relation_id, login_databag) = setup_login_ui_relation(harness)
+    _, login_databag = setup_login_ui_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.kratos_pebble_ready.emit(container)
@@ -426,12 +422,10 @@ def test_on_config_changed_when_identity_schemas_config(
     harness.charm.on.leader_elected.emit()
     harness.charm.on.kratos_pebble_ready.emit(container)
     schema_id = "user_v0"
-    harness.update_config(
-        dict(
-            identity_schemas=json.dumps({"user_v1": IDENTITY_SCHEMA, schema_id: IDENTITY_SCHEMA}),
-            default_identity_schema_id=schema_id,
-        )
-    )
+    harness.update_config({
+        "identity_schemas": json.dumps({"user_v1": IDENTITY_SCHEMA, schema_id: IDENTITY_SCHEMA}),
+        "default_identity_schema_id": schema_id,
+    })
 
     expected_config = {
         "log": {
@@ -483,12 +477,10 @@ def test_on_config_changed_when_identity_schemas_config_unset(
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     schema_id = "user_v0"
-    harness.update_config(
-        dict(
-            identity_schemas=json.dumps({"user_v1": IDENTITY_SCHEMA, schema_id: IDENTITY_SCHEMA}),
-            default_identity_schema_id=schema_id,
-        )
-    )
+    harness.update_config({
+        "identity_schemas": json.dumps({"user_v1": IDENTITY_SCHEMA, schema_id: IDENTITY_SCHEMA}),
+        "default_identity_schema_id": schema_id,
+    })
     harness.update_config(unset=["identity_schemas", "default_identity_schema_id"])
 
     expected_config = {
@@ -1017,7 +1009,7 @@ def test_on_config_changed_when_missing_hydra_relation_data(
 ) -> None:
     setup_postgres_relation(harness)
     setup_peer_relation(harness)
-    (login_relation_id, login_databag) = setup_login_ui_relation(harness)
+    _, login_databag = setup_login_ui_relation(harness)
 
     container = harness.model.unit.get_container(CONTAINER_NAME)
     harness.charm.on.leader_elected.emit()
@@ -1477,13 +1469,11 @@ def test_create_admin_account_without_password(
 
     harness.charm._on_create_admin_account_action(event)
 
-    event.set_results.assert_called_with(
-        {
-            "identity-id": mocked_create_identity.return_value["id"],
-            "password-reset-link": mocked_recover_password_with_link.return_value["recovery_link"],
-            "expires-at": mocked_recover_password_with_link.return_value["expires_at"],
-        }
-    )
+    event.set_results.assert_called_with({
+        "identity-id": mocked_create_identity.return_value["id"],
+        "password-reset-link": mocked_recover_password_with_link.return_value["recovery_link"],
+        "expires-at": mocked_recover_password_with_link.return_value["expires_at"],
+    })
 
 
 def test_run_migration_action(
