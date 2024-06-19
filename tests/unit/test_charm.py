@@ -1590,3 +1590,40 @@ def test_kratos_info_updated_on_relation_ready(harness: Harness) -> None:
         "identity-schemas",
         "kratos-model",
     )
+
+
+def test_on_pebble_ready_correct_plan_with_proxy_flags_when_set(
+    harness: Harness,
+    mocked_migration_is_needed: MagicMock,
+    mocked_get_secret: MagicMock,
+) -> None:
+    proxy = "http://proxy.internal:6666"
+    no_proxy = "google.com,github.com"
+    harness.update_config({"http_proxy": proxy, "https_proxy": proxy, "no_proxy": no_proxy})
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    setup_peer_relation(harness)
+    setup_postgres_relation(harness)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    updated_plan = harness.get_container_pebble_plan(CONTAINER_NAME).to_dict()
+    environment = updated_plan["services"][CONTAINER_NAME].pop("environment")
+    assert environment["HTTP_PROXY"] == proxy
+    assert environment["HTTPS_PROXY"] == proxy
+    assert environment["NO_PROXY"] == no_proxy
+
+
+def test_on_pebble_ready_correct_plan_with_proxy_flags_when_unset(
+    harness: Harness,
+    mocked_migration_is_needed: MagicMock,
+    mocked_get_secret: MagicMock,
+) -> None:
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    setup_peer_relation(harness)
+    setup_postgres_relation(harness)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    updated_plan = harness.get_container_pebble_plan(CONTAINER_NAME).to_dict()
+    environment = updated_plan["services"][CONTAINER_NAME].pop("environment")
+    assert environment["HTTP_PROXY"] == ""
+    assert environment["HTTPS_PROXY"] == ""
+    assert environment["NO_PROXY"] == ""
