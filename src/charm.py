@@ -252,6 +252,18 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.tracing.on.endpoint_removed, self._on_config_changed)
 
     @property
+    def _http_proxy(self) -> str:
+        return self.config["http_proxy"]
+
+    @property
+    def _https_proxy(self) -> str:
+        return self.config["https_proxy"]
+
+    @property
+    def _no_proxy(self) -> str:
+        return self.config["no_proxy"]
+
+    @property
     def _kratos_service_params(self) -> str:
         ret = ["--config", str(self._config_file_path)]
         if self.config["dev"]:
@@ -289,6 +301,9 @@ class KratosCharm(CharmBase):
             "environment": {
                 "DSN": self._dsn,
                 "SERVE_PUBLIC_BASE_URL": self._public_url,
+                "HTTP_PROXY": self._http_proxy,
+                "HTTPS_PROXY": self._https_proxy,
+                "NO_PROXY": self._no_proxy,
             },
         }
 
