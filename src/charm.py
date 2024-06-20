@@ -9,6 +9,9 @@
 import base64
 import json
 import logging
+
+
+
 from functools import cached_property
 from os.path import join
 from pathlib import Path
@@ -362,20 +365,25 @@ class KratosCharm(CharmBase):
         return normalise_url(url) if url else None
 
     @property
+    def _internal_url(self) -> Optional[str]:
+        host = self.internal_ingress.external_host
+        return (
+            f"{self.internal_ingress.scheme}://{host}/{self.model.name}-{self.model.app.name}"
+            if host
+            else None
+        )
+
+    @property
     def _kratos_endpoints(self) -> Tuple[str, str]:
         admin_endpoint = (
-            self._admin_url
+            self._internal_url
             or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
         )
         public_endpoint = (
-            self._public_url
+            self._internal_url
             or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
         )
 
-        admin_endpoint, public_endpoint = (
-            admin_endpoint.replace("https", "http"),
-            public_endpoint.replace("https", "http"),
-        )
         return admin_endpoint, public_endpoint
 
     @property
@@ -1124,6 +1132,7 @@ class KratosCharm(CharmBase):
         # and config-change
         if self.internal_ingress.is_ready():
             self.internal_ingress.submit_to_traefik(self._internal_ingress_config)
+            self._update_kratos_endpoints_relation_data(event)
 
     @property
     def _internal_ingress_config(self) -> dict:
