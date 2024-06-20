@@ -96,7 +96,7 @@ async def test_ingress_relation(ops_test: OpsTest) -> None:
         channel="latest/edge",
         config={"external_hostname": "some_hostname"},
     )
-    await ops_test.model.integrate(f"{KRATOS_APP}:admin-ingress", TRAEFIK_ADMIN_APP)
+    await ops_test.model.integrate(f"{KRATOS_APP}:internal-ingress", TRAEFIK_ADMIN_APP)
     await ops_test.model.integrate(f"{KRATOS_APP}:public-ingress", TRAEFIK_PUBLIC_APP)
 
     await ops_test.model.wait_for_idle(
@@ -118,15 +118,24 @@ async def test_has_public_ingress(ops_test: OpsTest) -> None:
     assert resp.status_code == 200
 
 
-async def test_has_admin_ingress(ops_test: OpsTest) -> None:
+async def test_has_internal_ingress(ops_test: OpsTest) -> None:
     # Get the traefik address and try to reach kratos
-    admin_address = await get_unit_address(ops_test, TRAEFIK_ADMIN_APP, 0)
+    internal_address = await get_unit_address(ops_test, TRAEFIK_ADMIN_APP, 0)
 
-    resp = requests.get(
-        f"http://{admin_address}/{ops_test.model.name}-{KRATOS_APP}/admin/identities"
+    # test admin endpoint
+    assert (
+        requests.get(
+            f"http://{internal_address}/{ops_test.model.name}-{KRATOS_APP}/admin/identities"
+        ).status_code
+        == 200
     )
-
-    assert resp.status_code == 200
+    # test public endpoint
+    assert (
+        requests.get(
+            f"http://{internal_address}/{ops_test.model.name}-{KRATOS_APP}/sessions/whoami"
+        ).status_code
+        == 401
+    )
 
 
 @pytest.mark.abort_on_fail

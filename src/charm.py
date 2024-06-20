@@ -264,10 +264,12 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.tracing.on.endpoint_removed, self._on_config_changed)
 
         self.framework.observe(
-            self.on[INTERNAL_INGRESS_RELATION_NAME].relation_joined, self._configure_ingress
+            self.on[INTERNAL_INGRESS_RELATION_NAME].relation_joined,
+            self._configure_internal_ingress,
         )
         self.framework.observe(
-            self.on[INTERNAL_INGRESS_RELATION_NAME].relation_changed, self._configure_ingress
+            self.on[INTERNAL_INGRESS_RELATION_NAME].relation_changed,
+            self._configure_internal_ingress,
         )
         self.framework.observe(
             self.on[INTERNAL_INGRESS_RELATION_NAME].relation_broken,
@@ -364,11 +366,6 @@ class KratosCharm(CharmBase):
         return normalise_url(url) if url else None
 
     @property
-    def _admin_url(self) -> Optional[str]:
-        url = self.admin_ingress.url
-        return normalise_url(url) if url else None
-
-    @property
     def _internal_url(self) -> Optional[str]:
         host = self.internal_ingress.external_host
         return (
@@ -458,18 +455,14 @@ class KratosCharm(CharmBase):
     @property
     def _kratos_endpoints(self) -> Tuple[str, str]:
         admin_endpoint = (
-            self._admin_url
+            self._internal_url
             or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
         )
         public_endpoint = (
-            self._public_url
+            self._internal_url
             or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
         )
 
-        admin_endpoint, public_endpoint = (
-            admin_endpoint.replace("https", "http"),
-            public_endpoint.replace("https", "http"),
-        )
         return admin_endpoint, public_endpoint
 
     @property
@@ -1197,8 +1190,10 @@ class KratosCharm(CharmBase):
     def _promtail_error(self, event: PromtailDigestError) -> None:
         logger.error(event.message)
 
-    def _configure_ingress(self, event: HookEvent) -> None:
-        """Since :class:`TraefikRouteRequirer` may not have been constructed with an existing
+    def _configure_internal_ingress(self, event: HookEvent) -> None:
+        """Method setting up the internal networking.
+
+        Since :class:`TraefikRouteRequirer` may not have been constructed with an existing
         relation if a :class:`RelationJoinedEvent` comes through during the charm lifecycle, if we
         get one here, we should recreate it, but OF will give us grief about "two objects claiming
         to be ...", so manipulate its private `_relation` variable instead.
@@ -1218,6 +1213,8 @@ class KratosCharm(CharmBase):
         # and config-change
         if self.internal_ingress.is_ready():
             self.internal_ingress.submit_to_traefik(self._internal_ingress_config)
+            self._update_kratos_endpoints_relation_data(event)
+            self._update_kratos_info_relation_data(event)
 
 
 if __name__ == "__main__":

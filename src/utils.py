@@ -51,6 +51,9 @@ def normalise_url(url: str) -> str:
     """
     parsed_url = urlparse(url)
 
+    # latest versions of traefik automatically redirect to https if ceritficate relation is
+    # set, this would void the changes below as even a request to the http url would be redirected
+    # make sure to disable the certificate relation for the internal ingress or trust that certificate
     parsed_url = parsed_url._replace(scheme="https")
     parsed_url = parsed_url._replace(netloc=parsed_url.netloc.rsplit(":", 1)[0])
 
