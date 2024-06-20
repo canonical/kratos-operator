@@ -49,6 +49,7 @@ from charms.traefik_k8s.v2.ingress import (
     IngressPerAppRequirer,
     IngressPerAppRevokedEvent,
 )
+from charms.traefik_route_k8s.v0.traefik_route import TraefikRouteRequirer
 from jinja2 import Template
 from lightkube import Client
 from lightkube.resources.apps_v1 import StatefulSet
@@ -62,6 +63,7 @@ from ops.charm import (
     PebbleReadyEvent,
     RelationDepartedEvent,
     RelationEvent,
+    RelationJoinedEvent,
     RemoveEvent,
     UpgradeCharmEvent,
 )
@@ -81,6 +83,7 @@ from tenacity import before_log, retry, stop_after_attempt, wait_exponential
 
 import config_map
 from config_map import IdentitySchemaConfigMap, KratosConfigMap, ProvidersConfigMap
+from constants import INTERNAL_INGRESS_RELATION_NAME
 from kratos import KratosAPI
 from utils import dict_to_action_output, normalise_url
 
@@ -150,6 +153,15 @@ class KratosCharm(CharmBase):
             strip_prefix=True,
             redirect_https=False,
         )
+
+        # -- ingress via raw traefik_route
+        # TraefikRouteRequirer expects an existing relation to be passed as part of the constructor,
+        # so this may be none. Rely on `self.ingress.is_ready` later to check
+        self.internal_ingress = TraefikRouteRequirer(
+            self,
+            self.model.get_relation(INTERNAL_INGRESS_RELATION_NAME),
+            INTERNAL_INGRESS_RELATION_NAME,
+        )  # type: ignore
 
         self.database = DatabaseRequires(
             self,
@@ -250,6 +262,12 @@ class KratosCharm(CharmBase):
 
         self.framework.observe(self.tracing.on.endpoint_changed, self._on_config_changed)
         self.framework.observe(self.tracing.on.endpoint_removed, self._on_config_changed)
+
+        self.framework.observe(
+            self.on[INTERNAL_INGRESS_RELATION_NAME].relation_joined, self._configure_ingress
+        )
+        self.framework.observe(self.on.leader_elected, self._configure_ingress)
+        self.framework.observe(self.on.config_changed, self._configure_ingress)
 
     @property
     def _http_proxy(self) -> str:
@@ -1084,6 +1102,106 @@ class KratosCharm(CharmBase):
 
     def _promtail_error(self, event: PromtailDigestError) -> None:
         logger.error(event.message)
+
+    def _configure_ingress(self, event: HookEvent) -> None:
+        """Since :class:`TraefikRouteRequirer` may not have been constructed with an existing
+        relation if a :class:`RelationJoinedEvent` comes through during the charm lifecycle, if we
+        get one here, we should recreate it, but OF will give us grief about "two objects claiming
+        to be ...", so manipulate its private `_relation` variable instead.
+
+        Args:
+            event: a :class:`HookEvent` to signal a change we may need to respond to.
+        """
+        if not self.unit.is_leader():
+            return
+
+        # If it's a RelationJoinedEvent, set it in the ingress object
+        if isinstance(event, RelationJoinedEvent):
+            self.internal_ingress._relation = event.relation
+
+        # No matter what, check readiness -- this blindly checks whether `ingress._relation` is not
+        # None, so it overlaps a little with the above, but works as expected on leader elections
+        # and config-change
+        if self.internal_ingress.is_ready():
+            self.internal_ingress.submit_to_traefik(self._internal_ingress_config)
+
+    @property
+    def _internal_ingress_config(self) -> dict:
+        """Build a raw ingress configuration for Traefik."""
+        # The path prefix is the same as in ingress per app
+        external_path = f"{self.model.name}-{self.model.app.name}"
+
+        middlewares = {
+            f"juju-sidecar-noprefix-{self.model.name}-{self.model.app.name}": {
+                "stripPrefix": {"forceSlash": False, "prefixes": [f"/{external_path}"]},
+            },
+        }
+
+        routers = {
+            "juju-{}-{}-admin-api-router".format(self.model.name, self.model.app.name): {
+                "entryPoints": ["web"],
+                "rule": f"PathPrefix(`/{external_path}/admin`)",
+                "middlewares": list(middlewares.keys()),
+                "service": "juju-{}-{}-admin-api-service".format(self.model.name, self.app.name),
+            },
+            "juju-{}-{}-admin-api-router-tls".format(self.model.name, self.model.app.name): {
+                "entryPoints": ["websecure"],
+                "rule": f"PathPrefix(`/{external_path}/admin`)",
+                "middlewares": list(middlewares.keys()),
+                "service": "juju-{}-{}-admin-api-service".format(self.model.name, self.app.name),
+                "tls": {
+                    "domains": [
+                        {
+                            "main": self.internal_ingress.external_host,
+                            "sans": [f"*.{self.internal_ingress.external_host}"],
+                        },
+                    ],
+                },
+            },
+            "juju-{}-{}-public-api-router".format(self.model.name, self.model.app.name): {
+                "entryPoints": ["web"],
+                "rule": f"PathPrefix(`/{external_path}`)",
+                "middlewares": list(middlewares.keys()),
+                "service": "juju-{}-{}-public-api-service".format(self.model.name, self.app.name),
+            },
+            "juju-{}-{}-public-api-router-tls".format(self.model.name, self.model.app.name): {
+                "entryPoints": ["websecure"],
+                "rule": f"PathPrefix(`/{external_path}`)",
+                "middlewares": list(middlewares.keys()),
+                "service": "juju-{}-{}-public-api-service".format(self.model.name, self.app.name),
+                "tls": {
+                    "domains": [
+                        {
+                            "main": self.internal_ingress.external_host,
+                            "sans": [f"*.{self.internal_ingress.external_host}"],
+                        },
+                    ],
+                },
+            },
+        }
+
+        services = {
+            "juju-{}-{}-admin-api-service".format(self.model.name, self.model.app.name): {
+                "loadBalancer": {
+                    "servers": [
+                        {
+                            "url": f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
+                        }
+                    ]
+                }
+            },
+            "juju-{}-{}-public-api-service".format(self.model.name, self.model.app.name): {
+                "loadBalancer": {
+                    "servers": [
+                        {
+                            "url": f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
+                        }
+                    ]
+                }
+            },
+        }
+
+        return {"http": {"routers": routers, "services": services, "middlewares": middlewares}}
 
 
 if __name__ == "__main__":
