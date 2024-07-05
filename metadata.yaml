@@ -38,6 +38,12 @@ requires:
     limit: 1
     description: |
       Provides traces to COS Tempo instance
+  internal-ingress:
+    interface: traefik_route
+    limit: 1
+    description: |
+      Ingress used for cross-cluster communication where network topology is more complex
+      than just one k8s cluster
 peers:
   kratos-peers:
     interface: kratos-peers

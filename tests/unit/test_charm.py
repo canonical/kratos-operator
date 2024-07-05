@@ -16,6 +16,8 @@ from ops.model import ActiveStatus, BlockedStatus, Container, WaitingStatus
 from ops.pebble import ExecError, TimeoutError
 from ops.testing import Harness
 
+from constants import INTERNAL_INGRESS_RELATION_NAME
+
 CONFIG_DIR = Path("/etc/config")
 CONTAINER_NAME = "kratos"
 ADMIN_PORT = "4434"
@@ -64,6 +66,24 @@ def setup_ingress_relation(harness: Harness, type: str) -> int:
         f"{type}-traefik",
         {"ingress": json.dumps({"url": f"http://{type}:80/{harness.model.name}-kratos"})},
     )
+    return relation_id
+
+
+def setup_internal_ingress_relation(harness: Harness, type: str) -> int:
+    relation_id = harness.add_relation(
+        f"{INTERNAL_INGRESS_RELATION_NAME}",
+        f"{type}-traefik",
+    )
+    harness.add_relation_unit(
+        relation_id,
+        f"{type}-traefik/0",
+    )
+    harness.update_relation_data(
+        relation_id,
+        f"{type}-traefik",
+        {"external_host": "test.staging.canonical.com", "scheme": "https"},
+    )
+
     return relation_id
 
 
@@ -1627,3 +1647,116 @@ def test_on_pebble_ready_correct_plan_with_proxy_flags_when_unset(
     assert environment["HTTP_PROXY"] == ""
     assert environment["HTTPS_PROXY"] == ""
     assert environment["NO_PROXY"] == ""
+
+
+def test_kratos_info_updated_on_internal_ingress_relation_joined(harness: Harness) -> None:
+    kratos_info_relation_id = setup_kratos_info_relation(harness)
+
+    _ = setup_internal_ingress_relation(harness, "admin")
+
+    ingress_url = f"{harness.charm.internal_ingress.scheme}://{harness.charm.internal_ingress.external_host}/{harness.model.name}-{harness.model.app.name}"
+
+    info_data = harness.get_relation_data(kratos_info_relation_id, harness.charm.app)
+
+    assert info_data["admin_endpoint"] == ingress_url
+    assert info_data["public_endpoint"] == ingress_url
+
+
+def test_kratos_info_updated_on_internal_ingress_relation_changed(harness: Harness) -> None:
+    kratos_info_relation_id = setup_kratos_info_relation(harness)
+
+    relation_id = setup_internal_ingress_relation(harness, "admin")
+
+    url_change = "new-test.staging.canonical.com"
+    harness.update_relation_data(
+        relation_id,
+        "admin-traefik",
+        {"external_host": url_change, "scheme": "https"},
+    )
+
+    ingress_url = f"{harness.charm.internal_ingress.scheme}://{url_change}/{harness.model.name}-{harness.model.app.name}"
+
+    info_data = harness.get_relation_data(kratos_info_relation_id, harness.charm.app)
+
+    assert info_data["admin_endpoint"] == ingress_url
+    assert info_data["public_endpoint"] == ingress_url
+
+
+def test_kratos_info_updated_on_internal_ingress_relation_broken(harness: Harness) -> None:
+    kratos_info_relation_id = setup_kratos_info_relation(harness)
+
+    relation_id = setup_internal_ingress_relation(harness, "admin")
+
+    harness.remove_relation(relation_id)
+
+    info_data = harness.get_relation_data(kratos_info_relation_id, harness.charm.app)
+
+    assert info_data["admin_endpoint"] == "http://kratos.kratos-model.svc.cluster.local:4434"
+    assert info_data["public_endpoint"] == "http://kratos.kratos-model.svc.cluster.local:4433"
+
+
+def test_kratos_endpoint_info_updated_on_internal_ingress_relation_joined(
+    harness: Harness,
+) -> None:
+    kratos_endpoint_info_relation_id = harness.add_relation(
+        "kratos-endpoint-info", "identity-platform-login-ui-operator"
+    )
+    harness.add_relation_unit(
+        kratos_endpoint_info_relation_id, "identity-platform-login-ui-operator/0"
+    )
+
+    _ = setup_internal_ingress_relation(harness, "admin")
+
+    ingress_url = f"{harness.charm.internal_ingress.scheme}://{harness.charm.internal_ingress.external_host}/{harness.model.name}-{harness.model.app.name}"
+
+    endpoint_data = harness.get_relation_data(kratos_endpoint_info_relation_id, harness.charm.app)
+
+    assert endpoint_data["admin_endpoint"] == ingress_url
+    assert endpoint_data["public_endpoint"] == ingress_url
+
+
+def test_kratos_endpoint_info_updated_on_internal_ingress_relation_changed(
+    harness: Harness,
+) -> None:
+    kratos_endpoint_info_relation_id = harness.add_relation(
+        "kratos-endpoint-info", "identity-platform-login-ui-operator"
+    )
+    harness.add_relation_unit(
+        kratos_endpoint_info_relation_id, "identity-platform-login-ui-operator/0"
+    )
+
+    relation_id = setup_internal_ingress_relation(harness, "admin")
+
+    url_change = "new-test.staging.canonical.com"
+    harness.update_relation_data(
+        relation_id,
+        "admin-traefik",
+        {"external_host": url_change, "scheme": "https"},
+    )
+
+    ingress_url = f"{harness.charm.internal_ingress.scheme}://{url_change}/{harness.model.name}-{harness.model.app.name}"
+
+    endpoint_data = harness.get_relation_data(kratos_endpoint_info_relation_id, harness.charm.app)
+
+    assert endpoint_data["admin_endpoint"] == ingress_url
+    assert endpoint_data["public_endpoint"] == ingress_url
+
+
+def test_kratos_endpoint_info_updated_on_internal_ingress_relation_broken(
+    harness: Harness,
+) -> None:
+    kratos_endpoint_info_relation_id = harness.add_relation(
+        "kratos-endpoint-info", "identity-platform-login-ui-operator"
+    )
+    harness.add_relation_unit(
+        kratos_endpoint_info_relation_id, "identity-platform-login-ui-operator/0"
+    )
+
+    relation_id = setup_internal_ingress_relation(harness, "admin")
+
+    harness.remove_relation(relation_id)
+
+    endpoint_data = harness.get_relation_data(kratos_endpoint_info_relation_id, harness.charm.app)
+
+    assert endpoint_data["admin_endpoint"] == "http://kratos.kratos-model.svc.cluster.local:4434"
+    assert endpoint_data["public_endpoint"] == "http://kratos.kratos-model.svc.cluster.local:4433"
