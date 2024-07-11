@@ -154,6 +154,14 @@ def mocked_get_version(mocker: MockerFixture) -> MagicMock:
     return mock
 
 
+@pytest.fixture(autouse=True)
+def mocked_push_ca_certs(mocker: MockerFixture):
+    mock = mocker.patch(
+        "certificate_transfer_integration.CertTransfer.push_ca_certs", return_value=None
+    )
+    return mock
+
+
 @pytest.fixture()
 def mocked_get_identity(mocker: MockerFixture, kratos_identity_json: Dict) -> MagicMock:
     mock = mocker.patch("charm.KratosAPI.get_identity", return_value=kratos_identity_json)

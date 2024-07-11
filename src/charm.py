@@ -82,6 +82,7 @@ from ops.pebble import ChangeError, Error, ExecError, Layer
 from tenacity import before_log, retry, stop_after_attempt, wait_exponential
 
 import config_map
+from certificate_transfer_integration import CertTransfer
 from config_map import IdentitySchemaConfigMap, KratosConfigMap, ProvidersConfigMap
 from constants import INTERNAL_INGRESS_RELATION_NAME, WORKLOAD_CONTAINER_NAME
 from kratos import KratosAPI
@@ -210,6 +211,12 @@ class KratosCharm(CharmBase):
 
         self._grafana_dashboards = GrafanaDashboardProvider(
             self, relation_name=self._grafana_dashboard_relation_name
+        )
+
+        self.cert_transfer = CertTransfer(
+            self,
+            WORKLOAD_CONTAINER_NAME,
+            self._handle_status_update_config,
         )
 
         self.framework.observe(self.on.install, self._on_install)
@@ -791,6 +798,7 @@ class KratosCharm(CharmBase):
             return
 
         self._cleanup_peer_data()
+        self.cert_transfer.push_ca_certs()
         self._update_config()
         # We need to push the layer because this may run before _on_pebble_ready
         self._container.add_layer(WORKLOAD_CONTAINER_NAME, self._pebble_layer, combine=True)

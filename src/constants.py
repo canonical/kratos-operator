@@ -5,3 +5,4 @@
 
 INTERNAL_INGRESS_RELATION_NAME = "internal-ingress"
 WORKLOAD_CONTAINER_NAME = "kratos"
+CERTIFICATE_TRANSFER_NAME = "receive-ca-cert"
