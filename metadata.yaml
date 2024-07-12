@@ -44,6 +44,12 @@ requires:
     description: |
       Ingress used for cross-cluster communication where network topology is more complex
       than just one k8s cluster
+  receive-ca-cert:
+    interface: certificate_transfer
+    description: |
+      Receive a CA cert.
+      This relation can be used with a local CA to obtain the CA cert that was used to sign proxied
+      endpoints.
 peers:
   kratos-peers:
     interface: kratos-peers

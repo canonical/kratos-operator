@@ -82,8 +82,9 @@ from ops.pebble import ChangeError, Error, ExecError, Layer
 from tenacity import before_log, retry, stop_after_attempt, wait_exponential
 
 import config_map
+from certificate_transfer_integration import CertTransfer
 from config_map import IdentitySchemaConfigMap, KratosConfigMap, ProvidersConfigMap
-from constants import INTERNAL_INGRESS_RELATION_NAME
+from constants import INTERNAL_INGRESS_RELATION_NAME, WORKLOAD_CONTAINER_NAME
 from kratos import KratosAPI
 from utils import dict_to_action_output, normalise_url
 
@@ -107,8 +108,7 @@ class KratosCharm(CharmBase):
 
     def __init__(self, *args: Any) -> None:
         super().__init__(*args)
-        self._container_name = "kratos"
-        self._container = self.unit.get_container(self._container_name)
+        self._container = self.unit.get_container(WORKLOAD_CONTAINER_NAME)
         self._config_dir_path = Path("/etc/config/kratos")
         self._config_file_path = self._config_dir_path / "kratos.yaml"
         self._identity_schemas_default_dir_path = self._config_dir_path
@@ -202,7 +202,7 @@ class KratosCharm(CharmBase):
             self,
             log_files=[str(self._log_path)],
             relation_name=self._loki_push_api_relation_name,
-            container_name=self._container_name,
+            container_name=WORKLOAD_CONTAINER_NAME,
         )
         self.tracing = TracingEndpointRequirer(
             self,
@@ -211,6 +211,12 @@ class KratosCharm(CharmBase):
 
         self._grafana_dashboards = GrafanaDashboardProvider(
             self, relation_name=self._grafana_dashboard_relation_name
+        )
+
+        self.cert_transfer = CertTransfer(
+            self,
+            WORKLOAD_CONTAINER_NAME,
+            self._handle_status_update_config,
         )
 
         self.framework.observe(self.on.install, self._on_install)
@@ -305,7 +311,7 @@ class KratosCharm(CharmBase):
             return False
 
         try:
-            service = self._container.get_service(self._container_name)
+            service = self._container.get_service(WORKLOAD_CONTAINER_NAME)
         except (ModelError, RuntimeError):
             return False
         return service.is_running()
@@ -345,7 +351,7 @@ class KratosCharm(CharmBase):
         pebble_layer: LayerDict = {
             "summary": "kratos layer",
             "description": "pebble config layer for kratos",
-            "services": {self._container_name: container},
+            "services": {WORKLOAD_CONTAINER_NAME: container},
             "checks": {
                 "kratos-ready": {
                     "override": "replace",
@@ -792,11 +798,12 @@ class KratosCharm(CharmBase):
             return
 
         self._cleanup_peer_data()
+        self.cert_transfer.push_ca_certs()
         self._update_config()
         # We need to push the layer because this may run before _on_pebble_ready
-        self._container.add_layer(self._container_name, self._pebble_layer, combine=True)
+        self._container.add_layer(WORKLOAD_CONTAINER_NAME, self._pebble_layer, combine=True)
         try:
-            self._container.restart(self._container_name)
+            self._container.restart(WORKLOAD_CONTAINER_NAME)
         except ChangeError as err:
             logger.error(str(err))
             self.unit.status = BlockedStatus("Failed to restart, please consult the logs")
@@ -883,7 +890,7 @@ class KratosCharm(CharmBase):
         pod_spec_patch = {
             "containers": [
                 {
-                    "name": self._container_name,
+                    "name": WORKLOAD_CONTAINER_NAME,
                     "volumeMounts": [
                         {
                             "mountPath": str(self._config_dir_path),
@@ -950,7 +957,7 @@ class KratosCharm(CharmBase):
 
         self.unit.status = BlockedStatus("Missing required relation with postgresql")
         try:
-            self._container.stop(self._container_name)
+            self._container.stop(WORKLOAD_CONTAINER_NAME)
         except ChangeError as err:
             logger.error(str(err))
             return
