@@ -9,6 +9,7 @@ import re
 from os.path import join
 from typing import Dict, List, Optional
 
+import bcrypt
 import requests
 from ops.model import Container
 
@@ -117,15 +118,63 @@ class KratosAPI:
 
         return r.json()
 
-    def recover_password_with_link(self, identity_id: str, expires_in: str = "1h") -> Dict:
-        """Create a magic link for recovering an identity's password."""
-        url = join(self.kratos_admin_url, "admin/recovery/link")
-        data = {"identity_id": identity_id, "expires_in": expires_in}
+    def reset_password(self, identity_id: str, password: str) -> Dict:
+        """Set identity's password to a provided value."""
+        identity = self.get_identity(identity_id)
+        traits = identity.get("traits")
+        schema_id = identity.get("schema_id")
+        state = identity.get("state")
 
-        r = requests.post(url, json=data)
+        credentials = {
+            "password": {
+                "config": {
+                    "hashed_password": bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+                }
+            }
+        }
+
+        # Update the identity with new password.
+        # Note that passwords can't be updated with Kratos CLI
+        url = join(self.kratos_admin_url, f"admin/identities/{identity_id}")
+        data = {"state": state, "traits": traits, "schema_id": schema_id, "credentials": credentials}
+
+        r = requests.put(url, json=data)
         r.raise_for_status()
 
         return r.json()
+
+    def invalidate_sessions(self, identity_id: str) -> Optional[bool]:
+        """Invalidate and delete all sessions that belong to an identity."""
+        url = join(self.kratos_admin_url, f"admin/identities/{identity_id}/sessions")
+
+        try:
+            r = requests.delete(url)
+            # This endpoint returns 204 if sessions were deleted or 404 if the identity had no sessions
+            r.raise_for_status()
+        except requests.exceptions.HTTPError as err:
+            if err.response.status_code == 404:
+                logger.info("No sessions found for the identity")
+                return False
+            raise err
+
+        return True
+
+    def delete_mfa_credential(self, identity_id: str, mfa_type: str) -> Optional[bool]:
+        """Delete a second factor credential of an identity."""
+        url = join(self.kratos_admin_url, f"admin/identities/{identity_id}/credentials/{mfa_type}")
+
+        try:
+            r = requests.delete(url)
+            # This endpoint returns 204 if credentials were deleted or 404 if the identity had no credentials
+            # of the selected type
+            r.raise_for_status()
+        except requests.exceptions.HTTPError as err:
+            if err.response.status_code == 404:
+                logger.info("No credentials found for the identity")
+                return False
+            raise err
+
+        return True
 
     def run_migration(self, dsn=None, timeout: float = 120) -> str:
         """Run an sql migration."""

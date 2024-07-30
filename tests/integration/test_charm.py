@@ -175,10 +175,24 @@ async def test_get_identity(ops_test: OpsTest) -> None:
     assert res["id"]
 
 
-@pytest.mark.skip(
-    reason=("the recovery and settings UI page must be provided to kratos for this test to work")
-)
 async def test_reset_password(ops_test: OpsTest) -> None:
+    action = (
+        await ops_test.model.applications[KRATOS_APP]
+        .units[0]
+        .run_action(
+            "reset-password",
+            email=ADMIN_MAIL,
+            password="some-password"
+        )
+    )
+
+    action_output = await action.wait()
+
+    assert "id" in action_output.results
+    assert action_output.status == "completed"
+
+
+async def test_reset_password_with_recovery_code(ops_test: OpsTest) -> None:
     action = (
         await ops_test.model.applications[KRATOS_APP]
         .units[0]
@@ -188,9 +202,43 @@ async def test_reset_password(ops_test: OpsTest) -> None:
         )
     )
 
-    res = (await action.wait()).results
+    action_output = await action.wait()
 
-    assert "recovery_link" in res
+    assert "recovery-link" in action_output.results
+    assert action_output.status == "completed"
+
+
+async def test_reset_identity_mfa(ops_test: OpsTest) -> None:
+    action = (
+        await ops_test.model.applications[KRATOS_APP]
+        .units[0]
+        .run_action(
+            "reset-identity-mfa",
+            **{
+                "email": ADMIN_MAIL,
+                "mfa-type": "totp",
+            },
+        )
+    )
+
+    action_output = await action.wait()
+
+    assert action_output.status == "completed"
+
+
+async def test_invalidate_identity_sessions(ops_test: OpsTest) -> None:
+    action = (
+        await ops_test.model.applications[KRATOS_APP]
+        .units[0]
+        .run_action(
+            "invalidate-identity-sessions",
+            email=ADMIN_MAIL,
+        )
+    )
+
+    action_output = await action.wait()
+
+    assert action_output.status == "completed"
 
 
 async def test_delete_identity(ops_test: OpsTest) -> None:
