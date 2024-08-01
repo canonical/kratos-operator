@@ -1367,60 +1367,89 @@ def test_error_on_delete_identity_action_with_email(
     event.fail.assert_called()
 
 
-def test_reset_password_action_when_password_provided_with_identity_id(
+def test_reset_password_action_when_password_secret_id_provided_with_identity_id(
     harness: Harness,
     mocked_kratos_service: MagicMock,
     mocked_reset_password: MagicMock,
 ) -> None:
+    secret_content = {"password": "some-password"}
+    secret_id = harness.add_user_secret(secret_content)
+    harness.grant_secret(secret_id, "kratos")
+
     event = MagicMock()
-    event.params = {"identity-id": "123", "password": "new-password"}
+    event.params = {"identity-id": "123", "password-secret-id": secret_id}
 
     harness.charm._on_reset_password_action(event)
 
     event.set_results.assert_called()
 
 
-def test_error_on_reset_password_action_when_password_provided_with_identity_id(
+def test_error_on_reset_password_action_when_password_secret_id_provided_with_identity_id(
     harness: Harness,
     mocked_kratos_service: MagicMock,
     mocked_reset_password: MagicMock,
 ) -> None:
-    mocked_reset_password.side_effect = requests.exceptions.HTTPError()
+    secret_content = {"password": "some-password"}
+    secret_id = harness.add_user_secret(secret_content)
+    harness.grant_secret(secret_id, "kratos")
+
+    mocked_reset_password.side_effect = requests.exceptions.HTTPError("error")
     event = MagicMock()
-    event.params = {"identity-id": "123", "password": "new-password"}
+    event.params = {"identity-id": "123", "password-secret-id": secret_id}
 
     harness.charm._on_reset_password_action(event)
 
-    event.fail.assert_called()
+    event.fail.assert_called_with("Failed to request Kratos API: error")
 
 
-def test_reset_password_action_when_password_provided_with_email(
+def test_reset_password_action_when_password_secret_id_invalid_with_identity_id(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_reset_password: MagicMock,
+) -> None:
+    event = MagicMock()
+    event.params = {"identity-id": "123", "password-secret-id": "invalid-juju-secret-id"}
+
+    harness.charm._on_reset_password_action(event)
+
+    event.fail.assert_called_with("Secret not found")
+
+
+def test_reset_password_action_when_password_secret_id_provided_with_email(
     harness: Harness,
     mocked_kratos_service: MagicMock,
     mocked_get_identity_from_email: MagicMock,
     mocked_reset_password: MagicMock,
 ) -> None:
+    secret_content = {"password": "some-password"}
+    secret_id = harness.add_user_secret(secret_content)
+    harness.grant_secret(secret_id, "kratos")
+
     event = MagicMock()
-    event.params = {"email": "test@example.com", "password": "new-password"}
+    event.params = {"email": "test@example.com", "password-secret-id": secret_id}
 
     harness.charm._on_reset_password_action(event)
 
     event.set_results.assert_called()
 
 
-def test_error_on_reset_password_action_when_password_provided_with_email(
+def test_error_on_reset_password_action_when_password_secret_id_provided_with_email(
     harness: Harness,
     mocked_kratos_service: MagicMock,
     mocked_get_identity_from_email: MagicMock,
     mocked_reset_password: MagicMock,
 ) -> None:
-    mocked_reset_password.side_effect = requests.exceptions.HTTPError()
+    secret_content = {"password": "some-password"}
+    secret_id = harness.add_user_secret(secret_content)
+    harness.grant_secret(secret_id, "kratos")
+
+    mocked_reset_password.side_effect = requests.exceptions.HTTPError("error")
     event = MagicMock()
-    event.params = {"email": "test@example.com", "password": "new-password"}
+    event.params = {"email": "test@example.com", "password-secret-id": secret_id}
 
     harness.charm._on_reset_password_action(event)
 
-    event.fail.assert_called()
+    event.fail.assert_called_with("Failed to request Kratos API: error")
 
 
 def test_reset_password_action_with_code_with_identity_id(

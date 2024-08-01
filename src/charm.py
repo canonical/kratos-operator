@@ -1109,10 +1109,21 @@ class KratosCharm(CharmBase):
 
         identity_id = self._get_identity_id(event)
 
+        if secret_id := event.params.get("password-secret-id"):
+            try:
+                juju_secret = self.model.get_secret(id=secret_id)
+                password = juju_secret.get_content().get("password")
+            except SecretNotFoundError:
+                event.fail("Secret not found")
+                return
+            except ModelError as err:
+                event.fail(f"An error occurred: {err}")
+                return
+
         event.log("Resetting password")
 
         try:
-            if password := event.params.get("password"):
+            if secret_id:
                 ret = self.kratos.reset_password(identity_id=identity_id, password=password)
                 event.log("Password changed successfully")
             else:
