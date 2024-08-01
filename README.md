@@ -187,6 +187,67 @@ An email can be used to specify the identity as well:
 juju run kratos/0 delete-identity email={email}
 ```
 
+### reset-password
+
+This action can be used to reset password of an identity by its email or id.
+The password can be set to a specified value by passing `password-secret-id` as an action parameter.
+
+To create a juju secret holding the password and grant it to kratos, run:
+
+```shell
+juju add-secret <secret-name> password=<new-password>
+secret:cql684nmp25c75sflot0
+juju grant-secret <secret-name> kratos
+```
+
+Then, run the action using identity id:
+
+```shell
+juju run kratos/0 reset-password identity-id={identity_id} password-secret-id=secret:cql684nmp25c75sflot0
+```
+
+Or email:
+
+```shell
+juju run kratos/0 reset-password email={email} password-secret-id=secret:cql684nmp25c75sflot0
+```
+
+If `password-secret-id` parameter is not provided, the action will return a self-service recovery code and link
+to reset the password.
+
+### invalidate-identity-sessions
+
+This action can be used to invalidate all user sessions using either the identity id or email.
+
+By id:
+
+```shell
+juju run kratos/0 invalidate-identity-sessions identity-id={identity_id}
+```
+
+By email:
+
+```shell
+juju run kratos/0 invalidate-identity-sessions email={email}
+```
+
+### reset-identity-mfa
+
+This action can be used to reset identity's second authentication factor using either the identity id or email.
+The type of credentials to be removed must be specified, supported values are `totp` and `lookup_secret`.
+
+By id:
+
+```shell
+juju run kratos/0 reset-identity-mfa identity-id={identity_id} mfa-type={totp|lookup_secret}
+```
+
+By email:
+
+```shell
+juju run kratos/0 reset-identity-mfa email={email} mfa-type={totp|lookup_secret}
+```
+
 ### run-migration
 
 This action can be used to trigger a database migration:
