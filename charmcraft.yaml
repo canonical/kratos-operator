@@ -1,7 +1,205 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+name: kratos
 type: charm
+description: |
+  Charmed Ory Kratos
+summary: |
+  Identity and user management system
+links:
+  documentation: https://discourse.charmhub.io/t/kratos-docs-index/12136
+  source: https://github.com/canonical/kratos-operator
+  issues: https://github.com/canonical/kratos-operator/issues
+
+containers:
+  kratos:
+    resource: oci-image
+
+resources:
+  oci-image:
+    type: oci-image
+    description: Kratos oci-image
+    upstream-source: ghcr.io/canonical/kratos:1.1.0
+
+requires:
+  pg-database:
+    interface: postgresql_client
+    optional: false
+  public-ingress:
+    interface: ingress
+  admin-ingress:
+    interface: ingress
+  kratos-external-idp:
+    interface: external_provider
+  hydra-endpoint-info:
+    interface: hydra_endpoints
+    limit: 1
+  ui-endpoint-info:
+    interface: login_ui_endpoints
+    limit: 1
+  logging:
+    interface: loki_push_api
+  tracing:
+    interface: tracing
+    limit: 1
+    description: |
+      Provides traces to COS Tempo instance
+  internal-ingress:
+    interface: traefik_route
+    limit: 1
+    description: |
+      Ingress used for cross-cluster communication where network topology is more complex
+      than just one k8s cluster
+  receive-ca-cert:
+    interface: certificate_transfer
+    description: |
+      Receive a CA cert.
+      This relation can be used with a local CA to obtain the CA cert that was used to sign proxied
+      endpoints.
+
+peers:
+  kratos-peers:
+    interface: kratos-peers
+
+provides:
+  kratos-endpoint-info:
+    interface: kratos_endpoints
+    description: |
+      Provides API endpoints to a related application
+  kratos-info:
+    interface: kratos_info
+    description: |
+      Provides kratos deployment info to a related application
+  metrics-endpoint:
+    interface: prometheus_scrape
+    description: |
+      Provides application metrics to COS Prometheus instance
+  grafana-dashboard:
+    description: |
+      Forwards the built-in grafana dashboard(s) for monitoring kratos.
+    interface: grafana_dashboard
+
+config:
+  options:
+    http_proxy:
+      description: URL of the HTTP proxy eg http://proxy.internal:6666, it will set the HTTP_PROXY var in the workload environment
+      type: string
+      default: ''
+    https_proxy:
+      description: URL of the HTTPS proxy eg http://proxy.internal:6666, it will set the HTTPS_PROXY var in the workload environment
+      type: string
+      default: ''
+    no_proxy:
+      description: Domains that need to be excluded from proxying no_proxy="test.com,test.co.uk", it is a comma separate list
+      type: string
+      default: ''
+    smtp_connection_uri:
+      description: SMTP connection URI
+      type: string
+      default: 'smtps://test:test@mailslurper:1025/?skip_ssl_verify=true'
+    dev:
+      description:
+        Run Kratos on dev mode, it is needed if HTTPS is not set up. This should only be used for development purposes.
+      type: boolean
+      default: False
+    identity_schemas:
+      description: |
+        A mapping of schema_id to identity schemas. For example:
+        {
+          "user_v0": {
+            "$id": "https://schemas.ory.sh/presets/kratos/quickstart/email-password/identity.schema.json",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "title": "Person",
+            "type": "object",
+            "properties": {
+              "traits": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "title": "E-Mail",
+                    "minLength": 3,
+                    "ory.sh/kratos": {
+                      "verification": {
+                        "via": "email"
+                      }
+                    }
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": true
+            }
+          }
+        }
+      type: string
+    default_identity_schema_id:
+      description: The default identity schema id, this option only works when `identity_schemas` is defined
+      type: string
+    log_level:
+      description: |
+        The verbosity of logs produced by Kratos.
+        Available values are: panic, fatal, error, warn, info, debug, and trace.
+      type: string
+      default: "info"
+
+actions:
+  get-identity:
+    description: Get a user using either the identity ID or the user email.
+    params:
+      identity-id:
+        description: The Identity ID
+        type: string
+      email:
+        description: The user's email
+        type: string
+  delete-identity:
+    description: Delete a user using either the identity ID or the user email.
+    params:
+      identity-id:
+        description: The Identity ID
+        type: string
+      email:
+        description: The user's email
+        type: string
+  create-admin-account:
+    description: |
+      Create an admin user. If no password was provided, the command will return a
+      magic link where the user will be able to set their password.
+    params:
+      username:
+        description: The admin username
+        type: string
+      email:
+        description: |
+          The admin's email, this email must not be associated with any other account
+          (user or admin)
+        type: string
+      password:
+        description: The admin's password
+        type: string
+      name:
+        description: The admin's name
+        type: string
+      phone_number:
+        description: The admin's phone number
+        type: string
+    # TODO: Remove required password once password resetting is implemented
+    required: ["username", "password"]
+  run-migration:
+    description: |
+      Run a migration, this is needed after upgrades. This is a non-reversible operation.
+      Run this after backing up the database.
+    params:
+      timeout:
+        description: Timeout after which the migration will be canceled
+        type: number
+        default: 120
+
 bases:
   - build-on:
       - name: "ubuntu"
@@ -9,6 +207,7 @@ bases:
     run-on:
       - name: "ubuntu"
         channel: "22.04"
+
 parts:
   charm:
     prime:

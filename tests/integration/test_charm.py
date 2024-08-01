@@ -14,7 +14,7 @@ from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
 
-METADATA = yaml.safe_load(Path("./metadata.yaml").read_text())
+METADATA = yaml.safe_load(Path("./charmcraft.yaml").read_text())
 KRATOS_APP = METADATA["name"]
 DB_APP = "postgresql-k8s"
 TRAEFIK_CHARM = "traefik-k8s"
