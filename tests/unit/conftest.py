@@ -208,19 +208,25 @@ def mocked_recover_password_with_code(
 
 
 @pytest.fixture()
-def recover_password_with_link_resp() -> Dict:
-    return {
-        "recovery_link": "http://kratos-ui/self-service/recovery?flow=e18560f9-8f50-4679-bcc9-d6cea2bb203f&token=5UJ9GgQTxvSp53zkwgOkjG9eRvnYjEYq",
-        "expires_at": "2023-04-03T21:47:52.869721347Z",
-    }
+def mocked_reset_password(mocker: MockerFixture, kratos_identity_json: Dict) -> MagicMock:
+    mock = mocker.patch(
+        "charm.KratosAPI.reset_password", return_value=kratos_identity_json
+    )
+    return mock
 
 
 @pytest.fixture()
-def mocked_recover_password_with_link(
-    mocker: MockerFixture, recover_password_with_link_resp: Dict
-) -> MagicMock:
+def mocked_invalidate_sessions(mocker: MockerFixture) -> MagicMock:
     mock = mocker.patch(
-        "charm.KratosAPI.recover_password_with_link", return_value=recover_password_with_link_resp
+        "charm.KratosAPI.invalidate_sessions", return_value=True
+    )
+    return mock
+
+
+@pytest.fixture()
+def mocked_delete_mfa_credential(mocker: MockerFixture) -> MagicMock:
+    mock = mocker.patch(
+        "charm.KratosAPI.delete_mfa_credential", return_value=True
     )
     return mock
 

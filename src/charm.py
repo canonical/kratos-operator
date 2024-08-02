@@ -254,8 +254,11 @@ class KratosCharm(CharmBase):
 
         self.framework.observe(self.on.get_identity_action, self._on_get_identity_action)
         self.framework.observe(self.on.delete_identity_action, self._on_delete_identity_action)
-        # TODO: Uncomment this line after we have implemented the recovery endpoint
-        # self.framework.observe(self.on.reset_password_action, self._on_reset_password_action)
+        self.framework.observe(self.on.reset_password_action, self._on_reset_password_action)
+        self.framework.observe(
+            self.on.invalidate_identity_sessions_action, self._on_invalidate_identity_sessions_action
+        )
+        self.framework.observe(self.on.reset_identity_mfa_action, self._on_reset_identity_mfa_action)
         self.framework.observe(
             self.on.create_admin_account_action, self._on_create_admin_account_action
         )
@@ -643,7 +646,7 @@ class KratosCharm(CharmBase):
         return default_schema_id, schemas
 
     def _get_identity_schema_config(self) -> Tuple[str, Dict]:
-        """Get the the default schema id and the identity schemas.
+        """Get the default schema id and the identity schemas.
 
         The identity schemas can come from 2 different sources. We chose them in this order:
         1) If the user has defined some schemas in the juju config, return those
@@ -1063,26 +1066,31 @@ class KratosCharm(CharmBase):
         event.log("Successfully got the identity.")
         event.set_results(dict_to_action_output(identity))
 
+    def _get_identity_id(self, event: ActionEvent) -> Optional[str]:
+        identity_id = event.params.get("identity-id")
+        email = event.params.get("email")
+        if identity_id and email:
+            event.fail("Only one of identity-id and email can be provided.")
+            return None
+        elif not identity_id and not email:
+            event.fail("One of identity-id and email must be provided.")
+            return None
+
+        if email:
+            identity = self.kratos.get_identity_from_email(email)
+            if not identity:
+                event.fail("Couldn't retrieve identity_id from email.")
+                return None
+            identity_id = identity["id"]
+
+        return identity_id
+
     def _on_delete_identity_action(self, event: ActionEvent) -> None:
         if not self._kratos_service_is_running:
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
-        identity_id = event.params.get("identity-id")
-        email = event.params.get("email")
-        if identity_id and email:
-            event.fail("Only one of identity-id and email can be provided.")
-            return
-        elif not identity_id and not email:
-            event.fail("One of identity-id and email must be provided.")
-            return
-
-        if email:
-            identity = self.kratos.get_identity_from_email(email)
-            identity_id = identity.get("id")
-            if not identity_id:
-                event.fail("Couldn't retrieve identity_id from email.")
-                return
+        identity_id = self._get_identity_id(event)
 
         event.log("Deleting the identity.")
         try:
@@ -1099,43 +1107,83 @@ class KratosCharm(CharmBase):
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
-        identity_id = event.params.get("identity-id")
-        email = event.params.get("email")
-        recovery_method = event.params.get("recovery-method")
-        if identity_id and email:
-            event.fail("Only one of identity-id and email can be provided.")
-            return
-        elif not identity_id and not email:
-            event.fail("One of identity-id and email must be provided.")
-            return
+        identity_id = self._get_identity_id(event)
 
-        if email:
-            identity = self.kratos.get_identity_from_email(email)
-            if not identity:
-                event.fail("Couldn't retrieve identity_id from email.")
+        if secret_id := event.params.get("password-secret-id"):
+            try:
+                juju_secret = self.model.get_secret(id=secret_id)
+                password = juju_secret.get_content().get("password")
+            except SecretNotFoundError:
+                event.fail("Secret not found")
                 return
-            identity_id = identity["id"]
+            except ModelError as err:
+                event.fail(f"An error occurred: {err}")
+                return
 
-        if recovery_method == "code":
-            fun = self.kratos.recover_password_with_code
-        elif recovery_method == "link":
-            fun = self.kratos.recover_password_with_link
-        else:
-            event.fail(
-                f"Unsupported recovery method {recovery_method}, "
-                "allowed methods are: `code` and `link`"
-            )
-            return
+        event.log("Resetting password")
 
-        event.log("Resetting password.")
         try:
-            ret = fun(identity_id=identity_id)
+            if secret_id:
+                ret = self.kratos.reset_password(identity_id=identity_id, password=password)
+                event.log("Password changed successfully")
+            else:
+                ret = self.kratos.recover_password_with_code(identity_id=identity_id)
+                event.log("Follow the link to reset the user's password")
         except requests.exceptions.RequestException as e:
             event.fail(f"Failed to request Kratos API: {e}")
             return
 
-        event.log("Follow the link to reset the user's password")
         event.set_results(dict_to_action_output(ret))
+
+    def _on_invalidate_identity_sessions_action(self, event: ActionEvent) -> None:
+        if not self._kratos_service_is_running:
+            event.fail("Service is not ready. Please re-run the action when the charm is active")
+            return
+
+        identity_id = self._get_identity_id(event)
+
+        event.log("Invalidating user sessions")
+        try:
+            sessions_invalidated = self.kratos.invalidate_sessions(identity_id=identity_id)
+            if not sessions_invalidated:
+                event.log("User has no sessions")
+                return
+        except requests.exceptions.RequestException as e:
+            event.fail(f"Failed to request Kratos API: {e}")
+            return
+
+        event.log("User sessions have been invalidated and deleted")
+
+    def _on_reset_identity_mfa_action(self, event: ActionEvent) -> None:
+        if not self._kratos_service_is_running:
+            event.fail("Service is not ready. Please re-run the action when the charm is active")
+            return
+
+        mfa_type = event.params.get("mfa-type")
+        identity_id = self._get_identity_id(event)
+
+        if not mfa_type:
+            event.fail("MFA type must be specified")
+            return
+
+        if mfa_type not in ("totp", "lookup_secret"):
+            event.fail(
+                f"Unsupported MFA credential type {mfa_type}, "
+                "allowed methods are: `totp` and `lookup_secret`"
+            )
+            return
+
+        event.log("Resetting user's second authentication factor")
+        try:
+            credential_deleted = self.kratos.delete_mfa_credential(identity_id=identity_id, mfa_type=mfa_type)
+            if not credential_deleted:
+                event.log(f"User has no {mfa_type} credentials")
+                return
+        except requests.exceptions.RequestException as e:
+            event.fail(f"Failed to request Kratos API: {e}")
+            return
+
+        event.log("Second authentication factor was reset")
 
     def _on_create_admin_account_action(self, event: ActionEvent) -> None:
         if not self._kratos_service_is_running:
@@ -1162,13 +1210,14 @@ class KratosCharm(CharmBase):
         res = {"identity-id": identity_id}
         event.log(f"Successfully created admin account: {identity_id}.")
         if not password:
-            event.log("Creating magic link for resetting admin password.")
+            event.log("Creating recovery code for resetting admin password.")
             try:
-                link = self.kratos.recover_password_with_link(identity_id)
+                link = self.kratos.recover_password_with_code(identity_id)
             except requests.exceptions.RequestException as e:
                 event.fail(f"Failed to request Kratos API: {e}")
                 return
             res["password-reset-link"] = link["recovery_link"]
+            res["password-reset-code"] = link["recovery_code"]
             res["expires-at"] = link["expires_at"]
 
         event.set_results(res)

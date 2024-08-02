@@ -195,16 +195,36 @@ def test_recover_password_with_code(
     assert ret == recover_password_with_code_resp
 
 
-def test_recover_password_with_link(
-    kratos_api: KratosAPI, mocker: MockerFixture, recover_password_with_link_resp: Dict
+def test_reset_password(
+    kratos_api: KratosAPI, mocker: MockerFixture, kratos_identity_json: Dict
 ) -> None:
     mocked_resp = MagicMock()
-    mocked_resp.json.return_value = recover_password_with_link_resp
-    mocker.patch("requests.post", return_value=mocked_resp)
+    mocked_resp.json.return_value = kratos_identity_json
+    mocker.patch("requests.put", return_value=mocked_resp)
 
-    ret = kratos_api.recover_password_with_link("identity_id")
+    ret = kratos_api.reset_password("identity_id", "password")
 
-    assert ret == recover_password_with_link_resp
+    assert ret == kratos_identity_json
+
+
+def test_invalidate_sessions(
+    kratos_api: KratosAPI, mocker: MockerFixture
+) -> None:
+    mocker.patch("requests.delete")
+
+    ret = kratos_api.invalidate_sessions("identity_id")
+
+    assert ret
+
+
+def test_delete_mfa_credential(
+    kratos_api: KratosAPI, mocker: MockerFixture
+) -> None:
+    mocker.patch("requests.delete")
+
+    ret = kratos_api.delete_mfa_credential("identity_id", "totp")
+
+    assert ret
 
 
 def test_run_migration(kratos_api: KratosAPI, mocked_kratos_process: MagicMock) -> None:

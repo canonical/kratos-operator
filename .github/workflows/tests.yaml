@@ -31,8 +31,7 @@ jobs:
         with:
           provider: microk8s
           channel: 1.28-strict/stable
-          juju-channel: 3.2
-          bootstrap-options: '--agent-version=3.2.0'
+          juju-channel: 3.4/stable
 
       - name: Run integration tests
         # set a predictable model name so it can be consumed by charm-logdump-action

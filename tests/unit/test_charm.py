@@ -1223,6 +1223,8 @@ def test_on_config_changed_when_missing_login_ui_and_hydra_relation_data(
         "_on_reset_password_action",
         "_on_create_admin_account_action",
         "_on_run_migration_action",
+        "_on_invalidate_identity_sessions_action",
+        "_on_reset_identity_mfa_action",
     ],
 )
 def test_actions_when_cannot_connect(harness: Harness, action: str) -> None:
@@ -1365,6 +1367,91 @@ def test_error_on_delete_identity_action_with_email(
     event.fail.assert_called()
 
 
+def test_reset_password_action_when_password_secret_id_provided_with_identity_id(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_reset_password: MagicMock,
+) -> None:
+    secret_content = {"password": "some-password"}
+    secret_id = harness.add_user_secret(secret_content)
+    harness.grant_secret(secret_id, "kratos")
+
+    event = MagicMock()
+    event.params = {"identity-id": "123", "password-secret-id": secret_id}
+
+    harness.charm._on_reset_password_action(event)
+
+    event.set_results.assert_called()
+
+
+def test_error_on_reset_password_action_when_password_secret_id_provided_with_identity_id(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_reset_password: MagicMock,
+) -> None:
+    secret_content = {"password": "some-password"}
+    secret_id = harness.add_user_secret(secret_content)
+    harness.grant_secret(secret_id, "kratos")
+
+    mocked_reset_password.side_effect = requests.exceptions.HTTPError("error")
+    event = MagicMock()
+    event.params = {"identity-id": "123", "password-secret-id": secret_id}
+
+    harness.charm._on_reset_password_action(event)
+
+    event.fail.assert_called_with("Failed to request Kratos API: error")
+
+
+def test_reset_password_action_when_password_secret_id_invalid_with_identity_id(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_reset_password: MagicMock,
+) -> None:
+    event = MagicMock()
+    event.params = {"identity-id": "123", "password-secret-id": "invalid-juju-secret-id"}
+
+    harness.charm._on_reset_password_action(event)
+
+    event.fail.assert_called_with("Secret not found")
+
+
+def test_reset_password_action_when_password_secret_id_provided_with_email(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_get_identity_from_email: MagicMock,
+    mocked_reset_password: MagicMock,
+) -> None:
+    secret_content = {"password": "some-password"}
+    secret_id = harness.add_user_secret(secret_content)
+    harness.grant_secret(secret_id, "kratos")
+
+    event = MagicMock()
+    event.params = {"email": "test@example.com", "password-secret-id": secret_id}
+
+    harness.charm._on_reset_password_action(event)
+
+    event.set_results.assert_called()
+
+
+def test_error_on_reset_password_action_when_password_secret_id_provided_with_email(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_get_identity_from_email: MagicMock,
+    mocked_reset_password: MagicMock,
+) -> None:
+    secret_content = {"password": "some-password"}
+    secret_id = harness.add_user_secret(secret_content)
+    harness.grant_secret(secret_id, "kratos")
+
+    mocked_reset_password.side_effect = requests.exceptions.HTTPError("error")
+    event = MagicMock()
+    event.params = {"email": "test@example.com", "password-secret-id": secret_id}
+
+    harness.charm._on_reset_password_action(event)
+
+    event.fail.assert_called_with("Failed to request Kratos API: error")
+
+
 def test_reset_password_action_with_code_with_identity_id(
     harness: Harness,
     mocked_kratos_service: MagicMock,
@@ -1372,7 +1459,7 @@ def test_reset_password_action_with_code_with_identity_id(
 ) -> None:
     identity_id = mocked_recover_password_with_code.return_value
     event = MagicMock()
-    event.params = {"identity-id": identity_id, "recovery-method": "code"}
+    event.params = {"identity-id": identity_id}
 
     harness.charm._on_reset_password_action(event)
 
@@ -1386,7 +1473,7 @@ def test_error_on_reset_password_action_with_code_with_identity_id(
 ) -> None:
     mocked_recover_password_with_code.side_effect = requests.exceptions.HTTPError()
     event = MagicMock()
-    event.params = {"identity-id": "identity_id", "recovery-method": "code"}
+    event.params = {"identity-id": "identity_id"}
 
     harness.charm._on_reset_password_action(event)
 
@@ -1401,67 +1488,176 @@ def test_reset_password_action_with_code_with_email(
 ) -> None:
     identity_id = mocked_recover_password_with_code.return_value
     event = MagicMock()
-    event.params = {"identity-id": identity_id, "recovery-method": "code"}
+    event.params = {"identity-id": identity_id}
 
     harness.charm._on_reset_password_action(event)
 
     event.set_results.assert_called()
 
 
-def test_reset_password_action_with_link_with_identity_id(
+def test_error_on_reset_mfa_action_with_identity_id_when_mfa_type_not_provided(
     harness: Harness,
     mocked_kratos_service: MagicMock,
-    mocked_recover_password_with_link: MagicMock,
+    mocked_delete_mfa_credential: MagicMock,
 ) -> None:
-    identity_id = mocked_recover_password_with_link.return_value
     event = MagicMock()
-    event.params = {"identity-id": identity_id, "recovery-method": "link"}
+    event.params = {"identity-id": "123"}
 
-    harness.charm._on_reset_password_action(event)
+    harness.charm._on_reset_identity_mfa_action(event)
 
-    event.set_results.assert_called()
+    event.fail.assert_called_with("MFA type must be specified")
 
 
-def test_error_on_reset_password_action_with_link_with_identity_id(
+def test_error_on_reset_mfa_action_with_identity_id_when_mfa_type_uncorrect(
     harness: Harness,
     mocked_kratos_service: MagicMock,
-    mocked_recover_password_with_link: MagicMock,
+    mocked_delete_mfa_credential: MagicMock,
 ) -> None:
-    mocked_recover_password_with_link.side_effect = requests.exceptions.HTTPError()
     event = MagicMock()
-    event.params = {"identity-id": "identity_id", "recovery-method": "link"}
+    unsupported_type = "test"
+    event.params = {"identity-id": "123", "mfa-type": unsupported_type}
 
-    harness.charm._on_reset_password_action(event)
+    harness.charm._on_reset_identity_mfa_action(event)
+
+    event.fail.assert_called_with(f"Unsupported MFA credential type {unsupported_type}, allowed methods are: `totp` and `lookup_secret`")
+
+
+@pytest.mark.parametrize("mfa_type", ["totp", "lookup_secret"])
+def test_reset_mfa_action_with_identity_id(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_delete_mfa_credential: MagicMock,
+    mfa_type: str,
+) -> None:
+    params = {"identity-id": "123", "mfa-type": mfa_type}
+
+    action_output = harness.run_action("reset-identity-mfa", params)
+
+    assert "Second authentication factor was reset" in action_output.logs
+
+
+@pytest.mark.parametrize("mfa_type", ["totp", "lookup_secret"])
+def test_reset_mfa_action_with_email(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_get_identity_from_email: MagicMock,
+    mocked_delete_mfa_credential: MagicMock,
+    mfa_type: str,
+) -> None:
+    params = {"email": "test@example.com", "mfa-type": mfa_type}
+
+    action_output = harness.run_action("reset-identity-mfa", params)
+
+    assert "Second authentication factor was reset" in action_output.logs
+
+
+@pytest.mark.parametrize("mfa_type", ["totp", "lookup_secret"])
+def test_reset_mfa_action_with_identity_id_when_no_credentials(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_delete_mfa_credential: MagicMock,
+    mfa_type: str,
+) -> None:
+    mocked_delete_mfa_credential.return_value = False
+    params = {"identity-id": "123", "mfa-type": mfa_type}
+
+    action_output = harness.run_action("reset-identity-mfa", params)
+
+    assert f"User has no {mfa_type} credentials" in action_output.logs
+
+
+@pytest.mark.parametrize("mfa_type", ["totp", "lookup_secret"])
+def test_reset_mfa_action_with_email_when_no_credentials(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_get_identity_from_email: MagicMock,
+    mocked_delete_mfa_credential: MagicMock,
+    mfa_type: str,
+) -> None:
+    mocked_delete_mfa_credential.return_value = False
+    params = {"email": "test@example.com", "mfa-type": mfa_type}
+
+    action_output = harness.run_action("reset-identity-mfa", params)
+
+    assert f"User has no {mfa_type} credentials" in action_output.logs
+
+
+def test_error_on_reset_mfa_action_with_identity_id(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_delete_mfa_credential: MagicMock,
+) -> None:
+    event = MagicMock()
+    mocked_delete_mfa_credential.side_effect = requests.exceptions.HTTPError()
+    event.params = {"identity-id": "123"}
+
+    harness.charm._on_reset_identity_mfa_action(event)
 
     event.fail.assert_called()
 
 
-def test_reset_password_action_with_link_with_email(
+def test_invalidate_sessions_action_with_identity_id(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_invalidate_sessions: MagicMock,
+) -> None:
+    params = {"identity-id": "123"}
+
+    action_output = harness.run_action("invalidate-identity-sessions", params)
+
+    assert "User sessions have been invalidated and deleted" in action_output.logs
+
+
+def test_invalidate_sessions_action_with_email(
     harness: Harness,
     mocked_kratos_service: MagicMock,
     mocked_get_identity_from_email: MagicMock,
-    mocked_recover_password_with_link: MagicMock,
+    mocked_invalidate_sessions: MagicMock,
 ) -> None:
-    identity_id = mocked_recover_password_with_link.return_value
-    event = MagicMock()
-    event.params = {"identity-id": identity_id, "recovery-method": "link"}
+    params = {"email": "test@example.com"}
 
-    harness.charm._on_reset_password_action(event)
+    action_output = harness.run_action("invalidate-identity-sessions", params)
 
-    event.set_results.assert_called()
+    assert "User sessions have been invalidated and deleted" in action_output.logs
 
 
-def test_error_on_reset_password_action_with_link_with_email(
+def test_invalidate_sessions_action_with_identity_id_when_no_sessions(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_invalidate_sessions: MagicMock,
+) -> None:
+    mocked_invalidate_sessions.return_value = False
+    params = {"identity-id": "123"}
+
+    action_output = harness.run_action("invalidate-identity-sessions", params)
+
+    assert "User has no sessions" in action_output.logs
+
+
+def test_invalidate_sessions_action_with_email_when_no_sessions(
     harness: Harness,
     mocked_kratos_service: MagicMock,
     mocked_get_identity_from_email: MagicMock,
-    mocked_recover_password_with_link: MagicMock,
+    mocked_invalidate_sessions: MagicMock,
 ) -> None:
-    mocked_recover_password_with_link.side_effect = requests.exceptions.HTTPError()
-    event = MagicMock()
-    event.params = {"identity-id": "identity_id", "recovery-method": "link"}
+    mocked_invalidate_sessions.return_value = False
+    params = {"email": "test@example.com"}
 
-    harness.charm._on_reset_password_action(event)
+    action_output = harness.run_action("invalidate-identity-sessions", params)
+
+    assert "User has no sessions" in action_output.logs
+
+
+def test_error_on_invalidate_sessions_action_with_identity_id(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_invalidate_sessions: MagicMock,
+) -> None:
+    event = MagicMock()
+    mocked_invalidate_sessions.side_effect = requests.exceptions.HTTPError()
+    event.params = {"identity-id": "123"}
+
+    harness.charm._on_invalidate_identity_sessions_action(event)
 
     event.fail.assert_called()
 
@@ -1482,7 +1678,7 @@ def test_create_admin_account_without_password(
     harness: Harness,
     mocked_kratos_service: MagicMock,
     mocked_create_identity: MagicMock,
-    mocked_recover_password_with_link: MagicMock,
+    mocked_recover_password_with_code: MagicMock,
 ) -> None:
     event = MagicMock()
     event.params = {"username": "username"}
@@ -1491,8 +1687,9 @@ def test_create_admin_account_without_password(
 
     event.set_results.assert_called_with({
         "identity-id": mocked_create_identity.return_value["id"],
-        "password-reset-link": mocked_recover_password_with_link.return_value["recovery_link"],
-        "expires-at": mocked_recover_password_with_link.return_value["expires_at"],
+        "password-reset-link": mocked_recover_password_with_code.return_value["recovery_link"],
+        "password-reset-code": mocked_recover_password_with_code.return_value["recovery_code"],
+        "expires-at": mocked_recover_password_with_code.return_value["expires_at"],
     })
 
 
