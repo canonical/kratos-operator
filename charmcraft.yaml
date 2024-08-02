@@ -245,10 +245,15 @@ bases:
         channel: "22.04"
 
 parts:
-  charm:
+  schemas:
+    plugin: dump
+    source: .
+    organize:
+      "claim_mappers/**": schemas/
+      "identity_schemas/**": schemas/
     prime:
-      - claim_mappers/**
-      - identity_schemas/**
+      - schemas/
+  charm:
     charm-binary-python-packages:
       - jsonschema
       - bcrypt
