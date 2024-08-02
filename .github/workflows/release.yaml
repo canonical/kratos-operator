@@ -16,9 +16,9 @@ jobs:
     name: Promote charm
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
       - name: Release charm to channel
-        uses: canonical/charming-actions/release-charm@631c2d944da2bd12430f1f3a954c8fffcf2385cd # 2.4.0
+        uses: canonical/charming-actions/release-charm@46fe0c6d63324b5f74ce0e65d6ab47051953cc48 # 2.6.2
         with:
           credentials: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
