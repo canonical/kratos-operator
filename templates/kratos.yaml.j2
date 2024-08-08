@@ -27,6 +27,21 @@ selfservice:
         login:
             ui_url: {{ login_ui_url }}
         {%- endif %}
+        {%- if settings_ui_url %}
+        settings:
+            ui_url: {{ settings_ui_url }}
+            required_aal: highest_available
+        {%- endif %}
+        {%- if recovery_ui_url %}
+        recovery:
+            enabled: True
+            ui_url: {{ recovery_ui_url }}
+            use: code
+            after:
+                default_browser_return_url: {{ default_browser_return_url }}
+                hooks:
+                    - hook: revoke_active_sessions
+        {%- endif %}
         {%- if oidc_providers %}
         registration:
             after:
@@ -35,10 +50,38 @@ selfservice:
                     - hook: session
         {%- endif %}
     {%- endif %}
-    {%- if oidc_providers %}
+    {%- if oidc_providers or recovery_ui_url or enable_local_idp and login_ui_url %}
     methods:
+        {%- if recovery_ui_url %}
+        code:
+            enabled: True
+        {%- endif %}
+        {%- if not enable_local_idp or not login_ui_url %}
         password:
-            enabled: false
+            enabled: False
+        {%- endif %}
+        {%- if enable_local_idp and login_ui_url %}
+        password:
+            enabled: True
+            config:
+                haveibeenpwned_enabled: False
+        totp:
+            enabled: True
+            config:
+                issuer: Identity Platform
+        {%- if enable_passwordless_login_method %}
+        webauthn:
+            enabled: True
+            config:
+                passwordless: True
+                rp:
+                    id: {{ domain }}
+                    origins:
+                        - {{ origin }}
+                    display_name: Identity Platform
+        {%- endif %}
+        {%- endif %}
+        {%- if oidc_providers %}
         oidc:
             config:
                 providers:
@@ -52,6 +95,7 @@ selfservice:
                       {%- endif %}
                 {%- endfor %}
             enabled: True
+        {%- endif %}
     {%- endif %}
 {%- if cookie_secrets %}
 secrets:

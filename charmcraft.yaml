@@ -103,6 +103,15 @@ config:
         Run Kratos on dev mode, it is needed if HTTPS is not set up. This should only be used for development purposes.
       type: boolean
       default: False
+    enable_local_idp:
+      description: Enable Kratos Identity Provider
+      type: boolean
+      default: True
+    enable_passwordless_login_method:
+      description: |
+        Enable passwordless authentication via webauthn. Requires `enable_local_idp=True`.
+      type: boolean
+      default: False
     identity_schemas:
       description: |
         A mapping of schema_id to identity schemas. For example:
