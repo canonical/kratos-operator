@@ -52,7 +52,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 3
+LIBPATCH = 5
 
 RELATION_NAME = "ui-endpoint-info"
 INTERFACE_NAME = "login_ui_endpoints"
@@ -63,6 +63,8 @@ RELATION_KEYS = [
     "error_url",
     "login_url",
     "oidc_error_url",
+    "device_verification_url",
+    "post_device_done_url",
 ]
 
 
@@ -110,6 +112,8 @@ class LoginUIEndpointsProvider(Object):
                 "error_url": f"{endpoint}/ui/error",
                 "login_url": f"{endpoint}/ui/login",
                 "oidc_error_url": f"{endpoint}/ui/oidc_error",
+                "device_verification_url": f"{endpoint}/ui/device_code",
+                "post_device_done_url": f"{endpoint}/ui/device_complete",
             }
         for relation in relations:
             relation.data[self._charm.app].update(endpoint_databag)
