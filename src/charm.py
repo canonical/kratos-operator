@@ -516,15 +516,17 @@ class KratosCharm(CharmBase):
         login_ui_url = self._get_login_ui_endpoint_info("login_url")
         mappers = self._get_claims_mappers()
         cookie_secrets = self._get_secret()
+        parsed_public_url = urlparse(self._public_url)
 
         allowed_return_urls = []
+        origin = ""
         if self._public_url:
             allowed_return_urls = [
-                urlparse(self._public_url)
-                ._replace(path="", params="", query="", fragment="")
+                parsed_public_url._replace(path="", params="", query="", fragment="")
                 .geturl()
                 + "/"
             ]
+            origin = f"{parsed_public_url.scheme}://{parsed_public_url.hostname}"
 
         rendered = template.render(
             cookie_secrets=[cookie_secrets] if cookie_secrets else None,
@@ -536,10 +538,16 @@ class KratosCharm(CharmBase):
             default_identity_schema_id=default_schema_id,
             login_ui_url=login_ui_url,
             error_ui_url=self._get_login_ui_endpoint_info("error_url"),
+            settings_ui_url=self._get_login_ui_endpoint_info("settings_url"),
+            recovery_ui_url=self._get_login_ui_endpoint_info("recovery_url"),
             oidc_providers=oidc_providers,
             available_mappers=self._get_available_mappers,
             oauth2_provider_url=self._get_hydra_endpoint_info(),
             smtp_connection_uri=self.config.get("smtp_connection_uri"),
+            enable_local_idp=self.config.get("enable_local_idp"),
+            enable_passwordless_login_method=self.config.get("enable_passwordless_login_method"),
+            origin=origin,
+            domain=parsed_public_url.hostname,
         )
         return rendered
 

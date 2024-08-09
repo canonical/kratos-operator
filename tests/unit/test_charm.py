@@ -115,6 +115,10 @@ def setup_login_ui_relation(harness: Harness) -> tuple[int, dict]:
         "error_url": f"{endpoint}/ui/error",
         "login_url": f"{endpoint}/ui/login",
         "oidc_error_url": f"{endpoint}/ui/oidc_error",
+        "device_verification_url": f"{endpoint}/ui/device_code",
+        "post_device_done_url": f"{endpoint}/ui/device_complete",
+        "settings_url": f"{endpoint}/ui/settings",
+        "recovery_url": f"{endpoint}/ui/recovery",
     }
     harness.update_relation_data(
         relation_id,
@@ -231,11 +235,13 @@ def validate_config(
         assert all(schema in schemas for schema in expected_schemas)
 
     if not validate_mappers and "methods" in config["selfservice"]:
-        for p in config["selfservice"]["methods"]["oidc"]["config"]["providers"]:
-            p.pop("mapper_url")
+        if "oidc" in config["selfservice"]["methods"]:
+            for p in config["selfservice"]["methods"]["oidc"]["config"]["providers"]:
+                p.pop("mapper_url")
     if not validate_mappers and "methods" in config["selfservice"]:
-        for p in expected_config["selfservice"]["methods"]["oidc"]["config"]["providers"]:
-            p.pop("mapper_url")
+        if "oidc" in config["selfservice"]["methods"]:
+            for p in expected_config["selfservice"]["methods"]["oidc"]["config"]["providers"]:
+                p.pop("mapper_url")
 
     assert config == expected_config
 
@@ -379,6 +385,40 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(
                 },
                 "login": {
                     "ui_url": login_databag["login_url"],
+                },
+                "settings": {
+                    "ui_url": login_databag["settings_url"],
+                    "required_aal": "highest_available",
+                },
+                "recovery": {
+                    "enabled": True,
+                    "ui_url": login_databag["recovery_url"],
+                    "use": "code",
+                    "after": {
+                        "default_browser_return_url": login_databag["login_url"],
+                        "hooks": [
+                            {
+                                "hook": "revoke_active_sessions",
+                            },
+                        ],
+                    },
+                },
+            },
+            "methods": {
+                "code": {
+                    "enabled": True,
+                },
+                "password": {
+                    "enabled": True,
+                    "config": {
+                        "haveibeenpwned_enabled": False,
+                    },
+                },
+                "totp": {
+                    "enabled": True,
+                    "config": {
+                        "issuer": "Identity Platform",
+                    },
                 },
             },
         },
@@ -770,6 +810,23 @@ def test_on_client_config_changed_with_ingress(
                 "login": {
                     "ui_url": login_databag["login_url"],
                 },
+                "settings": {
+                    "ui_url": login_databag["settings_url"],
+                    "required_aal": "highest_available",
+                },
+                "recovery": {
+                    "enabled": True,
+                    "ui_url": login_databag["recovery_url"],
+                    "use": "code",
+                    "after": {
+                        "default_browser_return_url": login_databag["login_url"],
+                        "hooks": [
+                                {
+                                    "hook": "revoke_active_sessions",
+                                },
+                            ],
+                    },
+                },
                 "registration": {
                     "after": {
                         "oidc": {
@@ -783,8 +840,20 @@ def test_on_client_config_changed_with_ingress(
                 },
             },
             "methods": {
+                "code": {
+                    "enabled": True,
+                },
                 "password": {
-                    "enabled": False,
+                    "enabled": True,
+                        "config": {
+                            "haveibeenpwned_enabled": False,
+                        },
+                    },
+                    "totp": {
+                        "enabled": True,
+                        "config": {
+                            "issuer": "Identity Platform",
+                        },
                 },
                 "oidc": {
                     "config": {
@@ -875,6 +944,40 @@ def test_on_client_config_relation_removed_with_ingress(
                 "login": {
                     "ui_url": login_databag["login_url"],
                 },
+                "settings": {
+                    "ui_url": login_databag["settings_url"],
+                    "required_aal": "highest_available",
+                },
+                "recovery": {
+                    "enabled": True,
+                    "ui_url": login_databag["recovery_url"],
+                    "use": "code",
+                    "after": {
+                        "default_browser_return_url": login_databag["login_url"],
+                        "hooks": [
+                            {
+                                "hook": "revoke_active_sessions",
+                            },
+                        ],
+                    },
+                },
+            },
+            "methods": {
+                "code": {
+                    "enabled": True,
+                },
+                "password": {
+                    "enabled": True,
+                    "config": {
+                        "haveibeenpwned_enabled": False,
+                    },
+                },
+                "totp": {
+                    "enabled": True,
+                    "config": {
+                        "issuer": "Identity Platform",
+                    },
+                },
             },
         },
         "courier": {
@@ -940,6 +1043,40 @@ def test_on_client_config_data_removed_with_ingress(
                 "login": {
                     "ui_url": login_databag["login_url"],
                 },
+                "settings": {
+                    "ui_url": login_databag["settings_url"],
+                    "required_aal": "highest_available",
+                },
+                "recovery": {
+                    "enabled": True,
+                    "ui_url": login_databag["recovery_url"],
+                    "use": "code",
+                    "after": {
+                        "default_browser_return_url": login_databag["login_url"],
+                        "hooks": [
+                            {
+                                "hook": "revoke_active_sessions",
+                            },
+                        ],
+                    },
+                },
+            },
+            "methods": {
+                "code": {
+                    "enabled": True,
+                },
+                "password": {
+                    "enabled": True,
+                    "config": {
+                        "haveibeenpwned_enabled": False,
+                    },
+                },
+                "totp": {
+                    "enabled": True,
+                    "config": {
+                        "issuer": "Identity Platform",
+                    },
+                },
             },
         },
         "courier": {
@@ -999,6 +1136,40 @@ def test_on_config_changed_with_hydra(
                 },
                 "login": {
                     "ui_url": login_databag["login_url"],
+                },
+                "settings": {
+                    "ui_url": login_databag["settings_url"],
+                    "required_aal": "highest_available",
+                },
+                "recovery": {
+                    "enabled": True,
+                    "ui_url": login_databag["recovery_url"],
+                    "use": "code",
+                    "after": {
+                        "default_browser_return_url": login_databag["login_url"],
+                        "hooks": [
+                            {
+                                "hook": "revoke_active_sessions",
+                            },
+                        ],
+                    },
+                },
+            },
+            "methods": {
+                "code": {
+                    "enabled": True,
+                },
+                "password": {
+                    "enabled": True,
+                    "config": {
+                        "haveibeenpwned_enabled": False,
+                    },
+                },
+                "totp": {
+                    "enabled": True,
+                    "config": {
+                        "issuer": "Identity Platform",
+                    },
                 },
             },
         },
@@ -1061,6 +1232,40 @@ def test_on_config_changed_when_missing_hydra_relation_data(
                 },
                 "login": {
                     "ui_url": login_databag["login_url"],
+                },
+                "settings": {
+                    "ui_url": login_databag["settings_url"],
+                    "required_aal": "highest_available",
+                },
+                "recovery": {
+                    "enabled": True,
+                    "ui_url": login_databag["recovery_url"],
+                    "use": "code",
+                    "after": {
+                        "default_browser_return_url": login_databag["login_url"],
+                        "hooks": [
+                            {
+                                "hook": "revoke_active_sessions",
+                            },
+                        ],
+                    },
+                },
+            },
+            "methods": {
+                "code": {
+                    "enabled": True,
+                },
+                "password": {
+                    "enabled": True,
+                    "config": {
+                        "haveibeenpwned_enabled": False,
+                    },
+                },
+                "totp": {
+                    "enabled": True,
+                    "config": {
+                        "issuer": "Identity Platform",
+                    },
                 },
             },
         },
@@ -1139,7 +1344,9 @@ def test_on_changed_without_login_ui_endpoints(
                 },
             ],
         },
-        "selfservice": {"default_browser_return_url": DEFAULT_BROWSER_RETURN_URL},
+        "selfservice": {
+            "default_browser_return_url": DEFAULT_BROWSER_RETURN_URL,
+        },
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
         },
@@ -1195,7 +1402,9 @@ def test_on_config_changed_when_missing_login_ui_and_hydra_relation_data(
                 },
             ],
         },
-        "selfservice": {"default_browser_return_url": DEFAULT_BROWSER_RETURN_URL},
+        "selfservice": {
+            "default_browser_return_url": DEFAULT_BROWSER_RETURN_URL,
+        },
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
         },
@@ -1205,6 +1414,208 @@ def test_on_config_changed_when_missing_login_ui_and_hydra_relation_data(
                     "enabled": True,
                 },
             },
+        },
+    }
+
+    configmap = mocked_kratos_configmap.update.call_args_list[-1][0][0]
+    config = configmap["kratos.yaml"]
+    validate_config(
+        expected_config, yaml.safe_load(config), validate_schemas=False, validate_mappers=False
+    )
+
+
+def test_on_config_changed_when_local_idp_disabled(
+    harness: Harness,
+    mocked_kratos_configmap: MagicMock,
+    mocked_migration_is_needed: MagicMock
+) -> None:
+    setup_peer_relation(harness)
+    setup_postgres_relation(harness)
+    (_, login_databag) = setup_login_ui_relation(harness)
+
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
+    harness.charm.on.kratos_pebble_ready.emit(container)
+    setup_hydra_relation(harness)
+
+    harness.update_config({"enable_local_idp": False})
+
+    expected_config = {
+        "log": {
+            "level": "info",
+            "format": "json",
+        },
+        "identity": {
+            "default_schema_id": "social_user_v0",
+            "schemas": [
+                {"id": "admin_v0", "url": "base64://something"},
+                {
+                    "id": "social_user_v0",
+                    "url": "base64://something",
+                },
+            ],
+        },
+        "selfservice": {
+            "default_browser_return_url": login_databag["login_url"],
+            "flows": {
+                "error": {
+                    "ui_url": login_databag["error_url"],
+                },
+                "login": {
+                    "ui_url": login_databag["login_url"],
+                },
+                "settings": {
+                    "ui_url": login_databag["settings_url"],
+                    "required_aal": "highest_available",
+                },
+                "recovery": {
+                    "enabled": True,
+                    "ui_url": login_databag["recovery_url"],
+                    "use": "code",
+                    "after": {
+                        "default_browser_return_url": login_databag["login_url"],
+                        "hooks": [
+                            {
+                                "hook": "revoke_active_sessions",
+                            },
+                        ],
+                    },
+                },
+            },
+            "methods": {
+                "code": {
+                    "enabled": True,
+                },
+                "password": {
+                    "enabled": False,
+                },
+            },
+        },
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+        "oauth2_provider": {
+            "url": "http://hydra-admin-url:80/testing-hydra",
+        },
+    }
+
+    configmap = mocked_kratos_configmap.update.call_args_list[-1][0][0]
+    config = configmap["kratos.yaml"]
+    validate_config(
+        expected_config, yaml.safe_load(config), validate_schemas=False, validate_mappers=False
+    )
+
+
+def test_on_config_changed_when_webauthn_enabled(
+    harness: Harness,
+    mocked_kratos_configmap: MagicMock,
+    mocked_migration_is_needed: MagicMock
+) -> None:
+    setup_peer_relation(harness)
+    setup_postgres_relation(harness)
+    (_, login_databag) = setup_login_ui_relation(harness)
+    setup_ingress_relation(harness, "public")
+
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
+    harness.charm.on.kratos_pebble_ready.emit(container)
+    setup_hydra_relation(harness)
+
+    harness.update_config({"enable_passwordless_login_method": True})
+
+    expected_config = {
+        "log": {
+            "level": "info",
+            "format": "json",
+        },
+        "identity": {
+            "default_schema_id": "social_user_v0",
+            "schemas": [
+                {"id": "admin_v0", "url": "base64://something"},
+                {
+                    "id": "social_user_v0",
+                    "url": "base64://something",
+                },
+            ],
+        },
+        "selfservice": {
+            "allowed_return_urls": [
+                "https://public/",
+            ],
+            "default_browser_return_url": login_databag["login_url"],
+            "flows": {
+                "error": {
+                    "ui_url": login_databag["error_url"],
+                },
+                "login": {
+                    "ui_url": login_databag["login_url"],
+                },
+                "settings": {
+                    "ui_url": login_databag["settings_url"],
+                    "required_aal": "highest_available",
+                },
+                "recovery": {
+                    "enabled": True,
+                    "ui_url": login_databag["recovery_url"],
+                    "use": "code",
+                    "after": {
+                        "default_browser_return_url": login_databag["login_url"],
+                        "hooks": [
+                            {
+                                "hook": "revoke_active_sessions",
+                            },
+                        ],
+                    },
+                },
+            },
+            "methods": {
+                "code": {
+                    "enabled": True,
+                },
+                "password": {
+                    "enabled": True,
+                    "config": {
+                        "haveibeenpwned_enabled": False,
+                    },
+                },
+                "totp": {
+                    "enabled": True,
+                    "config": {
+                        "issuer": "Identity Platform",
+                    },
+                },
+                "webauthn": {
+                    "enabled": True,
+                    "config": {
+                        "passwordless": True,
+                        "rp": {
+                            "id": "public",
+                            "origins": ["https://public"],
+                            "display_name": "Identity Platform",
+                        }
+                    },
+                },
+            },
+        },
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+        "oauth2_provider": {
+            "url": "http://hydra-admin-url:80/testing-hydra",
         },
     }
 
