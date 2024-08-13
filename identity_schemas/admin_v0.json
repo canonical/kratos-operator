@@ -24,10 +24,24 @@
           "title": "E-Mail",
           "minLength": 3,
           "ory.sh/kratos": {
-            "verification": {
-              "via": "email"
+              "credentials": {
+                "password": {
+                  "identifier": true
+                },
+                "totp": {
+                   "account_name": true
+                },
+                "webauthn": {
+                  "identifier": true
+                }
+              },
+              "verification": {
+                "via": "email"
+              },
+              "recovery": {
+                "via": "email"
+              }
             }
-          }
         },
         "name": {
           "type": "string",
