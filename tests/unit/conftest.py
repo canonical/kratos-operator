@@ -163,6 +163,15 @@ def mocked_push_ca_certs(mocker: MockerFixture):
 
 
 @pytest.fixture()
+def mocked_recovery_email_template(mocker: MockerFixture) -> MagicMock:
+    mock = mocker.patch(
+        "charm.KratosCharm._recovery_email_template",
+        return_value="file:///etc/config/templates/recovery-body.html.gotmpl",
+    )
+    return mock
+
+
+@pytest.fixture()
 def mocked_get_identity(mocker: MockerFixture, kratos_identity_json: Dict) -> MagicMock:
     mock = mocker.patch("charm.KratosAPI.get_identity", return_value=kratos_identity_json)
     return mock

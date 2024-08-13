@@ -45,6 +45,9 @@ requires:
     limit: 1
     description: |
       Provides traces to COS Tempo instance
+  smtp:
+    interface: smtp
+    limit: 1
   internal-ingress:
     interface: traefik_route
     limit: 1
@@ -94,10 +97,6 @@ config:
       description: Domains that need to be excluded from proxying no_proxy="test.com,test.co.uk", it is a comma separate list
       type: string
       default: ''
-    smtp_connection_uri:
-      description: SMTP connection URI
-      type: string
-      default: 'smtps://test:test@mailslurper:1025/?skip_ssl_verify=true'
     dev:
       description:
         Run Kratos on dev mode, it is needed if HTTPS is not set up. This should only be used for development purposes.
@@ -148,6 +147,14 @@ config:
       type: string
     default_identity_schema_id:
       description: The default identity schema id, this option only works when `identity_schemas` is defined
+      type: string
+    recovery_email_template:
+      description: |
+        The custom html template used to send emails with recovery codes. For example:
+
+        Hi,
+        Please enter the following code to recover your account:
+        {{ .RecoveryCode }}
       type: string
     log_level:
       description: |
