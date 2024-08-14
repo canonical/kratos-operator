@@ -550,6 +550,7 @@ class KratosCharm(CharmBase):
             smtp_connection_uri=self._smtp_connection_uri,
             recovery_email_template=self._recovery_email_template,
             enable_local_idp=self.config.get("enable_local_idp"),
+            enforce_mfa=self.config.get("enforce_mfa"),
             enable_passwordless_login_method=self.config.get("enable_passwordless_login_method"),
             origin=origin,
             domain=parsed_public_url.hostname,
@@ -902,6 +903,7 @@ class KratosCharm(CharmBase):
     def _on_config_changed(self, event: ConfigChangedEvent) -> None:
         """Event Handler for config changed event."""
         self._handle_status_update_config(event)
+        self._update_kratos_info_relation_data(event)
 
     def _on_remove(self, event: RemoveEvent) -> None:
         if not self.unit.is_leader():
@@ -922,6 +924,7 @@ class KratosCharm(CharmBase):
         providers_configmap_name = self.providers_configmap.name
         schemas_configmap_name = self.schemas_configmap.name
         configmaps_namespace = self.model.name
+        mfa_enabled = self.config.get("enforce_mfa")
 
         self.info_provider.send_info_relation_data(
             admin_endpoint,
@@ -929,6 +932,7 @@ class KratosCharm(CharmBase):
             providers_configmap_name,
             schemas_configmap_name,
             configmaps_namespace,
+            mfa_enabled,
         )
 
     def _update_kratos_endpoints_relation_data(self, event: RelationEvent) -> None:

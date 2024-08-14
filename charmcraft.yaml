@@ -106,6 +106,12 @@ config:
       description: Enable Kratos Identity Provider
       type: boolean
       default: True
+    enforce_mfa:
+      description: |
+        Enforce users to set up and use multi factor authentication.
+        Disabling this option will allow users to log in with password or webauthn without completing 2fa.
+      type: boolean
+      default: True
     enable_passwordless_login_method:
       description: |
         Enable passwordless authentication via webauthn. Requires `enable_local_idp=True`.
