@@ -24,12 +24,6 @@ juju deploy kratos
 juju integrate kratos postgresql-k8s
 ```
 
-To set the smtp connection uri, do:
-
-```shell
-juju config kratos smtp_connection_uri={smtp_connection_uri}
-```
-
 ### Interacting with Kratos API
 
 Below are two examples of the API.
@@ -84,6 +78,22 @@ To provide ingress to the public API run:
 ```shell
 juju integrate traefik-public kratos:public-ingress
 ```
+
+### SMTP Server Integration
+
+In order to turn Kratos into a functional identity provider, an outgoing mail server must be integrated.
+It can be done using the [`smtp`](https://github.com/canonical/charm-relation-interfaces/tree/main/interfaces/smtp/v0) interface.
+
+If you have a self-hosted SMTP server independent of the juju ecosystem, deploy the [`smtp-integrator`](https://github.com/canonical/smtp-integrator-operator.git) charm, configure it with the required server details
+and integrate with Kratos:
+
+```shell
+juju deploy smtp-integrator --channel latest/edge
+juju config smtp-integrator user=<username> password=<pwd> host=<hostname> port=<port> transport_security=<none|tls|starttls> skip_ssl_verify=<True|False>
+juju integrate smtp-integrator:smtp kratos
+```
+
+[Mailslurper](https://github.com/mailslurper/mailslurper) is recommended for local development.
 
 ### External Provider Integration
 

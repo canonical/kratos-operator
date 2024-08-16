@@ -174,6 +174,30 @@ def setup_tempo_relation(harness: Harness) -> int:
     return relation_id
 
 
+def setup_smtp_relation(harness: Harness, transport_security: str, skip_ssl_verify: str) -> int:
+    secret_content = {"password": "some-password"}
+    secret_id = harness.add_user_secret(secret_content)
+    harness.grant_secret(secret_id, "kratos")
+
+    smtp_relation_id = harness.add_relation("smtp", "smtp-provider")
+    harness.add_relation_unit(smtp_relation_id, "smtp-provider/0")
+    harness.update_relation_data(
+        smtp_relation_id,
+        "smtp-provider",
+        {
+            "host": "example.smtp",
+            "port": "25",
+            "user": "example_user",
+            "password_id": secret_id,
+            "auth_type": "plain",
+            "transport_security": transport_security,
+            "domain": "domain",
+            "skip_ssl_verify": skip_ssl_verify,
+        }
+    )
+    return smtp_relation_id
+
+
 def setup_kratos_info_relation(harness: Harness) -> int:
     relation_id = harness.add_relation("kratos-info", "requirer")
     harness.add_relation_unit(relation_id, "requirer/0")
@@ -471,6 +495,72 @@ def test_on_pebble_ready_lk_called(
     harness.charm.on.kratos_pebble_ready.emit(container)
 
     lk_client.patch.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "transport_security,method,skip_ssl_verify,additional_param",
+    [
+        ("tls", "smtps", "False", ""),
+        ("starttls", "smtp", "False", ""),
+        ("tls", "smtps", "True", "?skip_ssl_verify=true"),
+        ("starttls", "smtp", "True", "?skip_ssl_verify=true"),
+    ]
+)
+def test_config_file_with_smtp_integration(
+    harness: Harness,
+    mocked_migration_is_needed: MagicMock,
+    mocked_kratos_configmap: MagicMock,
+    transport_security: str,
+    method: str,
+    skip_ssl_verify: str,
+    additional_param: str,
+) -> None:
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    setup_peer_relation(harness)
+    setup_postgres_relation(harness)
+    harness.charm.on.leader_elected.emit()
+    harness.charm.on.kratos_pebble_ready.emit(container)
+
+    setup_smtp_relation(harness, transport_security, skip_ssl_verify)
+
+    expected_config = {
+        "log": {
+            "level": "info",
+            "format": "json",
+        },
+        "identity": {
+            "default_schema_id": "social_user_v0",
+            "schemas": [
+                {
+                    "id": "user_v0",
+                    "url": f"base64://{base64.b64encode(json.dumps(IDENTITY_SCHEMA).encode()).decode()}",
+                },
+                {
+                    "id": "user_v1",
+                    "url": f"base64://{base64.b64encode(json.dumps(IDENTITY_SCHEMA).encode()).decode()}",
+                },
+            ],
+        },
+        "selfservice": {
+            "default_browser_return_url": DEFAULT_BROWSER_RETURN_URL,
+        },
+        "courier": {
+            "smtp": {"connection_uri": f"{method}://example_user:some-password@example.smtp:25/{additional_param}"},
+        },
+        "serve": {
+            "public": {
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+    }
+
+    configmap = mocked_kratos_configmap.update.call_args_list[-1][0][0]
+    config = configmap["kratos.yaml"]
+    validate_config(
+        expected_config, yaml.safe_load(config), validate_schemas=False, validate_mappers=False
+    )
 
 
 def test_on_config_changed_when_identity_schemas_config(
@@ -1422,6 +1512,24 @@ def test_on_config_changed_when_missing_login_ui_and_hydra_relation_data(
     validate_config(
         expected_config, yaml.safe_load(config), validate_schemas=False, validate_mappers=False
     )
+
+
+def test_on_config_changed_when_recovery_email_template_set(
+    harness: Harness,
+    mocked_kratos_configmap: MagicMock,
+    mocked_migration_is_needed: MagicMock,
+    mocked_recovery_email_template: MagicMock
+) -> None:
+    setup_peer_relation(harness)
+    setup_postgres_relation(harness)
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
+    harness.charm.on.kratos_pebble_ready.emit(container)
+    harness.update_config({"recovery_email_template": "some template"})
+
+    configmap = mocked_kratos_configmap.update.call_args_list[-1][0][0]
+    config = configmap["kratos.yaml"]
+    assert "templates" in config
 
 
 def test_on_config_changed_when_local_idp_disabled(

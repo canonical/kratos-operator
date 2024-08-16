@@ -43,6 +43,7 @@ from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
 from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer, PromtailDigestError
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
+from charms.smtp_integrator.v0.smtp import SmtpDataAvailableEvent, SmtpRequires
 from charms.tempo_k8s.v0.tracing import TracingEndpointRequirer
 from charms.traefik_k8s.v2.ingress import (
     IngressPerAppReadyEvent,
@@ -116,6 +117,7 @@ class KratosCharm(CharmBase):
         self._identity_schemas_local_dir_path = Path("identity_schemas")
         self._mappers_dir_path = self._config_dir_path
         self._mappers_local_dir_path = Path("claim_mappers")
+        self._email_template_file_path = Path("/etc/config/templates") / "recovery-body.html.gotmpl"
         self._db_name = f"{self.model.name}_{self.app.name}"
         self._db_relation_name = "pg-database"
         self._hydra_relation_name = "hydra-endpoint-info"
@@ -139,6 +141,7 @@ class KratosCharm(CharmBase):
         self.service_patcher = KubernetesServicePatch(
             self, [("admin", KRATOS_ADMIN_PORT), ("public", KRATOS_PUBLIC_PORT)]
         )
+        self.smtp = SmtpRequires(self)
         self.admin_ingress = IngressPerAppRequirer(
             self,
             relation_name="admin-ingress",
@@ -251,6 +254,7 @@ class KratosCharm(CharmBase):
         self.framework.observe(
             self.external_provider.on.client_config_removed, self._on_client_config_removed
         )
+        self.framework.observe(self.smtp.on.smtp_data_available, self._on_smtp_data_available)
 
         self.framework.observe(self.on.get_identity_action, self._on_get_identity_action)
         self.framework.observe(self.on.delete_identity_action, self._on_delete_identity_action)
@@ -543,13 +547,49 @@ class KratosCharm(CharmBase):
             oidc_providers=oidc_providers,
             available_mappers=self._get_available_mappers,
             oauth2_provider_url=self._get_hydra_endpoint_info(),
-            smtp_connection_uri=self.config.get("smtp_connection_uri"),
+            smtp_connection_uri=self._smtp_connection_uri,
+            recovery_email_template=self._recovery_email_template,
             enable_local_idp=self.config.get("enable_local_idp"),
             enable_passwordless_login_method=self.config.get("enable_passwordless_login_method"),
             origin=origin,
             domain=parsed_public_url.hostname,
         )
         return rendered
+
+    @property
+    def _recovery_email_template(self) -> Optional[str]:
+        if self.config.get("recovery_email_template"):
+            return f"file://{self._email_template_file_path}"
+
+        return None
+
+    @property
+    def _smtp_connection_uri(self) -> str:
+        smtp = self.smtp.get_relation_data()
+        if not smtp:
+            logger.info("No smtp connection url found, the default placeholder value will be used. "
+                        "Use the smtp library to integrate with an email server")
+            # smtp_connection_uri is required to start the service, use a default value
+            return "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"
+
+        username = smtp.user
+        server = smtp.host
+        port = smtp.port
+        transport_security = smtp.transport_security
+        skip_ssl_verify = smtp.skip_ssl_verify
+        password = self.model.get_secret(id=smtp.password_id).get_content().get("password") if smtp.password_id else None
+
+        if transport_security == "none":
+            return f"smtp://{username}:{password}@{server}:{port}/?disable_starttls=true"
+        elif transport_security == "tls":
+            method = "smtps"
+        elif transport_security == "starttls":
+            method = "smtp"
+
+        if skip_ssl_verify:
+            return f"{method}://{username}:{password}@{server}:{port}/?skip_ssl_verify=true"
+        else:
+            return f"{method}://{username}:{password}@{server}:{port}/"
 
     @retry(
         wait=wait_exponential(multiplier=3, min=1, max=10),
@@ -820,6 +860,9 @@ class KratosCharm(CharmBase):
             self.unit.status = BlockedStatus("Failed to restart, please consult the logs")
             return
 
+        if template := self.config.get("recovery_email_template"):
+            self._container.push(self._email_template_file_path, template, make_dirs=True)
+
         self.unit.status = ActiveStatus()
 
     def _on_install(self, event: InstallEvent) -> None:
@@ -1039,6 +1082,10 @@ class KratosCharm(CharmBase):
         self.unit.status = MaintenanceStatus("Removing external provider")
         self._handle_status_update_config(event)
         self.external_provider.remove_relation_registered_provider(event.relation_id)
+
+    def _on_smtp_data_available(self, event: SmtpDataAvailableEvent):
+        logger.info("Updating smtp mail courier configuration")
+        self._handle_status_update_config(event)
 
     def _on_get_identity_action(self, event: ActionEvent) -> None:
         if not self._kratos_service_is_running:
