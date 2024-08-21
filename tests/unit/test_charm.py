@@ -401,6 +401,11 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(
                 },
             ],
         },
+        "session": {
+            "whoami": {
+                "required_aal": "highest_available",
+            },
+        },
         "selfservice": {
             "default_browser_return_url": login_databag["login_url"],
             "flows": {
@@ -541,6 +546,11 @@ def test_config_file_with_smtp_integration(
                 },
             ],
         },
+        "session": {
+            "whoami": {
+                "required_aal": "highest_available",
+            },
+        },
         "selfservice": {
             "default_browser_return_url": DEFAULT_BROWSER_RETURN_URL,
         },
@@ -595,6 +605,11 @@ def test_on_config_changed_when_identity_schemas_config(
                 },
             ],
         },
+        "session": {
+            "whoami": {
+                "required_aal": "highest_available",
+            },
+        },
         "selfservice": {
             "default_browser_return_url": DEFAULT_BROWSER_RETURN_URL,
         },
@@ -648,8 +663,101 @@ def test_on_config_changed_when_identity_schemas_config_unset(
                 },
             ],
         },
+        "session": {
+            "whoami": {
+                "required_aal": "highest_available",
+            },
+        },
         "selfservice": {
             "default_browser_return_url": DEFAULT_BROWSER_RETURN_URL,
+        },
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+    }
+
+    configmap = mocked_kratos_configmap.update.call_args_list[-1][0][0]
+    config = configmap["kratos.yaml"]
+    validate_config(
+        expected_config, yaml.safe_load(config), validate_schemas=False, validate_mappers=False
+    )
+
+
+def test_on_config_changed_when_local_idp_enabled_mfa_not_enforced(
+    harness: Harness, mocked_kratos_configmap: MagicMock, mocked_migration_is_needed: MagicMock
+) -> None:
+    setup_peer_relation(harness)
+    setup_postgres_relation(harness)
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
+    harness.charm.on.kratos_pebble_ready.emit(container)
+    setup_ingress_relation(harness, "public")
+    (_, login_databag) = setup_login_ui_relation(harness)
+    harness.update_config({"enforce_mfa": False})
+
+    expected_config = {
+        "log": {
+            "level": "info",
+            "format": "json",
+        },
+        "identity": {
+            "default_schema_id": "social_user_v0",
+            "schemas": [
+                {"id": "admin_v0", "url": "base64://something"},
+                {
+                    "id": "social_user_v0",
+                    "url": "base64://something",
+                },
+            ],
+        },
+        "selfservice": {
+            "allowed_return_urls": [
+                "https://public/",
+            ],
+            "default_browser_return_url": login_databag["login_url"],
+            "flows": {
+                "error": {
+                    "ui_url": login_databag["error_url"],
+                },
+                "login": {
+                    "ui_url": login_databag["login_url"],
+                },
+                "settings": {
+                    "ui_url": login_databag["settings_url"],
+                    "required_aal": "highest_available",
+                },
+                "recovery": {
+                    "enabled": True,
+                    "ui_url": login_databag["recovery_url"],
+                    "use": "code",
+                    "after": {
+                        "default_browser_return_url": login_databag["login_url"],
+                        "hooks": [
+                            {
+                                "hook": "revoke_active_sessions",
+                            },
+                        ],
+                    },
+                },
+            },
+            "methods": {
+                "code": {
+                    "enabled": True,
+                },
+                "password": {
+                    "enabled": True,
+                    "config": {
+                        "haveibeenpwned_enabled": False,
+                    },
+                },
+            },
         },
         "courier": {
             "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
@@ -888,6 +996,11 @@ def test_on_client_config_changed_with_ingress(
                 },
             ],
         },
+        "session": {
+            "whoami": {
+                "required_aal": "highest_available",
+            },
+        },
         "selfservice": {
             "allowed_return_urls": [
                 "https://public/",
@@ -1022,6 +1135,11 @@ def test_on_client_config_relation_removed_with_ingress(
                 },
             ],
         },
+        "session": {
+            "whoami": {
+                "required_aal": "highest_available",
+            },
+        },
         "selfservice": {
             "allowed_return_urls": [
                 "https://public/",
@@ -1121,6 +1239,11 @@ def test_on_client_config_data_removed_with_ingress(
                 },
             ],
         },
+        "session": {
+            "whoami": {
+                "required_aal": "highest_available",
+            },
+        },
         "selfservice": {
             "allowed_return_urls": [
                 "https://public/",
@@ -1218,6 +1341,11 @@ def test_on_config_changed_with_hydra(
                 },
             ],
         },
+        "session": {
+            "whoami": {
+                "required_aal": "highest_available",
+            },
+        },
         "selfservice": {
             "default_browser_return_url": login_databag["login_url"],
             "flows": {
@@ -1313,6 +1441,11 @@ def test_on_config_changed_when_missing_hydra_relation_data(
                     "url": "base64://something",
                 },
             ],
+        },
+        "session": {
+            "whoami": {
+                "required_aal": "highest_available",
+            },
         },
         "selfservice": {
             "default_browser_return_url": login_databag["login_url"],
@@ -1434,6 +1567,11 @@ def test_on_changed_without_login_ui_endpoints(
                 },
             ],
         },
+        "session": {
+            "whoami": {
+                "required_aal": "highest_available",
+            },
+        },
         "selfservice": {
             "default_browser_return_url": DEFAULT_BROWSER_RETURN_URL,
         },
@@ -1491,6 +1629,11 @@ def test_on_config_changed_when_missing_login_ui_and_hydra_relation_data(
                     "url": "base64://something",
                 },
             ],
+        },
+        "session": {
+            "whoami": {
+                "required_aal": "highest_available",
+            },
         },
         "selfservice": {
             "default_browser_return_url": DEFAULT_BROWSER_RETURN_URL,
@@ -1652,6 +1795,11 @@ def test_on_config_changed_when_webauthn_enabled(
                     "url": "base64://something",
                 },
             ],
+        },
+        "session": {
+            "whoami": {
+                "required_aal": "highest_available",
+            },
         },
         "selfservice": {
             "allowed_return_urls": [
@@ -2325,6 +2473,7 @@ def test_kratos_info_updated_on_relation_ready(harness: Harness) -> None:
         "providers",
         "identity-schemas",
         "kratos-model",
+        True,
     )
 
 

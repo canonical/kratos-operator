@@ -8,6 +8,11 @@ identity:
         - id: {{ schema_id }}
           url: '{{ identity_schema }}'
         {%- endfor %}
+{%- if enable_local_idp and enforce_mfa %}
+session:
+  whoami:
+    required_aal: highest_available
+{%- endif %}
 selfservice:
     {%- if allowed_return_urls %}
     allowed_return_urls:
@@ -65,10 +70,12 @@ selfservice:
             enabled: True
             config:
                 haveibeenpwned_enabled: False
+        {%- if enforce_mfa %}
         totp:
             enabled: True
             config:
                 issuer: Identity Platform
+        {%- endif %}
         {%- if enable_passwordless_login_method %}
         webauthn:
             enabled: True
