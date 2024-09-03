@@ -4,8 +4,17 @@
 
 """Utility functions for the Kratos charm."""
 
-from typing import Dict
+from functools import wraps
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 from urllib.parse import urlparse
+
+from ops import WaitingStatus
+from tenacity import Retrying, TryAgain, wait_fixed
+
+from constants import CONFIG_FILE_PATH
+
+if TYPE_CHECKING:
+    from charm import KratosCharm
 
 
 def dict_to_action_output(d: Dict) -> Dict:
@@ -58,3 +67,22 @@ def normalise_url(url: str) -> str:
     parsed_url = parsed_url._replace(netloc=parsed_url.netloc.rsplit(":", 1)[0])
 
     return parsed_url.geturl()
+
+
+def run_after_config_updated(func: Callable) -> Callable:
+    @wraps(func)
+    def wrapper(charm: "KratosCharm", *args: Any, **kwargs: Any) -> Optional[Any]:
+        charm.unit.status = WaitingStatus("Waiting for configuration to be updated")
+
+        for attempt in Retrying(
+            wait=wait_fixed(5),
+        ):
+            expected_config = charm._render_conf_file()
+            current_config = charm._container.pull(CONFIG_FILE_PATH).read()
+            with attempt:
+                if expected_config != current_config:
+                    raise TryAgain
+
+        return func(charm, *args, **kwargs)
+
+    return wrapper

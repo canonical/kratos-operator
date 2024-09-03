@@ -1,7 +1,14 @@
 # Copyright 2023 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-from utils import dict_to_action_output, normalise_url
+from io import StringIO
+from unittest.mock import MagicMock, _Sentinel, sentinel
+
+from ops import ActiveStatus, CharmBase, HookEvent
+from pytest_mock import MockerFixture
+
+from tests.unit.conftest import harness
+from utils import dict_to_action_output, normalise_url, run_after_config_updated
 
 
 def test_dict_to_action_output() -> None:
@@ -63,3 +70,22 @@ def test_normalise_url_without_trailing_slash() -> None:
     res_url = normalise_url(url)
 
     assert res_url == expected_url
+
+
+class TestUtils:
+    def test_run_after_config_updated(
+        self,
+        harness: harness,
+        mocked_hook_event: MagicMock,
+        mocker: MockerFixture,
+    ) -> None:
+        mocker.patch("ops.model.Container.pull", return_value=StringIO("abc"))
+        mocker.patch("charm.KratosCharm._render_conf_file", return_value="abc")
+
+        @run_after_config_updated
+        def wrapped(charm: CharmBase, event: HookEvent) -> _Sentinel:
+            charm.unit.status = ActiveStatus()
+            return sentinel
+
+        assert wrapped(harness.charm, mocked_hook_event) is sentinel
+        assert isinstance(harness.model.unit.status, ActiveStatus)

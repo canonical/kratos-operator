@@ -12,6 +12,7 @@ from ops.testing import Harness
 from pytest_mock import MockerFixture
 
 from charm import KratosCharm
+from constants import WORKLOAD_CONTAINER_NAME
 from kratos import KratosAPI
 
 
@@ -30,6 +31,11 @@ def harness(mocked_kubernetes_service_patcher: MagicMock) -> Harness:
 def lk_client(mocker: MockerFixture) -> None:
     mock_lightkube = mocker.patch("charm.Client", autospec=True)
     return mock_lightkube.return_value
+
+
+@pytest.fixture
+def mocked_hook_event(mocker: MockerFixture) -> MagicMock:
+    return mocker.patch("ops.charm.HookEvent", autospec=True)
 
 
 @pytest.fixture()
@@ -96,6 +102,14 @@ def mocked_pebble_exec_failed(mocked_pebble_exec: MagicMock) -> MagicMock:
         exit_code=400, stderr="Failed to execute", stdout="Failed", command=["test", "command"]
     )
     return mocked_pebble_exec
+
+
+@pytest.fixture(autouse=True)
+def mocked_restart_service(mocker: MockerFixture) -> MagicMock:
+    return mocker.patch(
+        "charm.KratosCharm._restart_service",
+        lambda charm: charm._container.restart(WORKLOAD_CONTAINER_NAME),
+    )
 
 
 @pytest.fixture()
