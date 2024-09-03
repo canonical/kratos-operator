@@ -177,7 +177,9 @@ async def test_get_identity(ops_test: OpsTest) -> None:
 
 async def test_reset_password(ops_test: OpsTest) -> None:
     secret_name = "password-secret"
-    secret_id = await ops_test.model.add_secret(name=secret_name, data_args=["password=some-password"])
+    secret_id = await ops_test.model.add_secret(
+        name=secret_name, data_args=["password=some-password"]
+    )
     await ops_test.model.grant_secret(secret_name=secret_name, application=KRATOS_APP)
 
     action = (

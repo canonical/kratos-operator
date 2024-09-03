@@ -13,16 +13,17 @@ import bcrypt
 import requests
 from ops.model import Container
 
+from constants import CONFIG_FILE_PATH
+
 logger = logging.getLogger(__name__)
 
 
 class KratosAPI:
     """A helper object for interacting with the kratos API."""
 
-    def __init__(self, kratos_admin_url: str, container: Container, config_file_path: str) -> None:
+    def __init__(self, kratos_admin_url: str, container: Container) -> None:
         self.kratos_admin_url = kratos_admin_url
         self.container = container
-        self.config_file_path = config_file_path
 
     def create_identity(
         self, traits: Dict, schema_id: str, password: Optional[str] = None
@@ -128,7 +129,9 @@ class KratosAPI:
         credentials = {
             "password": {
                 "config": {
-                    "hashed_password": bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+                    "hashed_password": bcrypt.hashpw(
+                        password.encode("utf-8"), bcrypt.gensalt()
+                    ).decode("utf-8")
                 }
             }
         }
@@ -136,7 +139,12 @@ class KratosAPI:
         # Update the identity with new password.
         # Note that passwords can't be updated with Kratos CLI
         url = join(self.kratos_admin_url, f"admin/identities/{identity_id}")
-        data = {"state": state, "traits": traits, "schema_id": schema_id, "credentials": credentials}
+        data = {
+            "state": state,
+            "traits": traits,
+            "schema_id": schema_id,
+            "credentials": credentials,
+        }
 
         r = requests.put(url, json=data)
         r.raise_for_status()
@@ -189,7 +197,7 @@ class KratosAPI:
             env = {"DSN": dsn}
         else:
             cmd.append("--config")
-            cmd.append(self.config_file_path)
+            cmd.append(CONFIG_FILE_PATH)
             env = None
 
         return self._run_cmd(cmd, timeout=timeout, environment=env)

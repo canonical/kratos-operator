@@ -51,6 +51,7 @@ def setup_postgres_relation(harness: Harness) -> None:
         "postgresql-k8s",
         {
             "data": '{"database": "database", "extra-user-roles": "SUPERUSER"}',
+            "database": "kratos-model_kratos",
             "endpoints": DB_ENDPOINTS,
             "password": DB_PASSWORD,
             "username": DB_USERNAME,
@@ -193,7 +194,7 @@ def setup_smtp_relation(harness: Harness, transport_security: str, skip_ssl_veri
             "transport_security": transport_security,
             "domain": "domain",
             "skip_ssl_verify": skip_ssl_verify,
-        }
+        },
     )
     return smtp_relation_id
 
@@ -509,7 +510,7 @@ def test_on_pebble_ready_lk_called(
         ("starttls", "smtp", "False", ""),
         ("tls", "smtps", "True", "?skip_ssl_verify=true"),
         ("starttls", "smtp", "True", "?skip_ssl_verify=true"),
-    ]
+    ],
 )
 def test_config_file_with_smtp_integration(
     harness: Harness,
@@ -555,7 +556,9 @@ def test_config_file_with_smtp_integration(
             "default_browser_return_url": DEFAULT_BROWSER_RETURN_URL,
         },
         "courier": {
-            "smtp": {"connection_uri": f"{method}://example_user:some-password@example.smtp:25/{additional_param}"},
+            "smtp": {
+                "connection_uri": f"{method}://example_user:some-password@example.smtp:25/{additional_param}"
+            },
         },
         "serve": {
             "public": {
@@ -1024,10 +1027,10 @@ def test_on_client_config_changed_with_ingress(
                     "after": {
                         "default_browser_return_url": login_databag["login_url"],
                         "hooks": [
-                                {
-                                    "hook": "revoke_active_sessions",
-                                },
-                            ],
+                            {
+                                "hook": "revoke_active_sessions",
+                            },
+                        ],
                     },
                 },
                 "registration": {
@@ -1048,15 +1051,15 @@ def test_on_client_config_changed_with_ingress(
                 },
                 "password": {
                     "enabled": True,
-                        "config": {
-                            "haveibeenpwned_enabled": False,
-                        },
+                    "config": {
+                        "haveibeenpwned_enabled": False,
                     },
-                    "totp": {
-                        "enabled": True,
-                        "config": {
-                            "issuer": "Identity Platform",
-                        },
+                },
+                "totp": {
+                    "enabled": True,
+                    "config": {
+                        "issuer": "Identity Platform",
+                    },
                 },
                 "oidc": {
                     "config": {
@@ -1661,7 +1664,7 @@ def test_on_config_changed_when_recovery_email_template_set(
     harness: Harness,
     mocked_kratos_configmap: MagicMock,
     mocked_migration_is_needed: MagicMock,
-    mocked_recovery_email_template: MagicMock
+    mocked_recovery_email_template: MagicMock,
 ) -> None:
     setup_peer_relation(harness)
     setup_postgres_relation(harness)
@@ -1676,9 +1679,7 @@ def test_on_config_changed_when_recovery_email_template_set(
 
 
 def test_on_config_changed_when_local_idp_disabled(
-    harness: Harness,
-    mocked_kratos_configmap: MagicMock,
-    mocked_migration_is_needed: MagicMock
+    harness: Harness, mocked_kratos_configmap: MagicMock, mocked_migration_is_needed: MagicMock
 ) -> None:
     setup_peer_relation(harness)
     setup_postgres_relation(harness)
@@ -1765,9 +1766,7 @@ def test_on_config_changed_when_local_idp_disabled(
 
 
 def test_on_config_changed_when_webauthn_enabled(
-    harness: Harness,
-    mocked_kratos_configmap: MagicMock,
-    mocked_migration_is_needed: MagicMock
+    harness: Harness, mocked_kratos_configmap: MagicMock, mocked_migration_is_needed: MagicMock
 ) -> None:
     setup_peer_relation(harness)
     setup_postgres_relation(harness)
@@ -1855,7 +1854,7 @@ def test_on_config_changed_when_webauthn_enabled(
                             "id": "public",
                             "origins": ["https://public"],
                             "display_name": "Identity Platform",
-                        }
+                        },
                     },
                 },
             },
@@ -2186,7 +2185,9 @@ def test_error_on_reset_mfa_action_with_identity_id_when_mfa_type_uncorrect(
 
     harness.charm._on_reset_identity_mfa_action(event)
 
-    event.fail.assert_called_with(f"Unsupported MFA credential type {unsupported_type}, allowed methods are: `totp` and `lookup_secret`")
+    event.fail.assert_called_with(
+        f"Unsupported MFA credential type {unsupported_type}, allowed methods are: `totp` and `lookup_secret`"
+    )
 
 
 @pytest.mark.parametrize("mfa_type", ["totp", "lookup_secret"])

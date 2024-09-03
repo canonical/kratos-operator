@@ -14,10 +14,7 @@ from charms.certificate_transfer_interface.v0.certificate_transfer import (
 )
 from ops import CharmBase, Object
 
-from constants import CERTIFICATE_TRANSFER_NAME
-
-LOCAL_CA_CERTS_PATH = Path("/usr/local/share/ca-certificates")
-BUNDLE_PATH = "/etc/ssl/certs/ca-certificates.crt"
+from constants import CA_BUNDLE_PATH, CERTIFICATE_TRANSFER_RELATION_NAME, LOCAL_CA_CERTS_PATH
 
 
 class CertTransfer(Object):
@@ -26,7 +23,7 @@ class CertTransfer(Object):
         charm: CharmBase,
         container_name: str,
         callback_fn: Callable,
-        cert_transfer_relation_name: str = CERTIFICATE_TRANSFER_NAME,
+        cert_transfer_relation_name: str = CERTIFICATE_TRANSFER_RELATION_NAME,
         bundle_name: str = "ca-certificates.crt",
     ):
         super().__init__(charm, cert_transfer_relation_name)
@@ -61,8 +58,8 @@ class CertTransfer(Object):
 
         subprocess.run(["update-ca-certificates", "--fresh"], capture_output=True)
 
-        with open(BUNDLE_PATH) as f:
-            self.container.push(BUNDLE_PATH, f, make_dirs=True)
+        with open(CA_BUNDLE_PATH) as f:
+            self.container.push(CA_BUNDLE_PATH, f, make_dirs=True)
 
     def clean_ca_certs(self) -> None:
         """Remove the cert bundle from the container."""

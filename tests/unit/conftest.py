@@ -43,7 +43,7 @@ def mocked_kratos_process() -> MagicMock:
 def kratos_api(mocked_kratos_process: MagicMock) -> KratosAPI:
     container = MagicMock()
     container.exec = MagicMock(return_value=mocked_kratos_process)
-    return KratosAPI("http://localhost:4434", container, "/etc/config/kratos.yaml")
+    return KratosAPI("http://localhost:4434", container)
 
 
 @pytest.fixture()
@@ -218,25 +218,19 @@ def mocked_recover_password_with_code(
 
 @pytest.fixture()
 def mocked_reset_password(mocker: MockerFixture, kratos_identity_json: Dict) -> MagicMock:
-    mock = mocker.patch(
-        "charm.KratosAPI.reset_password", return_value=kratos_identity_json
-    )
+    mock = mocker.patch("charm.KratosAPI.reset_password", return_value=kratos_identity_json)
     return mock
 
 
 @pytest.fixture()
 def mocked_invalidate_sessions(mocker: MockerFixture) -> MagicMock:
-    mock = mocker.patch(
-        "charm.KratosAPI.invalidate_sessions", return_value=True
-    )
+    mock = mocker.patch("charm.KratosAPI.invalidate_sessions", return_value=True)
     return mock
 
 
 @pytest.fixture()
 def mocked_delete_mfa_credential(mocker: MockerFixture) -> MagicMock:
-    mock = mocker.patch(
-        "charm.KratosAPI.delete_mfa_credential", return_value=True
-    )
+    mock = mocker.patch("charm.KratosAPI.delete_mfa_credential", return_value=True)
     return mock
 
 
