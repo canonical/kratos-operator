@@ -9,6 +9,7 @@ import pytest
 from ops.pebble import ExecError
 from pytest_mock import MockerFixture
 
+from constants import CONFIG_FILE_PATH
 from kratos import KratosAPI
 
 
@@ -207,9 +208,7 @@ def test_reset_password(
     assert ret == kratos_identity_json
 
 
-def test_invalidate_sessions(
-    kratos_api: KratosAPI, mocker: MockerFixture
-) -> None:
+def test_invalidate_sessions(kratos_api: KratosAPI, mocker: MockerFixture) -> None:
     mocker.patch("requests.delete")
 
     ret = kratos_api.invalidate_sessions("identity_id")
@@ -217,9 +216,7 @@ def test_invalidate_sessions(
     assert ret
 
 
-def test_delete_mfa_credential(
-    kratos_api: KratosAPI, mocker: MockerFixture
-) -> None:
+def test_delete_mfa_credential(kratos_api: KratosAPI, mocker: MockerFixture) -> None:
     mocker.patch("requests.delete")
 
     ret = kratos_api.delete_mfa_credential("identity_id", "totp")
@@ -240,7 +237,7 @@ def test_run_migration(kratos_api: KratosAPI, mocked_kratos_process: MagicMock) 
         "-e",
         "--yes",
         "--config",
-        kratos_api.config_file_path,
+        CONFIG_FILE_PATH,
     ]
 
     assert expected_output == cmd_output

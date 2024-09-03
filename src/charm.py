@@ -11,7 +11,6 @@ import json
 import logging
 from functools import cached_property
 from os.path import join
-from pathlib import Path
 from secrets import token_hex
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
@@ -85,7 +84,34 @@ from tenacity import before_log, retry, stop_after_attempt, wait_exponential
 import config_map
 from certificate_transfer_integration import CertTransfer
 from config_map import IdentitySchemaConfigMap, KratosConfigMap, ProvidersConfigMap
-from constants import INTERNAL_INGRESS_RELATION_NAME, WORKLOAD_CONTAINER_NAME
+from constants import (
+    CONFIG_DIR_PATH,
+    CONFIG_FILE_PATH,
+    COOKIE_SECRET_KEY,
+    DB_RELATION_NAME,
+    DEFAULT_SCHEMA_ID_FILE_NAME,
+    EMAIL_TEMPLATE_FILE_PATH,
+    GRAFANA_DASHBOARD_RELATION_NAME,
+    HYDRA_RELATION_NAME,
+    IDENTITY_SCHEMAS_LOCAL_DIR_PATH,
+    INTERNAL_INGRESS_RELATION_NAME,
+    KRATOS_ADMIN_PORT,
+    KRATOS_CONFIG_MAP_NAME,
+    KRATOS_PUBLIC_PORT,
+    KRATOS_SERVICE_COMMAND,
+    LOG_DIR,
+    LOG_LEVELS,
+    LOG_PATH,
+    LOGIN_UI_RELATION_NAME,
+    LOKI_PUSH_API_RELATION_NAME,
+    MAPPERS_LOCAL_DIR_PATH,
+    PEER_KEY_DB_MIGRATE_VERSION,
+    PEER_RELATION_NAME,
+    PROMETHEUS_SCRAPE_RELATION_NAME,
+    SECRET_LABEL,
+    TRACING_RELATION_NAME,
+    WORKLOAD_CONTAINER_NAME,
+)
 from kratos import KratosAPI
 from utils import dict_to_action_output, normalise_url
 
@@ -94,14 +120,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-KRATOS_ADMIN_PORT = 4434
-KRATOS_PUBLIC_PORT = 4433
-PEER_RELATION_NAME = "kratos-peers"
-SECRET_LABEL = "cookie_secret"
-COOKIE_SECRET_KEY = "cookiesecret"
-PEER_KEY_DB_MIGRATE_VERSION = "db_migrate_version"
-DEFAULT_SCHEMA_ID_FILE_NAME = "default.schema"
-LOG_LEVELS = ["panic", "fatal", "error", "warn", "info", "debug", "trace"]
 
 
 class KratosCharm(CharmBase):
@@ -110,31 +128,9 @@ class KratosCharm(CharmBase):
     def __init__(self, *args: Any) -> None:
         super().__init__(*args)
         self._container = self.unit.get_container(WORKLOAD_CONTAINER_NAME)
-        self._config_dir_path = Path("/etc/config/kratos")
-        self._config_file_path = self._config_dir_path / "kratos.yaml"
-        self._identity_schemas_default_dir_path = self._config_dir_path
-        self._identity_schemas_config_dir_path = self._config_dir_path / "schemas" / "juju"
-        self._identity_schemas_local_dir_path = Path("identity_schemas")
-        self._mappers_dir_path = self._config_dir_path
-        self._mappers_local_dir_path = Path("claim_mappers")
-        self._email_template_file_path = Path("/etc/config/templates") / "recovery-body.html.gotmpl"
-        self._db_name = f"{self.model.name}_{self.app.name}"
-        self._db_relation_name = "pg-database"
-        self._hydra_relation_name = "hydra-endpoint-info"
-        self._login_ui_relation_name = "ui-endpoint-info"
-        self._prometheus_scrape_relation_name = "metrics-endpoint"
-        self._loki_push_api_relation_name = "logging"
-        self._grafana_dashboard_relation_name = "grafana-dashboard"
-        self._tracing_relation_name = "tracing"
-        self._kratos_service_command = "kratos serve all"
-        self._log_dir = Path("/var/log")
-        self._log_path = self._log_dir / "kratos.log"
-        self._kratos_config_map_name = "kratos-config"
 
         self.client = Client(field_manager=self.app.name, namespace=self.model.name)
-        self.kratos = KratosAPI(
-            f"http://127.0.0.1:{KRATOS_ADMIN_PORT}", self._container, str(self._config_file_path)
-        )
+        self.kratos = KratosAPI(f"http://127.0.0.1:{KRATOS_ADMIN_PORT}", self._container)
         self.kratos_configmap = KratosConfigMap(self.client, self)
         self.schemas_configmap = IdentitySchemaConfigMap(self.client, self)
         self.providers_configmap = ProvidersConfigMap(self.client, self)
@@ -168,19 +164,17 @@ class KratosCharm(CharmBase):
 
         self.database = DatabaseRequires(
             self,
-            relation_name=self._db_relation_name,
-            database_name=self._db_name,
+            relation_name=DB_RELATION_NAME,
+            database_name=f"{self.model.name}_{self.app.name}",
             extra_user_roles="SUPERUSER",
         )
 
         self.external_provider = ExternalIdpRequirer(self, relation_name="kratos-external-idp")
 
-        self.hydra_endpoints = HydraEndpointsRequirer(
-            self, relation_name=self._hydra_relation_name
-        )
+        self.hydra_endpoints = HydraEndpointsRequirer(self, relation_name=HYDRA_RELATION_NAME)
 
         self.login_ui_endpoints = LoginUIEndpointsRequirer(
-            self, relation_name=self._login_ui_relation_name
+            self, relation_name=LOGIN_UI_RELATION_NAME
         )
 
         self.endpoints_provider = KratosEndpointsProvider(self)
@@ -188,7 +182,7 @@ class KratosCharm(CharmBase):
 
         self.metrics_endpoint = MetricsEndpointProvider(
             self,
-            relation_name=self._prometheus_scrape_relation_name,
+            relation_name=PROMETHEUS_SCRAPE_RELATION_NAME,
             jobs=[
                 {
                     "metrics_path": "/metrics/prometheus",
@@ -203,17 +197,17 @@ class KratosCharm(CharmBase):
 
         self.loki_consumer = LogProxyConsumer(
             self,
-            log_files=[str(self._log_path)],
-            relation_name=self._loki_push_api_relation_name,
+            log_files=[str(LOG_PATH)],
+            relation_name=LOKI_PUSH_API_RELATION_NAME,
             container_name=WORKLOAD_CONTAINER_NAME,
         )
         self.tracing = TracingEndpointRequirer(
             self,
-            relation_name=self._tracing_relation_name,
+            relation_name=TRACING_RELATION_NAME,
         )
 
         self._grafana_dashboards = GrafanaDashboardProvider(
-            self, relation_name=self._grafana_dashboard_relation_name
+            self, relation_name=GRAFANA_DASHBOARD_RELATION_NAME
         )
 
         self.cert_transfer = CertTransfer(
@@ -234,15 +228,15 @@ class KratosCharm(CharmBase):
         )
         self.framework.observe(self.info_provider.on.ready, self._update_kratos_info_relation_data)
         self.framework.observe(
-            self.on[self._hydra_relation_name].relation_changed, self._on_config_changed
+            self.on[HYDRA_RELATION_NAME].relation_changed, self._on_config_changed
         )
         self.framework.observe(
-            self.on[self._login_ui_relation_name].relation_changed, self._on_config_changed
+            self.on[LOGIN_UI_RELATION_NAME].relation_changed, self._on_config_changed
         )
         self.framework.observe(self.database.on.database_created, self._on_database_created)
         self.framework.observe(self.database.on.endpoints_changed, self._on_database_changed)
         self.framework.observe(
-            self.on[self._db_relation_name].relation_departed, self._on_database_relation_departed
+            self.on[DB_RELATION_NAME].relation_departed, self._on_database_relation_departed
         )
         self.framework.observe(self.admin_ingress.on.ready, self._on_admin_ingress_ready)
         self.framework.observe(self.admin_ingress.on.revoked, self._on_ingress_revoked)
@@ -260,9 +254,12 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.on.delete_identity_action, self._on_delete_identity_action)
         self.framework.observe(self.on.reset_password_action, self._on_reset_password_action)
         self.framework.observe(
-            self.on.invalidate_identity_sessions_action, self._on_invalidate_identity_sessions_action
+            self.on.invalidate_identity_sessions_action,
+            self._on_invalidate_identity_sessions_action,
         )
-        self.framework.observe(self.on.reset_identity_mfa_action, self._on_reset_identity_mfa_action)
+        self.framework.observe(
+            self.on.reset_identity_mfa_action, self._on_reset_identity_mfa_action
+        )
         self.framework.observe(
             self.on.create_admin_account_action, self._on_create_admin_account_action
         )
@@ -305,7 +302,7 @@ class KratosCharm(CharmBase):
 
     @property
     def _kratos_service_params(self) -> str:
-        ret = ["--config", str(self._config_file_path)]
+        ret = ["--config", str(CONFIG_FILE_PATH)]
         if self.config["dev"]:
             logger.warning("Running Kratos in dev mode, don't do this in production")
             ret.append("--dev")
@@ -334,9 +331,9 @@ class KratosCharm(CharmBase):
             "summary": "Kratos Operator layer",
             "startup": "disabled",
             "command": '/bin/sh -c "{} {} 2>&1 | tee -a {}"'.format(
-                self._kratos_service_command,
+                KRATOS_SERVICE_COMMAND,
                 self._kratos_service_params,
-                str(self._log_path),
+                str(LOG_PATH),
             ),
             "environment": {
                 "DSN": self._dsn,
@@ -499,7 +496,7 @@ class KratosCharm(CharmBase):
     def _get_available_mappers(self) -> List[str]:
         return [
             schema_file.name[: -len("_schema.jsonnet")]
-            for schema_file in self._mappers_local_dir_path.iterdir()
+            for schema_file in MAPPERS_LOCAL_DIR_PATH.iterdir()
         ]
 
     def _validate_config_log_level(self) -> bool:
@@ -526,8 +523,7 @@ class KratosCharm(CharmBase):
         origin = ""
         if self._public_url:
             allowed_return_urls = [
-                parsed_public_url._replace(path="", params="", query="", fragment="")
-                .geturl()
+                parsed_public_url._replace(path="", params="", query="", fragment="").geturl()
                 + "/"
             ]
             origin = f"{parsed_public_url.scheme}://{parsed_public_url.hostname}"
@@ -560,7 +556,7 @@ class KratosCharm(CharmBase):
     @property
     def _recovery_email_template(self) -> Optional[str]:
         if self.config.get("recovery_email_template"):
-            return f"file://{self._email_template_file_path}"
+            return f"file://{EMAIL_TEMPLATE_FILE_PATH}"
 
         return None
 
@@ -568,8 +564,10 @@ class KratosCharm(CharmBase):
     def _smtp_connection_uri(self) -> str:
         smtp = self.smtp.get_relation_data()
         if not smtp:
-            logger.info("No smtp connection url found, the default placeholder value will be used. "
-                        "Use the smtp library to integrate with an email server")
+            logger.info(
+                "No smtp connection url found, the default placeholder value will be used. "
+                "Use the smtp library to integrate with an email server"
+            )
             # smtp_connection_uri is required to start the service, use a default value
             return "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"
 
@@ -578,7 +576,11 @@ class KratosCharm(CharmBase):
         port = smtp.port
         transport_security = smtp.transport_security
         skip_ssl_verify = smtp.skip_ssl_verify
-        password = self.model.get_secret(id=smtp.password_id).get_content().get("password") if smtp.password_id else None
+        password = (
+            self.model.get_secret(id=smtp.password_id).get_content().get("password")
+            if smtp.password_id
+            else None
+        )
 
         if transport_security == "none":
             return f"smtp://{username}:{password}@{server}:{port}/?disable_starttls=true"
@@ -604,7 +606,7 @@ class KratosCharm(CharmBase):
 
     def _get_hydra_endpoint_info(self) -> Optional[str]:
         oauth2_provider_url = None
-        if self.model.relations[self._hydra_relation_name]:
+        if self.model.relations[HYDRA_RELATION_NAME]:
             try:
                 hydra_endpoints = self.hydra_endpoints.get_hydra_endpoints()
                 oauth2_provider_url = hydra_endpoints["admin_endpoint"]
@@ -673,7 +675,7 @@ class KratosCharm(CharmBase):
 
     def _get_default_identity_schemas(self) -> Dict:
         schemas = {}
-        for schema_file in self._identity_schemas_local_dir_path.glob("*.json"):
+        for schema_file in IDENTITY_SCHEMAS_LOCAL_DIR_PATH.glob("*.json"):
             with open(schema_file) as f:
                 schema = f.read()
             schemas[schema_file.stem] = schema
@@ -681,9 +683,7 @@ class KratosCharm(CharmBase):
 
     def _get_default_identity_schema_config(self) -> Tuple[str, Dict]:
         schemas = self._get_default_identity_schemas()
-        default_schema_id_file = (
-            self._identity_schemas_local_dir_path / DEFAULT_SCHEMA_ID_FILE_NAME
-        )
+        default_schema_id_file = IDENTITY_SCHEMAS_LOCAL_DIR_PATH / DEFAULT_SCHEMA_ID_FILE_NAME
         with open(default_schema_id_file) as f:
             default_schema_id = f.read()
         if default_schema_id not in schemas:
@@ -715,7 +715,7 @@ class KratosCharm(CharmBase):
 
     def _get_claims_mappers(self) -> Dict[str, str]:
         mappers = {}
-        for file in self._mappers_local_dir_path.glob("*.jsonnet"):
+        for file in MAPPERS_LOCAL_DIR_PATH.glob("*.jsonnet"):
             with open(file) as f:
                 mapper = f.read()
             mappers[file.stem] = mapper
@@ -741,7 +741,7 @@ class KratosCharm(CharmBase):
             "username": relation_data.get("username"),
             "password": relation_data.get("password"),
             "endpoints": relation_data.get("endpoints"),
-            "database_name": self._db_name,
+            "database_name": relation_data.get("database"),
         }
 
     def _run_sql_migration(self) -> bool:
@@ -824,7 +824,7 @@ class KratosCharm(CharmBase):
 
         self.unit.status = MaintenanceStatus("Configuring resources")
 
-        if not self.model.relations[self._db_relation_name]:
+        if not self.model.relations[DB_RELATION_NAME]:
             self.unit.status = BlockedStatus("Missing required relation with postgresql")
             event.defer()
             return
@@ -862,7 +862,7 @@ class KratosCharm(CharmBase):
             return
 
         if template := self.config.get("recovery_email_template"):
-            self._container.push(self._email_template_file_path, template, make_dirs=True)
+            self._container.push(EMAIL_TEMPLATE_FILE_PATH, template, make_dirs=True)
 
         self.unit.status = ActiveStatus()
 
@@ -893,9 +893,9 @@ class KratosCharm(CharmBase):
             event.defer()
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
-        if not self._container.isdir(str(self._log_dir)):
-            self._container.make_dir(path=str(self._log_dir), make_parents=True)
-            logger.info(f"Created directory {self._log_dir}")
+        if not self._container.isdir(str(LOG_DIR)):
+            self._container.make_dir(path=str(LOG_DIR), make_parents=True)
+            logger.info(f"Created directory {LOG_DIR}")
 
         self._set_version()
         self._handle_status_update_config(event)
@@ -951,7 +951,7 @@ class KratosCharm(CharmBase):
                     "name": WORKLOAD_CONTAINER_NAME,
                     "volumeMounts": [
                         {
-                            "mountPath": str(self._config_dir_path),
+                            "mountPath": str(CONFIG_DIR_PATH),
                             "name": "config",
                             "readOnly": True,
                         },
@@ -961,7 +961,7 @@ class KratosCharm(CharmBase):
             "volumes": [
                 {
                     "name": "config",
-                    "configMap": {"name": self._kratos_config_map_name},
+                    "configMap": {"name": KRATOS_CONFIG_MAP_NAME},
                 },
             ],
         }
@@ -1234,7 +1234,9 @@ class KratosCharm(CharmBase):
 
         event.log("Resetting user's second authentication factor")
         try:
-            credential_deleted = self.kratos.delete_mfa_credential(identity_id=identity_id, mfa_type=mfa_type)
+            credential_deleted = self.kratos.delete_mfa_credential(
+                identity_id=identity_id, mfa_type=mfa_type
+            )
             if not credential_deleted:
                 event.log(f"User has no {mfa_type} credentials")
                 return
