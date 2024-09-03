@@ -113,7 +113,7 @@ from constants import (
     WORKLOAD_CONTAINER_NAME,
 )
 from kratos import KratosAPI
-from utils import dict_to_action_output, normalise_url
+from utils import dict_to_action_output, normalise_url, run_after_config_updated
 
 if TYPE_CHECKING:
     from ops.pebble import LayerDict
@@ -812,6 +812,10 @@ class KratosCharm(CharmBase):
 
         return self._get_peer_data(self._migration_peer_data_key) != self.kratos.get_version()
 
+    @run_after_config_updated
+    def _restart_service(self) -> None:
+        self._container.restart(WORKLOAD_CONTAINER_NAME)
+
     def _handle_status_update_config(self, event: HookEvent) -> None:
         if not self._container.can_connect():
             event.defer()
@@ -855,11 +859,12 @@ class KratosCharm(CharmBase):
         # We need to push the layer because this may run before _on_pebble_ready
         self._container.add_layer(WORKLOAD_CONTAINER_NAME, self._pebble_layer, combine=True)
         try:
-            self._container.restart(WORKLOAD_CONTAINER_NAME)
+            self._restart_service()
         except ChangeError as err:
             logger.error(str(err))
-            self.unit.status = BlockedStatus("Failed to restart, please consult the logs")
-            return
+            self.unit.status = BlockedStatus(
+                "Failed to restart the service, please check the logs"
+            )
 
         if template := self.config.get("recovery_email_template"):
             self._container.push(EMAIL_TEMPLATE_FILE_PATH, template, make_dirs=True)
