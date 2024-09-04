@@ -450,6 +450,9 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(
                         "issuer": "Identity Platform",
                     },
                 },
+                "lookup_secret": {
+                    "enabled": True,
+                },
             },
         },
         "courier": {
@@ -1061,6 +1064,9 @@ def test_on_client_config_changed_with_ingress(
                         "issuer": "Identity Platform",
                     },
                 },
+                "lookup_secret": {
+                    "enabled": True,
+                },
                 "oidc": {
                     "config": {
                         "providers": [
@@ -1189,6 +1195,9 @@ def test_on_client_config_relation_removed_with_ingress(
                         "issuer": "Identity Platform",
                     },
                 },
+                "lookup_secret": {
+                    "enabled": True,
+                },
             },
         },
         "courier": {
@@ -1293,6 +1302,9 @@ def test_on_client_config_data_removed_with_ingress(
                         "issuer": "Identity Platform",
                     },
                 },
+                "lookup_secret": {
+                    "enabled": True,
+                },
             },
         },
         "courier": {
@@ -1391,6 +1403,9 @@ def test_on_config_changed_with_hydra(
                     "config": {
                         "issuer": "Identity Platform",
                     },
+                },
+                "lookup_secret": {
+                    "enabled": True,
                 },
             },
         },
@@ -1492,6 +1507,9 @@ def test_on_config_changed_when_missing_hydra_relation_data(
                     "config": {
                         "issuer": "Identity Platform",
                     },
+                },
+                "lookup_secret": {
+                    "enabled": True,
                 },
             },
         },
@@ -1845,6 +1863,9 @@ def test_on_config_changed_when_webauthn_enabled(
                     "config": {
                         "issuer": "Identity Platform",
                     },
+                },
+                "lookup_secret": {
+                    "enabled": True,
                 },
                 "webauthn": {
                     "enabled": True,
