@@ -75,6 +75,8 @@ selfservice:
             enabled: True
             config:
                 issuer: Identity Platform
+        lookup_secret:
+            enabled: True
         {%- endif %}
         {%- if enable_passwordless_login_method %}
         webauthn:
