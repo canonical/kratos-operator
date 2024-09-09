@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 from httpx import Response
 from lightkube import ApiError
+from lightkube.resources.core_v1 import ConfigMap
 from pytest_mock import MockerFixture
 
 from charm import KratosCharm
@@ -23,6 +24,14 @@ def mocked_charm() -> MagicMock:
     mock = MagicMock(spec=KratosCharm)
     mock.model.name = "namespace"
     return mock
+
+
+@pytest.fixture
+def mocked_cm(lk_client: MagicMock) -> MagicMock:
+    mocked_cm = MagicMock(ConfigMap, autospec=True)
+    mocked_cm.data = "{}"
+    lk_client.get.return_value = mocked_cm
+    return mocked_cm
 
 
 def test_create_all(lk_client: MagicMock, mocker: MockerFixture, mocked_charm: MagicMock) -> None:
@@ -72,9 +81,10 @@ def test_create_map_already_exists(
 
 @pytest.mark.parametrize("cls", (KratosConfigMap, IdentitySchemaConfigMap, ProvidersConfigMap))
 def test_config_map_update(
-    lk_client: MagicMock, cls: ConfigMapBase, mocked_charm: MagicMock
+    lk_client: MagicMock, mocked_cm: MagicMock, cls: ConfigMapBase, mocked_charm: MagicMock
 ) -> None:
-    data = {"a": 1}
+    data = {"a": "b"}
+    mocked_cm.data = data
     cm = cls(lk_client, mocked_charm)
 
     cm.update(data)
@@ -98,12 +108,18 @@ def test_update_map_error(
 
 
 @pytest.mark.parametrize("cls", (KratosConfigMap, IdentitySchemaConfigMap, ProvidersConfigMap))
-def test_config_map_get(lk_client: MagicMock, cls: ConfigMapBase, mocked_charm: MagicMock) -> None:
+def test_config_map_get(
+    lk_client: MagicMock, mocked_cm: MagicMock, cls: ConfigMapBase, mocked_charm: MagicMock
+) -> None:
+    data = {"a": "1"}
+    mocked_cm.data = data
     cm = cls(lk_client, mocked_charm)
 
-    cm.get()
+    ret = cm.get()
 
+    expected_data = {"a": 1}
     assert lk_client.get.called
+    assert ret == expected_data
 
 
 @pytest.mark.parametrize("cls", (KratosConfigMap, IdentitySchemaConfigMap, ProvidersConfigMap))
