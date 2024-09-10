@@ -6,6 +6,7 @@ import json
 import logging
 from asyncio import sleep
 from pathlib import Path
+from typing import Tuple
 
 import pytest
 import requests
@@ -139,7 +140,7 @@ async def test_has_internal_ingress(ops_test: OpsTest) -> None:
 
 
 @pytest.mark.abort_on_fail
-async def test_create_admin_account(ops_test: OpsTest) -> None:
+async def test_create_admin_account(ops_test: OpsTest, password_secret: Tuple[str, str]) -> None:
     action = (
         await ops_test.model.applications[KRATOS_APP]
         .units[0]
@@ -150,7 +151,7 @@ async def test_create_admin_account(ops_test: OpsTest) -> None:
                 "email": ADMIN_MAIL,
                 "name": "Admin Admin",
                 "phone_number": "6912345678",
-                "password": "123456",
+                "password-secret-id": password_secret[0],
             },
         )
     )

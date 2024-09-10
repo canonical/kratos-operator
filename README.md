@@ -156,10 +156,21 @@ The kratos charm offers the following actions:
 
 ### create-admin-account
 
-This action can be used to create an admin account:
+This action can be used to create an admin account.
+The password can be set to a specified value by passing `password-secret-id` as an action parameter.
+
+To create a juju secret holding the password and grant it to kratos, run:
 
 ```shell
-juju run kratos/0 create-admin-account username=admin123 password=abc123456 email=admin@example.com
+juju add-secret <secret-name> password=<new-password>
+secret:cql684nmp25c75sflot0
+juju grant-secret <secret-name> kratos
+```
+
+To create the admin account:
+
+```shell
+juju run kratos/0 create-admin-account username=admin123 password-secret-id=secret:12345678 email=admin@example.com
 ```
 
 NOTE: The email registered for an admin account must not be used for any other

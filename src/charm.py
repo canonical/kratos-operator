@@ -1263,7 +1263,17 @@ class KratosCharm(CharmBase):
             "phone_number": event.params.get("phone_number"),
         }
         traits = {k: v for k, v in traits.items() if v is not None}
-        password = event.params.get("password")
+        password = None
+        if secret_id := event.params.get("password-secret-id"):
+            try:
+                juju_secret = self.model.get_secret(id=secret_id)
+                password = juju_secret.get_content().get("password")
+            except SecretNotFoundError:
+                event.fail("Secret not found")
+                return
+            except ModelError as err:
+                event.fail(f"An error occurred: {err}")
+                return
 
         event.log("Creating admin account.")
         try:

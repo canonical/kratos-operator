@@ -4,7 +4,7 @@
 import base64
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 from unittest.mock import MagicMock, Mock
 
 import pytest
@@ -2352,11 +2352,14 @@ def test_error_on_invalidate_sessions_action_with_identity_id(
 
 
 def test_create_admin_account_with_password(
-    harness: Harness, mocked_kratos_service: MagicMock, mocked_create_identity: MagicMock
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_create_identity: MagicMock,
+    password_secret: Tuple[str, str],
 ) -> None:
     identity_id = mocked_create_identity.return_value["id"]
     event = MagicMock()
-    event.params = {"username": "username", "password": "p4sSw0rC"}
+    event.params = {"username": "username", "password-secret-id": password_secret[1]}
 
     harness.charm._on_create_admin_account_action(event)
 
