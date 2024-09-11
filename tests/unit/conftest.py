@@ -2,7 +2,7 @@
 # See LICENSE file for licensing details.
 
 import json
-from typing import Dict, Generator
+from typing import Dict, Generator, Tuple
 from unittest.mock import MagicMock
 
 import pytest
@@ -293,3 +293,11 @@ def mocked_log_proxy_consumer_setup_promtail(mocker: MockerFixture) -> MagicMock
 def mocked_push_default_files(mocker: MockerFixture) -> MagicMock:
     mocked = mocker.patch("charm.KratosCharm._push_default_files")
     return mocked
+
+
+@pytest.fixture
+def password_secret(harness: Harness) -> Tuple[str, str]:
+    user_password = "user_password"
+    secret = harness.add_user_secret({"password": user_password})
+    harness.grant_secret(secret, harness.charm.app)
+    return user_password, secret

@@ -201,8 +201,8 @@ actions:
           The admin's email, this email must not be associated with any other account
           (user or admin)
         type: string
-      password:
-        description: The admin's password
+      password-secret-id:
+        description: The juju secret that contains the admin's password
         type: string
       name:
         description: The admin's name
@@ -210,7 +210,7 @@ actions:
       phone_number:
         description: The admin's phone number
         type: string
-    required: ["username", "password"]
+    required: ["username", "email"]
   reset-password:
     description: |
       Reset password of an identity using either the identity ID or user email.
@@ -222,8 +222,10 @@ actions:
       email:
         description: The user's email
         type: string
-      password:
-        description: The password to set for an identity. If not provided, a self-service recovery link will be returned.
+      password-secret-id:
+        description: |
+          The juju secret that contains the password to set for an identity. If
+          not provided, a self-service recovery link will be returned.
         type: string
   invalidate-identity-sessions:
     description: |
