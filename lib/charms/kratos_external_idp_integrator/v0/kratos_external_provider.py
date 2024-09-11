@@ -126,7 +126,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 9
+LIBPATCH = 10
 
 PYDEPS = ["jsonschema"]
 
@@ -222,7 +222,7 @@ class DataValidationError(RuntimeError):
 def _load_data(data: Dict, schema: Dict) -> Dict:
     """Parses nested fields and checks whether `data` matches `schema`."""
     if "providers" not in data:
-        return dict(providers=[])
+        return {"providers": []}
 
     data = dict(data)
     try:
@@ -592,12 +592,13 @@ class Provider:
 
     client_id: str
     provider: str
-    relation_id: str
+    relation_id: Optional[str] = None
     scope: str = "profile email address phone"
     label: Optional[str] = None
     client_secret: Optional[str] = None
     issuer_url: Optional[str] = None
     tenant_id: Optional[str] = None
+    microsoft_tenant: Optional[str] = None
     team_id: Optional[str] = None
     private_key_id: Optional[str] = None
     private_key: Optional[str] = None
@@ -612,7 +613,7 @@ class Provider:
 
         if self.issuer_url:
             id = hashlib.sha1(f"{self.client_id}_{self.issuer_url}".encode()).hexdigest()
-        elif self.tenant_id:
+        elif self.get_microsoft_tenant():
             id = hashlib.sha1(f"{self.client_id}_{self.tenant_id}".encode()).hexdigest()
         else:
             id = hashlib.sha1(self.client_id.encode()).hexdigest()
@@ -621,6 +622,17 @@ class Provider:
     @provider_id.setter
     def provider_id(self, val) -> None:
         self.id = val
+
+    def get_scope(self) -> list:
+        if isinstance(self.scope, str):
+            return self.scope.split(" ")
+        elif isinstance(self.scope, list):
+            return self.scope
+        else:
+            raise ValueError(f"scope must be `list` or `str`, but `{type(self.scope)}` provided")
+
+    def get_microsoft_tenant(self) -> str:
+        return self.tenant_id or self.microsoft_tenant
 
     def config(self) -> Dict:
         """Generate Kratos config for this provider."""
@@ -631,13 +643,13 @@ class Provider:
             "label": self.label or self.provider,
             "client_secret": self.client_secret,
             "issuer_url": self.issuer_url,
-            "scope": self.scope.split(" "),
+            "scope": self.get_scope(),
             "mapper_url": (
                 base64.b64encode(self.jsonnet_mapper.encode()).decode()
                 if self.jsonnet_mapper
                 else None
             ),
-            "microsoft_tenant": self.tenant_id,
+            "microsoft_tenant": self.get_microsoft_tenant(),
             "apple_team_id": self.team_id,
             "apple_private_key_id": self.private_key_id,
             "apple_private_key": self.private_key,
@@ -744,14 +756,14 @@ class ExternalIdpRequirer(Object):
         if not self._charm.unit.is_leader():
             return
 
-        data = dict(
-            providers=[
-                dict(
-                    redirect_uri=redirect_uri,
-                    provider_id=provider_id,
-                )
+        data = {
+            "providers": [
+                {
+                    "redirect_uri": redirect_uri,
+                    "provider_id": provider_id,
+                }
             ]
-        )
+        }
 
         data = _dump_data(data, REQUIRER_JSON_SCHEMA)
 
