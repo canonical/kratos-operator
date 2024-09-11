@@ -38,6 +38,7 @@ from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ClientConfigChangedEvent,
     ClientConfigRemovedEvent,
     ExternalIdpRequirer,
+    Provider,
 )
 from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer, PromtailDigestError
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
@@ -108,6 +109,7 @@ from constants import (
     PEER_KEY_DB_MIGRATE_VERSION,
     PEER_RELATION_NAME,
     PROMETHEUS_SCRAPE_RELATION_NAME,
+    PROVIDERS_CONFIGMAP_FILE_NAME,
     SECRET_LABEL,
     TRACING_RELATION_NAME,
     WORKLOAD_CONTAINER_NAME,
@@ -221,6 +223,7 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.on.kratos_pebble_ready, self._on_pebble_ready)
         self.framework.observe(self.on.leader_elected, self._on_leader_elected)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
+        self.framework.observe(self.on.update_status, self._handle_status_update_config)
         self.framework.observe(self.on.remove, self._on_remove)
         # TODO: Remove once all charms use kratos-info instead of kratos-endpoints-info
         self.framework.observe(
@@ -727,7 +730,9 @@ class KratosCharm(CharmBase):
     def _get_oidc_providers(self) -> Optional[List]:
         providers = self.external_provider.get_providers()
         if p := self.providers_configmap.get():
-            providers.extend(p.values())
+            providers.extend(
+                [Provider.from_dict(provider) for provider in p[PROVIDERS_CONFIGMAP_FILE_NAME]]
+            )
         return providers
 
     def _get_database_relation_info(self) -> Optional[Dict]:

@@ -22,6 +22,7 @@ LOG_DIR = Path("/var/log")
 LOG_PATH = LOG_DIR / "kratos.log"
 CONFIG_FILE_PATH = CONFIG_DIR_PATH / "kratos.yaml"
 IDENTITY_SCHEMAS_LOCAL_DIR_PATH = Path("identity_schemas")
+PROVIDERS_CONFIGMAP_FILE_NAME = "idps.yaml"
 
 # Integration constants
 PEER_RELATION_NAME = "kratos-peers"
