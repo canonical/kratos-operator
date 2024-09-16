@@ -164,8 +164,7 @@ def setup_tempo_relation(harness: Harness) -> int:
     relation_id = harness.add_relation("tracing", "tempo-k8s")
     harness.add_relation_unit(relation_id, "tempo-k8s/0")
     trace_databag = {
-        "host": '"tempo-k8s-0.tempo-k8s-endpoints.namespace.svc.cluster.local"',
-        "ingesters": '[{"protocol": "tempo", "port": 3200}, {"protocol": "otlp_grpc", "port": 4317}, {"protocol": "otlp_http", "port": 4318}, {"protocol": "zipkin", "port": 9411}, {"protocol": "jaeger_http_thrift", "port": 14268}, {"protocol": "jaeger_grpc", "port": 14250}]',
+        "receivers": '[{"protocol": {"name": "otlp_http", "type":"http"},"url":"http://tempo-k8s-0.tempo-k8s-endpoints.namespace.svc.cluster.local:4318"}]',
     }
     harness.update_relation_data(
         relation_id,

@@ -44,7 +44,7 @@ from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer, PromtailDigestErr
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.smtp_integrator.v0.smtp import SmtpDataAvailableEvent, SmtpRequires
-from charms.tempo_k8s.v0.tracing import TracingEndpointRequirer
+from charms.tempo_k8s.v2.tracing import TracingEndpointRequirer
 from charms.traefik_k8s.v2.ingress import (
     IngressPerAppReadyEvent,
     IngressPerAppRequirer,
@@ -204,8 +204,7 @@ class KratosCharm(CharmBase):
             container_name=WORKLOAD_CONTAINER_NAME,
         )
         self.tracing = TracingEndpointRequirer(
-            self,
-            relation_name=TRACING_RELATION_NAME,
+            self, relation_name=TRACING_RELATION_NAME, protocols=["otlp_http"]
         )
 
         self._grafana_dashboards = GrafanaDashboardProvider(
@@ -730,9 +729,9 @@ class KratosCharm(CharmBase):
     def _get_oidc_providers(self) -> Optional[List]:
         providers = self.external_provider.get_providers()
         if p := self.providers_configmap.get():
-            providers.extend(
-                [Provider.from_dict(provider) for provider in p[PROVIDERS_CONFIGMAP_FILE_NAME]]
-            )
+            providers.extend([
+                Provider.from_dict(provider) for provider in p[PROVIDERS_CONFIGMAP_FILE_NAME]
+            ])
         return providers
 
     def _get_database_relation_info(self) -> Optional[Dict]:
@@ -925,7 +924,9 @@ class KratosCharm(CharmBase):
         if not self._tracing_ready:
             return ""
 
-        return self.tracing.otlp_http_endpoint() or ""
+        http_endpoint = urlparse(self.tracing.get_endpoint("otlp_http"))
+
+        return http_endpoint.geturl().replace(f"{http_endpoint.scheme}://", "", 1) or ""  # type: ignore[arg-type]
 
     def _update_kratos_info_relation_data(self, event: RelationEvent) -> None:
         logger.info("Sending kratos info")
