@@ -62,6 +62,7 @@ async def test_build_and_deploy(ops_test: OpsTest) -> None:
         "postgresql-k8s",
         channel="14/stable",
         trust=True,
+        config={"plugin_pg_trgm_enable": "True", "plugin_btree_gin_enable": "True"},
     )
     charm = await ops_test.build_charm(".")
     resources = {"oci-image": METADATA["resources"]["oci-image"]["upstream-source"]}
