@@ -53,6 +53,7 @@ from charms.traefik_route_k8s.v0.traefik_route import TraefikRouteRequirer
 from jinja2 import Template
 from lightkube import Client
 from lightkube.resources.apps_v1 import StatefulSet
+from ops import main
 from ops.charm import (
     ActionEvent,
     CharmBase,
@@ -67,7 +68,6 @@ from ops.charm import (
     RemoveEvent,
     UpgradeCharmEvent,
 )
-from ops.main import main
 from ops.model import (
     ActiveStatus,
     BlockedStatus,
