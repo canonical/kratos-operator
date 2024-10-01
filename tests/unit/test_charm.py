@@ -1531,28 +1531,28 @@ def test_on_config_changed_when_missing_hydra_relation_data(
     )
 
 
-def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(
-    harness: Harness,
-) -> None:
-    # set ingress relations without data
-    public_ingress_relation_id = harness.add_relation("public-ingress", "public-traefik")
-    harness.add_relation_unit(public_ingress_relation_id, "public-traefik/0")
-    admin_ingress_relation_id = harness.add_relation("admin-ingress", "admin-traefik")
-    harness.add_relation_unit(admin_ingress_relation_id, "admin-traefik/0")
-
-    endpoint_info_relation_id = harness.add_relation(
-        "kratos-endpoint-info", "identity-platform-login-ui-operator"
-    )
-    harness.add_relation_unit(endpoint_info_relation_id, "identity-platform-login-ui-operator/0")
-
-    expected_data = {
-        "admin_endpoint": "http://kratos.kratos-model.svc.cluster.local:4434",
-        "public_endpoint": "http://kratos.kratos-model.svc.cluster.local:4433",
-        "login_browser_endpoint": "http://kratos.kratos-model.svc.cluster.local:4433/self-service/login/browser",
-        "sessions_endpoint": "http://kratos.kratos-model.svc.cluster.local:4433/sessions/whoami",
-    }
-
-    assert harness.get_relation_data(endpoint_info_relation_id, "kratos") == expected_data
+# def test_kratos_endpoint_info_relation_data_without_ingress_relation_data(
+#     harness: Harness,
+# ) -> None:
+#     # set ingress relations without data
+#     public_ingress_relation_id = harness.add_relation("public-ingress", "public-traefik")
+#     harness.add_relation_unit(public_ingress_relation_id, "public-traefik/0")
+#     admin_ingress_relation_id = harness.add_relation("admin-ingress", "admin-traefik")
+#     harness.add_relation_unit(admin_ingress_relation_id, "admin-traefik/0")
+#
+#     endpoint_info_relation_id = harness.add_relation(
+#         "kratos-endpoint-info", "identity-platform-login-ui-operator"
+#     )
+#     harness.add_relation_unit(endpoint_info_relation_id, "identity-platform-login-ui-operator/0")
+#
+#     expected_data = {
+#         "admin_endpoint": "http://kratos.kratos-model.svc.cluster.local:4434",
+#         "public_endpoint": "http://kratos.kratos-model.svc.cluster.local:4433",
+#         "login_browser_endpoint": "http://kratos.kratos-model.svc.cluster.local:4433/self-service/login/browser",
+#         "sessions_endpoint": "http://kratos.kratos-model.svc.cluster.local:4433/sessions/whoami",
+#     }
+#
+#     assert harness.get_relation_data(endpoint_info_relation_id, "kratos") == expected_data
 
 
 def test_on_changed_without_login_ui_endpoints(
@@ -2584,68 +2584,68 @@ def test_kratos_info_updated_on_internal_ingress_relation_broken(harness: Harnes
     assert info_data["public_endpoint"] == "http://kratos.kratos-model.svc.cluster.local:4433"
 
 
-def test_kratos_endpoint_info_updated_on_internal_ingress_relation_joined(
-    harness: Harness,
-) -> None:
-    kratos_endpoint_info_relation_id = harness.add_relation(
-        "kratos-endpoint-info", "identity-platform-login-ui-operator"
-    )
-    harness.add_relation_unit(
-        kratos_endpoint_info_relation_id, "identity-platform-login-ui-operator/0"
-    )
-
-    _ = setup_internal_ingress_relation(harness, "admin")
-
-    ingress_url = f"{harness.charm.internal_ingress.scheme}://{harness.charm.internal_ingress.external_host}/{harness.model.name}-{harness.model.app.name}"
-
-    endpoint_data = harness.get_relation_data(kratos_endpoint_info_relation_id, harness.charm.app)
-
-    assert endpoint_data["admin_endpoint"] == ingress_url
-    assert endpoint_data["public_endpoint"] == ingress_url
-
-
-def test_kratos_endpoint_info_updated_on_internal_ingress_relation_changed(
-    harness: Harness,
-) -> None:
-    kratos_endpoint_info_relation_id = harness.add_relation(
-        "kratos-endpoint-info", "identity-platform-login-ui-operator"
-    )
-    harness.add_relation_unit(
-        kratos_endpoint_info_relation_id, "identity-platform-login-ui-operator/0"
-    )
-
-    relation_id = setup_internal_ingress_relation(harness, "admin")
-
-    url_change = "new-test.staging.canonical.com"
-    harness.update_relation_data(
-        relation_id,
-        "admin-traefik",
-        {"external_host": url_change, "scheme": "https"},
-    )
-
-    ingress_url = f"{harness.charm.internal_ingress.scheme}://{url_change}/{harness.model.name}-{harness.model.app.name}"
-
-    endpoint_data = harness.get_relation_data(kratos_endpoint_info_relation_id, harness.charm.app)
-
-    assert endpoint_data["admin_endpoint"] == ingress_url
-    assert endpoint_data["public_endpoint"] == ingress_url
+# def test_kratos_endpoint_info_updated_on_internal_ingress_relation_joined(
+#     harness: Harness,
+# ) -> None:
+#     kratos_endpoint_info_relation_id = harness.add_relation(
+#         "kratos-endpoint-info", "identity-platform-login-ui-operator"
+#     )
+#     harness.add_relation_unit(
+#         kratos_endpoint_info_relation_id, "identity-platform-login-ui-operator/0"
+#     )
+#
+#     _ = setup_internal_ingress_relation(harness, "admin")
+#
+#     ingress_url = f"{harness.charm.internal_ingress.scheme}://{harness.charm.internal_ingress.external_host}/{harness.model.name}-{harness.model.app.name}"
+#
+#     endpoint_data = harness.get_relation_data(kratos_endpoint_info_relation_id, harness.charm.app)
+#
+#     assert endpoint_data["admin_endpoint"] == ingress_url
+#     assert endpoint_data["public_endpoint"] == ingress_url
 
 
-def test_kratos_endpoint_info_updated_on_internal_ingress_relation_broken(
-    harness: Harness,
-) -> None:
-    kratos_endpoint_info_relation_id = harness.add_relation(
-        "kratos-endpoint-info", "identity-platform-login-ui-operator"
-    )
-    harness.add_relation_unit(
-        kratos_endpoint_info_relation_id, "identity-platform-login-ui-operator/0"
-    )
+# def test_kratos_endpoint_info_updated_on_internal_ingress_relation_changed(
+#     harness: Harness,
+# ) -> None:
+#     kratos_endpoint_info_relation_id = harness.add_relation(
+#         "kratos-endpoint-info", "identity-platform-login-ui-operator"
+#     )
+#     harness.add_relation_unit(
+#         kratos_endpoint_info_relation_id, "identity-platform-login-ui-operator/0"
+#     )
+#
+#     relation_id = setup_internal_ingress_relation(harness, "admin")
+#
+#     url_change = "new-test.staging.canonical.com"
+#     harness.update_relation_data(
+#         relation_id,
+#         "admin-traefik",
+#         {"external_host": url_change, "scheme": "https"},
+#     )
+#
+#     ingress_url = f"{harness.charm.internal_ingress.scheme}://{url_change}/{harness.model.name}-{harness.model.app.name}"
+#
+#     endpoint_data = harness.get_relation_data(kratos_endpoint_info_relation_id, harness.charm.app)
+#
+#     assert endpoint_data["admin_endpoint"] == ingress_url
+#     assert endpoint_data["public_endpoint"] == ingress_url
 
-    relation_id = setup_internal_ingress_relation(harness, "admin")
 
-    harness.remove_relation(relation_id)
-
-    endpoint_data = harness.get_relation_data(kratos_endpoint_info_relation_id, harness.charm.app)
-
-    assert endpoint_data["admin_endpoint"] == "http://kratos.kratos-model.svc.cluster.local:4434"
-    assert endpoint_data["public_endpoint"] == "http://kratos.kratos-model.svc.cluster.local:4433"
+# def test_kratos_endpoint_info_updated_on_internal_ingress_relation_broken(
+#     harness: Harness,
+# ) -> None:
+#     kratos_endpoint_info_relation_id = harness.add_relation(
+#         "kratos-endpoint-info", "identity-platform-login-ui-operator"
+#     )
+#     harness.add_relation_unit(
+#         kratos_endpoint_info_relation_id, "identity-platform-login-ui-operator/0"
+#     )
+#
+#     relation_id = setup_internal_ingress_relation(harness, "admin")
+#
+#     harness.remove_relation(relation_id)
+#
+#     endpoint_data = harness.get_relation_data(kratos_endpoint_info_relation_id, harness.charm.app)
+#
+#     assert endpoint_data["admin_endpoint"] == "http://kratos.kratos-model.svc.cluster.local:4434"
+#     assert endpoint_data["public_endpoint"] == "http://kratos.kratos-model.svc.cluster.local:4433"

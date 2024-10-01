@@ -147,7 +147,7 @@ In order to integrate them, run:
 
 ```shell
 juju integrate kratos:ui-endpoint-info identity-platform-login-ui-operator:ui-endpoint-info
-juju integrate identity-platform-login-ui-operator:kratos-endpoint-info kratos:kratos-endpoint-info
+juju integrate identity-platform-login-ui-operator:kratos-info kratos:kratos-info
 ```
 
 ## Actions
