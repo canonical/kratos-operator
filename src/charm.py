@@ -32,7 +32,6 @@ from charms.identity_platform_login_ui_operator.v0.login_ui_endpoints import (
     LoginUIEndpointsRequirer,
     LoginUITooManyRelatedAppsError,
 )
-from charms.kratos.v0.kratos_endpoints import KratosEndpointsProvider
 from charms.kratos.v0.kratos_info import KratosInfoProvider
 from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ClientConfigChangedEvent,
@@ -54,6 +53,7 @@ from charms.traefik_route_k8s.v0.traefik_route import TraefikRouteRequirer
 from jinja2 import Template
 from lightkube import Client
 from lightkube.resources.apps_v1 import StatefulSet
+from ops import main
 from ops.charm import (
     ActionEvent,
     CharmBase,
@@ -68,7 +68,6 @@ from ops.charm import (
     RemoveEvent,
     UpgradeCharmEvent,
 )
-from ops.main import main
 from ops.model import (
     ActiveStatus,
     BlockedStatus,
@@ -179,7 +178,6 @@ class KratosCharm(CharmBase):
             self, relation_name=LOGIN_UI_RELATION_NAME
         )
 
-        self.endpoints_provider = KratosEndpointsProvider(self)
         self.info_provider = KratosInfoProvider(self)
 
         self.metrics_endpoint = MetricsEndpointProvider(
@@ -224,10 +222,6 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.update_status, self._handle_status_update_config)
         self.framework.observe(self.on.remove, self._on_remove)
-        # TODO: Remove once all charms use kratos-info instead of kratos-endpoints-info
-        self.framework.observe(
-            self.endpoints_provider.on.ready, self._update_kratos_endpoints_relation_data
-        )
         self.framework.observe(self.info_provider.on.ready, self._update_kratos_info_relation_data)
         self.framework.observe(
             self.on[HYDRA_RELATION_NAME].relation_changed, self._on_config_changed
@@ -946,12 +940,6 @@ class KratosCharm(CharmBase):
             mfa_enabled,
         )
 
-    def _update_kratos_endpoints_relation_data(self, event: RelationEvent) -> None:
-        logger.info("Sending endpoints info")
-
-        (admin_endpoint, public_endpoint) = self._kratos_endpoints
-        self.endpoints_provider.send_endpoint_relation_data(admin_endpoint, public_endpoint)
-
     def _patch_statefulset(self) -> None:
         if not self.unit.is_leader():
             return
@@ -1050,7 +1038,6 @@ class KratosCharm(CharmBase):
             logger.info("This app's admin ingress URL: %s", event.url)
 
         self._handle_status_update_config(event)
-        self._update_kratos_endpoints_relation_data(event)
         self._update_kratos_info_relation_data(event)
 
     def _on_public_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
@@ -1058,7 +1045,6 @@ class KratosCharm(CharmBase):
             logger.info("This app's public ingress URL: %s", event.url)
 
         self._handle_status_update_config(event)
-        self._update_kratos_endpoints_relation_data(event)
         self._update_kratos_info_relation_data(event)
 
     def _on_ingress_revoked(self, event: IngressPerAppRevokedEvent) -> None:
@@ -1066,7 +1052,6 @@ class KratosCharm(CharmBase):
             logger.info("This app no longer has ingress")
 
         self._handle_status_update_config(event)
-        self._update_kratos_endpoints_relation_data(event)
         self._update_kratos_info_relation_data(event)
 
     def _on_client_config_changed(self, event: ClientConfigChangedEvent) -> None:
@@ -1351,7 +1336,6 @@ class KratosCharm(CharmBase):
         # and config-change
         if self.internal_ingress.is_ready():
             self.internal_ingress.submit_to_traefik(self._internal_ingress_config)
-            self._update_kratos_endpoints_relation_data(event)
             self._update_kratos_info_relation_data(event)
 
 
