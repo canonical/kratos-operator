@@ -40,6 +40,7 @@ Class SomeCharm(CharmBase):
 """
 
 import logging
+from os.path import join
 from typing import Dict, Optional
 
 from ops.charm import CharmBase, RelationCreatedEvent
@@ -53,7 +54,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 3
 
 RELATION_NAME = "kratos-info"
 INTERFACE_NAME = "kratos_info"
@@ -91,6 +92,7 @@ class KratosInfoProvider(Object):
         self,
         admin_endpoint: str,
         public_endpoint: str,
+        external_url: str,
         providers_configmap_name: str,
         schemas_configmap_name: str,
         configmaps_namespace: str,
@@ -100,11 +102,13 @@ class KratosInfoProvider(Object):
         if not self._charm.unit.is_leader():
             return
 
+        external_url = external_url if external_url.endswith("/") else external_url + "/"
+
         relations = self.model.relations[self._relation_name]
         info_databag = {
             "admin_endpoint": admin_endpoint,
             "public_endpoint": public_endpoint,
-            "login_browser_endpoint": f"{public_endpoint}/self-service/login/browser",
+            "login_browser_endpoint": join(external_url, "self-service/login/browser"),
             "sessions_endpoint": f"{public_endpoint}/sessions/whoami",
             "providers_configmap_name": providers_configmap_name,
             "schemas_configmap_name": schemas_configmap_name,
