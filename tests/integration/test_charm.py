@@ -89,12 +89,14 @@ async def test_ingress_relation(ops_test: OpsTest) -> None:
     await ops_test.model.deploy(
         TRAEFIK_CHARM,
         application_name=TRAEFIK_PUBLIC_APP,
+        trust=True,
         channel="latest/edge",
         config={"external_hostname": "some_hostname"},
     )
     await ops_test.model.deploy(
         TRAEFIK_CHARM,
         application_name=TRAEFIK_ADMIN_APP,
+        trust=True,
         channel="latest/edge",
         config={"external_hostname": "some_hostname"},
     )
