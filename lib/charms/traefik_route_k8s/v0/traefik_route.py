@@ -2,75 +2,16 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-r"""# Interface Library for traefik_route.
+r"""# [DEPRECATED!] Interface Library for traefik_route.
 
-This library wraps relation endpoints for traefik_route. The requirer of this
-relation is the traefik-route-k8s charm, or any charm capable of providing
-Traefik configuration files. The provider is the traefik-k8s charm, or another
-charm willing to consume Traefik configuration files.
+This is a DEPRECATED version of the traefik_route interface library.
 
-## Getting Started
+It was dropped and no longer maintained under `traefik-route-k8s-operator`, which will soon be archived.
 
-To get started using the library, you just need to fetch the library using `charmcraft`.
+traefik_route v0 is now maintained under `traefik-k8s-operator`.
 
-```shell
-cd some-charm
-charmcraft fetch-lib charms.traefik_route_k8s.v0.traefik_route
-```
+Please fetch the new library with `charmcraft fetch-lib charms.traefik_k8s.v0.traefik_route`.
 
-To use the library from the provider side (Traefik):
-
-```yaml
-requires:
-    traefik_route:
-        interface: traefik_route
-        limit: 1
-```
-
-```python
-from charms.traefik_route_k8s.v0.traefik_route import TraefikRouteProvider
-
-class TraefikCharm(CharmBase):
-  def __init__(self, *args):
-    # ...
-    self.traefik_route = TraefikRouteProvider(self)
-
-    self.framework.observe(
-        self.traefik_route.on.ready, self._handle_traefik_route_ready
-    )
-
-    def _handle_traefik_route_ready(self, event):
-        config: str = self.traefik_route.get_config(event.relation)  # yaml
-        # use config to configure Traefik
-```
-
-To use the library from the requirer side (TraefikRoute):
-
-```yaml
-requires:
-    traefik-route:
-        interface: traefik_route
-        limit: 1
-        optional: false
-```
-
-```python
-# ...
-from charms.traefik_route_k8s.v0.traefik_route import TraefikRouteRequirer
-
-class TraefikRouteCharm(CharmBase):
-  def __init__(self, *args):
-    # ...
-    traefik_route = TraefikRouteRequirer(
-        self, self.model.relations.get("traefik-route"),
-        "traefik-route"
-    )
-    if traefik_route.is_ready():
-        traefik_route.submit_to_traefik(
-            config={'my': {'traefik': 'configuration'}}
-        )
-
-```
 """
 import logging
 from typing import Optional
@@ -88,7 +29,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 9
+LIBPATCH = 11
 
 log = logging.getLogger(__name__)
 
@@ -157,6 +98,12 @@ class TraefikRouteProvider(Object):
             external_host: The external host.
             scheme: The scheme.
         """
+        log.warning(
+            "The ``traefik_route v0`` library is DEPRECATED "
+            "and no longer maintained under ``traefik-route-k8s-operator``. "
+            "``traefik_route v0`` is now maintained under ``traefik-k8s-operator``. "
+            "Please fetch the new library with ``charmcraft fetch-lib charms.traefik_k8s.v0.traefik_route``."
+        )
         super().__init__(charm, relation_name)
         self._stored.set_default(external_host=None, scheme=None)
 
@@ -243,21 +190,34 @@ class TraefikRouteProvider(Object):
         self._stored.external_host = external_host
         self._stored.scheme = scheme
 
-    @staticmethod
-    def is_ready(relation: Relation) -> bool:
+    def is_ready(self, relation: Relation) -> bool:
         """Whether TraefikRoute is ready on this relation.
 
         Returns True when the remote app shared the config; False otherwise.
         """
-        assert relation.app is not None  # not currently handled anyway
+        if not relation.app or not relation.data[relation.app]:
+            return False
         return "config" in relation.data[relation.app]
 
-    @staticmethod
-    def get_config(relation: Relation) -> Optional[str]:
-        """Retrieve the config published by the remote application."""
-        # TODO: validate this config
-        assert relation.app is not None  # not currently handled anyway
+    def get_config(self, relation: Relation) -> Optional[str]:
+        """Renamed to ``get_dynamic_config``."""
+        log.warning(
+            "``TraefikRouteProvider.get_config`` is deprecated. "
+            "Use ``TraefikRouteProvider.get_dynamic_config`` instead"
+        )
+        return self.get_dynamic_config(relation)
+
+    def get_dynamic_config(self, relation: Relation) -> Optional[str]:
+        """Retrieve the dynamic config published by the remote application."""
+        if not self.is_ready(relation):
+            return None
         return relation.data[relation.app].get("config")
+
+    def get_static_config(self, relation: Relation) -> Optional[str]:
+        """Retrieve the static config published by the remote application."""
+        if not self.is_ready(relation):
+            return None
+        return relation.data[relation.app].get("static")
 
 
 class TraefikRouteRequirer(Object):
@@ -266,6 +226,7 @@ class TraefikRouteRequirer(Object):
     The traefik_route requirer will publish to the application databag an object like:
     {
         'config': <Traefik_config>
+        'static': <Traefik_config>  # optional
     }
 
     NB: TraefikRouteRequirer does no validation; it assumes that the
@@ -278,6 +239,12 @@ class TraefikRouteRequirer(Object):
     _stored = StoredState()
 
     def __init__(self, charm: CharmBase, relation: Relation, relation_name: str = "traefik-route"):
+        log.warning(
+            "The ``traefik_route v0`` library is DEPRECATED "
+            "and no longer maintained under ``traefik-route-k8s-operator``. "
+            "``traefik_route v0`` is now maintained under ``traefik-k8s-operator``. "
+            "Please fetch the new library with ``charmcraft fetch-lib charms.traefik_k8s.v0.traefik_route``."
+        )
         super(TraefikRouteRequirer, self).__init__(charm, relation_name)
         self._stored.set_default(external_host=None, scheme=None)
 
@@ -344,11 +311,15 @@ class TraefikRouteRequirer(Object):
         """Is the TraefikRouteRequirer ready to submit data to Traefik?"""
         return self._relation is not None
 
-    def submit_to_traefik(self, config):
+    def submit_to_traefik(self, config: dict, static: Optional[dict] = None):
         """Relay an ingress configuration data structure to traefik.
 
-        This will publish to TraefikRoute's traefik-route relation databag
-        the config traefik needs to route the units behind this charm.
+        This will publish to the traefik-route relation databag
+        a chunk of Traefik dynamic config that the traefik charm on the other end can pick
+        up and apply.
+
+        Use ``static`` if you need to update traefik's **static** configuration.
+        Note that this will force traefik to restart to comply.
         """
         if not self._charm.unit.is_leader():
             raise UnauthorizedError()
@@ -357,3 +328,6 @@ class TraefikRouteRequirer(Object):
 
         # Traefik thrives on yaml, feels pointless to talk json to Route
         app_databag["config"] = yaml.safe_dump(config)
+
+        if static:
+            app_databag["static"] = yaml.safe_dump(static)
