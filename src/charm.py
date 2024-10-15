@@ -97,6 +97,7 @@ from constants import (
     INTERNAL_INGRESS_RELATION_NAME,
     KRATOS_ADMIN_PORT,
     KRATOS_CONFIG_MAP_NAME,
+    KRATOS_INFO_RELATION_NAME,
     KRATOS_PUBLIC_PORT,
     KRATOS_SERVICE_COMMAND,
     LOG_DIR,
@@ -851,6 +852,19 @@ class KratosCharm(CharmBase):
             event.defer()
             return
 
+        if self.model.relations[KRATOS_INFO_RELATION_NAME] and self.public_ingress.relation is None:
+            self.unit.status = BlockedStatus(
+                "Cannot send integration data without an external hostname. Please "
+                "provide an ingress relation."
+            )
+            return
+        elif self.model.relations[KRATOS_INFO_RELATION_NAME] and self._public_url is None:
+            self.unit.status = WaitingStatus(
+                "Waiting for ingress"
+            )
+            event.defer()
+            return
+
         self._cleanup_peer_data()
         self.cert_transfer.push_ca_certs()
         self._update_config()
@@ -931,9 +945,13 @@ class KratosCharm(CharmBase):
         configmaps_namespace = self.model.name
         mfa_enabled = self.config.get("enforce_mfa")
 
+        if self._public_url is None:
+            return
+
         self.info_provider.send_info_relation_data(
             admin_endpoint,
             public_endpoint,
+            self._public_url,
             providers_configmap_name,
             schemas_configmap_name,
             configmaps_namespace,

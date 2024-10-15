@@ -5,6 +5,8 @@
 
 from pathlib import Path
 
+from charms.kratos.v0.kratos_info import RELATION_NAME
+
 # Charm constants
 WORKLOAD_CONTAINER_NAME = "kratos"
 EMAIL_TEMPLATE_FILE_PATH = Path("/etc/config/templates") / "recovery-body.html.gotmpl"
@@ -31,6 +33,7 @@ CERTIFICATE_TRANSFER_RELATION_NAME = "receive-ca-cert"
 DB_RELATION_NAME = "pg-database"
 HYDRA_RELATION_NAME = "hydra-endpoint-info"
 LOGIN_UI_RELATION_NAME = "ui-endpoint-info"
+KRATOS_INFO_RELATION_NAME = RELATION_NAME
 PROMETHEUS_SCRAPE_RELATION_NAME = "metrics-endpoint"
 LOKI_PUSH_API_RELATION_NAME = "logging"
 GRAFANA_DASHBOARD_RELATION_NAME = "grafana-dashboard"

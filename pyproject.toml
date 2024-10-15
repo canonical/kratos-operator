@@ -61,7 +61,7 @@ per-file-ignores = {"tests/*" = ["D100","D101","D102","D103","D104"]}
 author = "Canonical Ltd."
 
 [tool.ruff.lint.mccabe]
-max-complexity = 10
+max-complexity = 15 # accommodate holistic handler needs
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

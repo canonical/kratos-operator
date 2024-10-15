@@ -2425,6 +2425,8 @@ def test_on_pebble_ready_with_bad_config(harness: Harness) -> None:
 
 def test_on_config_changed_with_invalid_log_level(harness: Harness) -> None:
     setup_postgres_relation(harness)
+    setup_ingress_relation(harness, "public")
+
     harness.update_config({"log_level": "invalid_config"})
 
     assert isinstance(harness.model.unit.status, BlockedStatus)
@@ -2466,10 +2468,12 @@ def test_kratos_info_ready_event_emitted_when_relation_created(harness: Harness)
 def test_kratos_info_updated_on_relation_ready(harness: Harness) -> None:
     harness.charm.info_provider.send_info_relation_data = mocked_handle = Mock(return_value=None)
     _ = setup_kratos_info_relation(harness)
+    setup_ingress_relation(harness, "public")
 
     mocked_handle.assert_called_with(
         "http://kratos.kratos-model.svc.cluster.local:4434",
         "http://kratos.kratos-model.svc.cluster.local:4433",
+        "https://public/kratos-model-kratos",
         "providers",
         "identity-schemas",
         "kratos-model",
@@ -2517,6 +2521,7 @@ def test_on_pebble_ready_correct_plan_with_proxy_flags_when_unset(
 def test_kratos_info_updated_on_internal_ingress_relation_joined(harness: Harness) -> None:
     kratos_info_relation_id = setup_kratos_info_relation(harness)
 
+    setup_ingress_relation(harness, "public")
     _ = setup_internal_ingress_relation(harness, "admin")
 
     ingress_url = f"{harness.charm.internal_ingress.scheme}://{harness.charm.internal_ingress.external_host}/{harness.model.name}-{harness.model.app.name}"
@@ -2530,6 +2535,7 @@ def test_kratos_info_updated_on_internal_ingress_relation_joined(harness: Harnes
 def test_kratos_info_updated_on_internal_ingress_relation_changed(harness: Harness) -> None:
     kratos_info_relation_id = setup_kratos_info_relation(harness)
 
+    setup_ingress_relation(harness, "public")
     relation_id = setup_internal_ingress_relation(harness, "admin")
 
     url_change = "new-test.staging.canonical.com"
@@ -2550,6 +2556,7 @@ def test_kratos_info_updated_on_internal_ingress_relation_changed(harness: Harne
 def test_kratos_info_updated_on_internal_ingress_relation_broken(harness: Harness) -> None:
     kratos_info_relation_id = setup_kratos_info_relation(harness)
 
+    setup_ingress_relation(harness, "public")
     relation_id = setup_internal_ingress_relation(harness, "admin")
 
     harness.remove_relation(relation_id)
