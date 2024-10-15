@@ -852,16 +852,17 @@ class KratosCharm(CharmBase):
             event.defer()
             return
 
-        if self.model.relations[KRATOS_INFO_RELATION_NAME] and self.public_ingress.relation is None:
+        if (
+            self.model.relations[KRATOS_INFO_RELATION_NAME]
+            and self.public_ingress.relation is None
+        ):
             self.unit.status = BlockedStatus(
                 "Cannot send integration data without an external hostname. Please "
                 "provide an ingress relation."
             )
             return
         elif self.model.relations[KRATOS_INFO_RELATION_NAME] and self._public_url is None:
-            self.unit.status = WaitingStatus(
-                "Waiting for ingress"
-            )
+            self.unit.status = WaitingStatus("Waiting for ingress")
             event.defer()
             return
 
