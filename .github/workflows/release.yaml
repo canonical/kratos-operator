@@ -16,7 +16,7 @@ jobs:
     name: Promote charm
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@eef61447b9ff4aafe5dcd4e0bbf5d482be7e7871 # v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Release charm to channel
         uses: canonical/charming-actions/release-charm@934193396735701141a1decc3613818e412da606 # 2.6.3
         with:
