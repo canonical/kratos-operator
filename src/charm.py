@@ -1174,7 +1174,7 @@ class KratosCharm(CharmBase):
             return
 
         event.log(f"Successfully deleted the identity: {identity_id}.")
-        event.set_results({"idenity-id": identity_id})
+        event.set_results({"identity-id": identity_id})
 
     def _on_reset_password_action(self, event: ActionEvent) -> None:
         if not self._kratos_service_is_running:
