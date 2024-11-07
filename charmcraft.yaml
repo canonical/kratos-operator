@@ -11,17 +11,14 @@ links:
   documentation: https://discourse.charmhub.io/t/kratos-docs-index/12136
   source: https://github.com/canonical/kratos-operator
   issues: https://github.com/canonical/kratos-operator/issues
-
 containers:
   kratos:
     resource: oci-image
-
 resources:
   oci-image:
     type: oci-image
     description: Kratos oci-image
     upstream-source: ghcr.io/canonical/kratos:1.1.0
-
 requires:
   pg-database:
     interface: postgresql_client
@@ -60,11 +57,9 @@ requires:
       Receive a CA cert.
       This relation can be used with a local CA to obtain the CA cert that was used to sign proxied
       endpoints.
-
 peers:
   kratos-peers:
     interface: kratos-peers
-
 provides:
   kratos-info:
     interface: kratos_info
@@ -78,7 +73,6 @@ provides:
     description: |
       Forwards the built-in grafana dashboard(s) for monitoring kratos.
     interface: grafana_dashboard
-
 config:
   options:
     http_proxy:
@@ -94,8 +88,7 @@ config:
       type: string
       default: ''
     dev:
-      description:
-        Run Kratos on dev mode, it is needed if HTTPS is not set up. This should only be used for development purposes.
+      description: Run Kratos on dev mode, it is needed if HTTPS is not set up. This should only be used for development purposes.
       type: boolean
       default: False
     enable_local_idp:
@@ -164,7 +157,6 @@ config:
         Available values are: panic, fatal, error, warn, info, debug, and trace.
       type: string
       default: "info"
-
 actions:
   get-identity:
     description: Get a user using either the identity ID or the user email.
@@ -256,14 +248,10 @@ actions:
         type: number
         default: 120
 
-bases:
-  - build-on:
-      - name: "ubuntu"
-        channel: "22.04"
-    run-on:
-      - name: "ubuntu"
-        channel: "22.04"
-
+########################### build ###########################
+base: ubuntu@22.04
+platforms:
+  amd64:
 parts:
   schemas:
     plugin: dump
