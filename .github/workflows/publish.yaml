@@ -59,3 +59,4 @@ jobs:
           credentials: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
           channel: ${{ steps.parse-inputs.outputs.destination_channel }}
+          destructive-mode: false
