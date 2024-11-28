@@ -39,7 +39,7 @@ from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ExternalIdpRequirer,
     Provider,
 )
-from charms.loki_k8s.v0.loki_push_api import LogProxyConsumer, PromtailDigestError
+from charms.loki_k8s.v1.loki_push_api import LogForwarder
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.smtp_integrator.v0.smtp import SmtpDataAvailableEvent, SmtpRequires
@@ -100,9 +100,7 @@ from constants import (
     KRATOS_INFO_RELATION_NAME,
     KRATOS_PUBLIC_PORT,
     KRATOS_SERVICE_COMMAND,
-    LOG_DIR,
     LOG_LEVELS,
-    LOG_PATH,
     LOGIN_UI_RELATION_NAME,
     LOKI_PUSH_API_RELATION_NAME,
     MAPPERS_LOCAL_DIR_PATH,
@@ -196,12 +194,7 @@ class KratosCharm(CharmBase):
             ],
         )
 
-        self.loki_consumer = LogProxyConsumer(
-            self,
-            log_files=[str(LOG_PATH)],
-            relation_name=LOKI_PUSH_API_RELATION_NAME,
-            container_name=WORKLOAD_CONTAINER_NAME,
-        )
+        self._log_forwarder = LogForwarder(self, relation_name=LOKI_PUSH_API_RELATION_NAME)
         self.tracing = TracingEndpointRequirer(
             self, relation_name=TRACING_RELATION_NAME, protocols=["otlp_http"]
         )
@@ -261,11 +254,6 @@ class KratosCharm(CharmBase):
             self.on.create_admin_account_action, self._on_create_admin_account_action
         )
         self.framework.observe(self.on.run_migration_action, self._on_run_migration_action)
-
-        self.framework.observe(
-            self.loki_consumer.on.promtail_digest_error,
-            self._promtail_error,
-        )
 
         self.framework.observe(self.tracing.on.endpoint_changed, self._on_config_changed)
         self.framework.observe(self.tracing.on.endpoint_removed, self._on_config_changed)
@@ -327,11 +315,7 @@ class KratosCharm(CharmBase):
             "override": "replace",
             "summary": "Kratos Operator layer",
             "startup": "disabled",
-            "command": '/bin/sh -c "{} {} 2>&1 | tee -a {}"'.format(
-                KRATOS_SERVICE_COMMAND,
-                self._kratos_service_params,
-                str(LOG_PATH),
-            ),
+            "command": f"{KRATOS_SERVICE_COMMAND} {self._kratos_service_params}",
             "environment": {
                 "DSN": self._dsn,
                 "SERVE_PUBLIC_BASE_URL": self._public_url,
@@ -911,9 +895,6 @@ class KratosCharm(CharmBase):
             event.defer()
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
-        if not self._container.isdir(str(LOG_DIR)):
-            self._container.make_dir(path=str(LOG_DIR), make_parents=True)
-            logger.info(f"Created directory {LOG_DIR}")
 
         self._set_version()
         self._handle_status_update_config(event)
@@ -1328,9 +1309,6 @@ class KratosCharm(CharmBase):
             return
         self._set_peer_data(self._migration_peer_data_key, self.kratos.get_version())
         event.log("Updated migration version in peer data.")
-
-    def _promtail_error(self, event: PromtailDigestError) -> None:
-        logger.error(event.message)
 
     def _configure_internal_ingress(self, event: HookEvent) -> None:
         """Method setting up the internal networking.
