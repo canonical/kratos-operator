@@ -303,7 +303,7 @@ def test_on_pebble_ready_correct_plan(
                 "override": "replace",
                 "summary": "Kratos Operator layer",
                 "startup": "disabled",
-                "command": '/bin/sh -c "kratos serve all --config /etc/config/kratos/kratos.yaml 2>&1 | tee -a /var/log/kratos.log"',
+                "command": "kratos serve all --config /etc/config/kratos/kratos.yaml",
             }
         },
     }
@@ -345,7 +345,7 @@ def test_on_pebble_ready_correct_plan_with_dev_flag(
                 "override": "replace",
                 "summary": "Kratos Operator layer",
                 "startup": "disabled",
-                "command": '/bin/sh -c "kratos serve all --config /etc/config/kratos/kratos.yaml --dev 2>&1 | tee -a /var/log/kratos.log"',
+                "command": "kratos serve all --config /etc/config/kratos/kratos.yaml --dev",
             }
         },
     }
@@ -2431,13 +2431,6 @@ def test_on_config_changed_with_invalid_log_level(harness: Harness) -> None:
 
     assert isinstance(harness.model.unit.status, BlockedStatus)
     assert "Invalid configuration value for log_level" in harness.charm.unit.status.message
-
-
-def test_on_pebble_ready_make_dir_called(harness: Harness) -> None:
-    container = harness.model.unit.get_container(CONTAINER_NAME)
-    harness.charm.on.kratos_pebble_ready.emit(container)
-
-    assert container.isdir("/var/log")
 
 
 def test_layer_updated_with_tracing_endpoint_info(harness: Harness) -> None:
