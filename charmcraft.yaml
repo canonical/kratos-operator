@@ -18,7 +18,7 @@ resources:
   oci-image:
     type: oci-image
     description: Kratos oci-image
-    upstream-source: ghcr.io/canonical/kratos:1.1.0
+    upstream-source: ghcr.io/canonical/kratos:1.3.1
 requires:
   pg-database:
     interface: postgresql_client
