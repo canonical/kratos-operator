@@ -89,7 +89,7 @@ async def test_build_and_deploy(ops_test: OpsTest) -> None:
         status="active",
         raise_on_blocked=False,
         raise_on_error=False,
-        timeout=5 * 60,
+        timeout=10 * 60,
     )
 
 
@@ -145,8 +145,6 @@ async def test_create_admin_account(ops_test: OpsTest, password_secret: Tuple[st
     )
 
     res = await action.wait()
-    print(res)
-    print(res.results)
 
     assert "identity-id" in res.results
 

@@ -32,6 +32,7 @@ jobs:
           provider: microk8s
           channel: 1.28-strict/stable
           juju-channel: 3.4/stable
+          microk8s-addons: "hostpath-storage metallb:10.64.140.43-10.64.140.49"
 
       - name: Run integration tests
         # set a predictable model name so it can be consumed by charm-logdump-action

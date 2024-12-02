@@ -45,11 +45,10 @@ IDENTITY_SCHEMA = {
 async def password_secret(ops_test: OpsTest) -> Tuple[str, str]:
     password = "secret"
     secrets = await ops_test.model.list_secrets({"label": "password"})
-    if not secrets:
+    if secrets:
+        secret_id = secrets[0].uri
+    else:
         secret_id = await ops_test.model.add_secret("password", [f"password={password}"])
-        return secret_id, password
-
-    secret_id = secrets[0].uri
     await ops_test.model.grant_secret("password", KRATOS_APP)
 
     return secret_id, password
