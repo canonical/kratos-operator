@@ -25,7 +25,6 @@ PROVIDERS_CONFIGMAP_FILE_NAME = "idps.yaml"
 # Integration constants
 PEER_RELATION_NAME = "kratos-peers"
 PUBLIC_INGRESS_INTEGRATION_NAME = "public-ingress"
-INTERNAL_INGRESS_RELATION_NAME = "internal-ingress"
 CERTIFICATE_TRANSFER_RELATION_NAME = "receive-ca-cert"
 DB_RELATION_NAME = "pg-database"
 HYDRA_RELATION_NAME = "hydra-endpoint-info"

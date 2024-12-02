@@ -9,9 +9,6 @@ from asyncio import sleep
 from typing import Awaitable, Callable, Optional, Tuple
 
 import pytest
-from httpx import AsyncClient, Response
-from pytest_operator.plugin import OpsTest
-
 from conftest import (
     ADMIN_MAIL,
     CA_APP,
@@ -24,6 +21,8 @@ from conftest import (
     PUBLIC_INGRESS_APP,
     PUBLIC_INGRESS_DOMAIN,
 )
+from httpx import AsyncClient, Response
+from pytest_operator.plugin import OpsTest
 
 logger = logging.getLogger(__name__)
 
