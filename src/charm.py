@@ -357,15 +357,6 @@ class KratosCharm(CharmBase):
         return normalise_url(url) if url else None
 
     @property
-    def _internal_url(self) -> Optional[str]:
-        host = self.internal_ingress.external_host
-        return (
-            f"{self.internal_ingress.scheme}://{host}/{self.model.name}-{self.model.app.name}"
-            if host
-            else None
-        )
-
-    @property
     def _internal_ingress_config(self) -> dict:
         """Build a raw ingress configuration for Traefik."""
         # The path prefix is the same as in ingress per app
@@ -442,19 +433,6 @@ class KratosCharm(CharmBase):
         }
 
         return {"http": {"routers": routers, "services": services, "middlewares": middlewares}}
-
-    @property
-    def _kratos_endpoints(self) -> Tuple[str, str]:
-        admin_endpoint = (
-            self._internal_url
-            or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
-        )
-        public_endpoint = (
-            self._internal_url
-            or f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
-        )
-
-        return admin_endpoint, public_endpoint
 
     @property
     def _dsn(self) -> Optional[str]:
@@ -921,7 +899,12 @@ class KratosCharm(CharmBase):
     def _update_kratos_info_relation_data(self, event: RelationEvent) -> None:
         logger.info("Sending kratos info")
 
-        (admin_endpoint, public_endpoint) = self._kratos_endpoints
+        admin_endpoint = (
+            f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
+        )
+        public_endpoint = (
+            f"http://{self.app.name}.{self.model.name}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
+        )
         providers_configmap_name = self.providers_configmap.name
         schemas_configmap_name = self.schemas_configmap.name
         configmaps_namespace = self.model.name
