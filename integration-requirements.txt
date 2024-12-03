@@ -1,5 +1,5 @@
-pytest
-juju
-pytest-operator==0.38.0
-requests
 -r requirements.txt
+httpx
+juju
+pytest
+pytest-operator==0.38.0
