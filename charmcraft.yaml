@@ -51,6 +51,11 @@ requires:
       Receive a CA cert.
       This relation can be used with a local CA to obtain the CA cert that was used to sign proxied
       endpoints.
+  service-mesh:
+    limit: 1
+    interface: service_mesh
+  require-cmr-mesh:
+    interface: cross_model_mesh
 peers:
   kratos-peers:
     interface: kratos-peers
@@ -67,6 +72,8 @@ provides:
     description: |
       Forwards the built-in grafana dashboard(s) for monitoring kratos.
     interface: grafana_dashboard
+  provide-cmr-mesh:
+    interface: cross_model_mesh
 config:
   options:
     http_proxy:
