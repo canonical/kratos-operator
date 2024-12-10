@@ -112,7 +112,7 @@ async def test_public_ingress_integration(
         headers={"Host": PUBLIC_INGRESS_DOMAIN},
     )
     assert resp.status_code == http.HTTPStatus.MOVED_PERMANENTLY, (
-        f"Expected HTTP 301 for {http_endpoint}, got {resp.status_code}."
+        f"Expected HTTP {http.HTTPStatus.MOVED_PERMANENTLY} for {http_endpoint}, got {resp.status_code}."
     )
 
     # Test HTTPS endpoint
@@ -123,7 +123,7 @@ async def test_public_ingress_integration(
         extensions={"sni_hostname": PUBLIC_INGRESS_DOMAIN},
     )
     assert resp.status_code == http.HTTPStatus.OK, (
-        f"Expected HTTP 200 for {https_endpoint}, got {resp.status_code}."
+        f"Expected HTTP {http.HTTPStatus.OK} for {https_endpoint}, got {resp.status_code}."
     )
 
 
