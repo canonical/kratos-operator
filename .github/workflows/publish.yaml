@@ -55,7 +55,7 @@ jobs:
 
       # Required to charmcraft pack in non-destructive mode
       - name: Setup lxd
-        uses: canonical/setup-lxd@v0.1.2
+        uses: canonical/setup-lxd@54a5806e490d92e207b57183cf111ed54bbdeff4 # v0.1.2
         with:
            channel: latest/stable
 
