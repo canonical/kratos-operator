@@ -15,6 +15,7 @@ from secrets import token_hex
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
+import ops
 import requests
 from charms.data_platform_libs.v0.data_interfaces import (
     DatabaseCreatedEvent,
@@ -32,6 +33,7 @@ from charms.identity_platform_login_ui_operator.v0.login_ui_endpoints import (
     LoginUIEndpointsRequirer,
     LoginUITooManyRelatedAppsError,
 )
+from charms.istio_beacon_k8s.v0.service_mesh import ServiceMeshConsumer
 from charms.kratos.v0.kratos_info import KratosInfoProvider
 from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ClientConfigChangedEvent,
@@ -52,7 +54,6 @@ from charms.traefik_k8s.v2.ingress import (
 from jinja2 import Template
 from lightkube import Client
 from lightkube.resources.apps_v1 import StatefulSet
-from ops import main
 from ops.charm import (
     ActionEvent,
     CharmBase,
@@ -196,6 +197,8 @@ class KratosCharm(CharmBase):
             WORKLOAD_CONTAINER_NAME,
             self._handle_status_update_config,
         )
+
+        self.service_mesh = ServiceMeshConsumer(self)
 
         self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.upgrade_charm, self._on_upgrade)
@@ -1189,4 +1192,4 @@ class KratosCharm(CharmBase):
 
 
 if __name__ == "__main__":
-    main(KratosCharm)
+    ops.main(KratosCharm)
