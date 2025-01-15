@@ -8,7 +8,7 @@ identity:
         - id: {{ schema_id }}
           url: '{{ identity_schema }}'
         {%- endfor %}
-{%- if enable_local_idp and enforce_mfa %}
+{%- if enable_oidc_webauthn_sequencing or (enable_local_idp and enforce_mfa) %}
 session:
   whoami:
     required_aal: highest_available
@@ -37,7 +37,7 @@ selfservice:
             ui_url: {{ settings_ui_url }}
             required_aal: highest_available
         {%- endif %}
-        {%- if recovery_ui_url %}
+        {%- if recovery_ui_url and enable_local_idp %}
         recovery:
             enabled: True
             ui_url: {{ recovery_ui_url }}
@@ -57,7 +57,7 @@ selfservice:
     {%- endif %}
     {%- if oidc_providers or recovery_ui_url or enable_local_idp and login_ui_url %}
     methods:
-        {%- if recovery_ui_url %}
+        {%- if recovery_ui_url and enable_local_idp %}
         code:
             enabled: True
         {%- endif %}
@@ -75,20 +75,26 @@ selfservice:
             enabled: True
             config:
                 issuer: Identity Platform
+        {%- endif %}
+        {%- endif %}
+        {%- if enable_oidc_webauthn_sequencing or (enforce_mfa and enable_local_idp) %}
         lookup_secret:
             enabled: True
         {%- endif %}
-        {%- if enable_passwordless_login_method %}
+        {%- if enable_passwordless_login_method or enable_oidc_webauthn_sequencing %}
         webauthn:
             enabled: True
             config:
+                {%- if enable_passwordless_login_method %}
                 passwordless: True
+                {%- else %}
+                passwordless: False
+                {%- endif %}
                 rp:
                     id: {{ domain }}
                     origins:
                         - {{ origin }}
                     display_name: Identity Platform
-        {%- endif %}
         {%- endif %}
         {%- if oidc_providers %}
         oidc:

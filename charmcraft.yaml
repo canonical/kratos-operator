@@ -106,6 +106,13 @@ config:
         Enable passwordless authentication via webauthn. Requires `enable_local_idp=True`.
       type: boolean
       default: False
+    enable_oidc_webauthn_sequencing:
+      description: |
+        Enforce setting up a WebAuthn key (e.g. with YubiKey or Google Password Manager on Android)
+        after signing in with an external identity provider. Requires `enable_passwordless_login_method=False`.
+        WARNING: Do not enable this option unless you are sure that this feature applies to your deployment.
+      type: boolean
+      default: False
     identity_schemas:
       description: |
         A mapping of schema_id to identity schemas. For example:
@@ -236,7 +243,7 @@ actions:
         description: The user's email
         type: string
       mfa-type:
-        description: The type of credentials to be removed, one of `totp` or `lookup_secret`.
+        description: The type of credentials to be removed, one of `totp`, `lookup_secret` or `webauthn`.
         type: string
   run-migration:
     description: |
