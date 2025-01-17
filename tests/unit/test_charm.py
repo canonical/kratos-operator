@@ -1713,24 +1713,8 @@ def test_on_config_changed_when_local_idp_disabled(
                     "ui_url": login_databag["settings_url"],
                     "required_aal": "highest_available",
                 },
-                "recovery": {
-                    "enabled": True,
-                    "ui_url": login_databag["recovery_url"],
-                    "use": "code",
-                    "after": {
-                        "default_browser_return_url": login_databag["login_url"],
-                        "hooks": [
-                            {
-                                "hook": "revoke_active_sessions",
-                            },
-                        ],
-                    },
-                },
             },
             "methods": {
-                "code": {
-                    "enabled": True,
-                },
                 "password": {
                     "enabled": False,
                 },
@@ -1846,6 +1830,144 @@ def test_on_config_changed_when_webauthn_enabled(
                     "enabled": True,
                     "config": {
                         "passwordless": True,
+                        "rp": {
+                            "id": "public",
+                            "origins": ["https://public"],
+                            "display_name": "Identity Platform",
+                        },
+                    },
+                },
+            },
+        },
+        "courier": {
+            "smtp": {"connection_uri": "smtps://test:test@mailslurper:1025/?skip_ssl_verify=true"}
+        },
+        "serve": {
+            "public": {
+                "cors": {
+                    "enabled": True,
+                },
+            },
+        },
+        "oauth2_provider": {
+            "url": "http://hydra-admin-url:80/testing-hydra",
+        },
+    }
+
+    configmap = mocked_kratos_configmap.update.call_args_list[-1][0][0]
+    config = configmap["kratos.yaml"]
+    validate_config(
+        expected_config, yaml.safe_load(config), validate_schemas=False, validate_mappers=False
+    )
+
+
+def test_on_config_changed_when_oidc_webauthn_sequencing_and_passwordless_login_enabled(
+    harness: Harness,
+    mocked_get_secret: MagicMock,
+    mocked_migration_is_needed: MagicMock,
+) -> None:
+    setup_peer_relation(harness)
+    setup_postgres_relation(harness)
+    setup_ingress_relation(harness, "public")
+
+    harness.update_config({"enable_oidc_webauthn_sequencing": True})
+    harness.update_config({"enable_passwordless_login_method": True})
+
+    assert isinstance(harness.model.unit.status, BlockedStatus)
+    assert (
+        "OIDC-WebAuthn sequencing mode requires `enable_passwordless_login_method=False`. Please change the config."
+        in harness.charm.unit.status.message
+    )
+
+
+def test_on_config_changed_when_oidc_webauthn_sequencing_enabled(
+    harness: Harness, mocked_kratos_configmap: MagicMock, mocked_migration_is_needed: MagicMock
+) -> None:
+    setup_peer_relation(harness)
+    setup_postgres_relation(harness)
+    (_, login_databag) = setup_login_ui_relation(harness)
+    setup_ingress_relation(harness, "public")
+
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.leader_elected.emit()
+    harness.charm.on.kratos_pebble_ready.emit(container)
+    setup_hydra_relation(harness)
+
+    harness.update_config({"enable_oidc_webauthn_sequencing": True})
+
+    expected_config = {
+        "log": {
+            "level": "info",
+            "format": "json",
+        },
+        "identity": {
+            "default_schema_id": "social_user_v0",
+            "schemas": [
+                {"id": "admin_v0", "url": "base64://something"},
+                {
+                    "id": "social_user_v0",
+                    "url": "base64://something",
+                },
+            ],
+        },
+        "session": {
+            "whoami": {
+                "required_aal": "highest_available",
+            },
+        },
+        "selfservice": {
+            "allowed_return_urls": [
+                "https://public/",
+            ],
+            "default_browser_return_url": login_databag["login_url"],
+            "flows": {
+                "error": {
+                    "ui_url": login_databag["error_url"],
+                },
+                "login": {
+                    "ui_url": login_databag["login_url"],
+                },
+                "settings": {
+                    "ui_url": login_databag["settings_url"],
+                    "required_aal": "highest_available",
+                },
+                "recovery": {
+                    "enabled": True,
+                    "ui_url": login_databag["recovery_url"],
+                    "use": "code",
+                    "after": {
+                        "default_browser_return_url": login_databag["login_url"],
+                        "hooks": [
+                            {
+                                "hook": "revoke_active_sessions",
+                            },
+                        ],
+                    },
+                },
+            },
+            "methods": {
+                "code": {
+                    "enabled": True,
+                },
+                "password": {
+                    "enabled": True,
+                    "config": {
+                        "haveibeenpwned_enabled": False,
+                    },
+                },
+                "totp": {
+                    "enabled": True,
+                    "config": {
+                        "issuer": "Identity Platform",
+                    },
+                },
+                "lookup_secret": {
+                    "enabled": True,
+                },
+                "webauthn": {
+                    "enabled": True,
+                    "config": {
+                        "passwordless": False,
                         "rp": {
                             "id": "public",
                             "origins": ["https://public"],
@@ -2182,11 +2304,11 @@ def test_error_on_reset_mfa_action_with_identity_id_when_mfa_type_uncorrect(
     harness.charm._on_reset_identity_mfa_action(event)
 
     event.fail.assert_called_with(
-        f"Unsupported MFA credential type {unsupported_type}, allowed methods are: `totp` and `lookup_secret`"
+        f"Unsupported MFA credential type {unsupported_type}, allowed methods are: `totp`, `lookup_secret` and `webauthn`"
     )
 
 
-@pytest.mark.parametrize("mfa_type", ["totp", "lookup_secret"])
+@pytest.mark.parametrize("mfa_type", ["totp", "lookup_secret", "webauthn"])
 def test_reset_mfa_action_with_identity_id(
     harness: Harness,
     mocked_kratos_service: MagicMock,
@@ -2200,7 +2322,7 @@ def test_reset_mfa_action_with_identity_id(
     assert "Second authentication factor was reset" in action_output.logs
 
 
-@pytest.mark.parametrize("mfa_type", ["totp", "lookup_secret"])
+@pytest.mark.parametrize("mfa_type", ["totp", "lookup_secret", "webauthn"])
 def test_reset_mfa_action_with_email(
     harness: Harness,
     mocked_kratos_service: MagicMock,
@@ -2215,7 +2337,7 @@ def test_reset_mfa_action_with_email(
     assert "Second authentication factor was reset" in action_output.logs
 
 
-@pytest.mark.parametrize("mfa_type", ["totp", "lookup_secret"])
+@pytest.mark.parametrize("mfa_type", ["totp", "lookup_secret", "webauthn"])
 def test_reset_mfa_action_with_identity_id_when_no_credentials(
     harness: Harness,
     mocked_kratos_service: MagicMock,
@@ -2230,7 +2352,7 @@ def test_reset_mfa_action_with_identity_id_when_no_credentials(
     assert f"User has no {mfa_type} credentials" in action_output.logs
 
 
-@pytest.mark.parametrize("mfa_type", ["totp", "lookup_secret"])
+@pytest.mark.parametrize("mfa_type", ["totp", "lookup_secret", "webauthn"])
 def test_reset_mfa_action_with_email_when_no_credentials(
     harness: Harness,
     mocked_kratos_service: MagicMock,
@@ -2471,6 +2593,7 @@ def test_kratos_info_updated_on_relation_ready(harness: Harness) -> None:
         "identity-schemas",
         "kratos-model",
         True,
+        False,
     )
 
 

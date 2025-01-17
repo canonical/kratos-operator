@@ -529,6 +529,7 @@ class KratosCharm(CharmBase):
             enable_local_idp=self.config.get("enable_local_idp"),
             enforce_mfa=self.config.get("enforce_mfa"),
             enable_passwordless_login_method=self.config.get("enable_passwordless_login_method"),
+            enable_oidc_webauthn_sequencing=self.config.get("enable_oidc_webauthn_sequencing"),
             origin=origin,
             domain=parsed_public_url.hostname,
         )
@@ -850,6 +851,13 @@ class KratosCharm(CharmBase):
             event.defer()
             return
 
+        if self.config["enable_oidc_webauthn_sequencing"] and self.config["enable_passwordless_login_method"]:
+            self.unit.status = BlockedStatus(
+                "OIDC-WebAuthn sequencing mode requires `enable_passwordless_login_method=False`. "
+                "Please change the config."
+            )
+            return
+
         self._cleanup_peer_data()
         self.cert_transfer.push_ca_certs()
         self._update_config()
@@ -926,6 +934,7 @@ class KratosCharm(CharmBase):
         schemas_configmap_name = self.schemas_configmap.name
         configmaps_namespace = self.model.name
         mfa_enabled = self.config.get("enforce_mfa")
+        oidc_webauthn_sequencing_enabled = self.config.get("enable_oidc_webauthn_sequencing")
 
         if self._public_url is None:
             return
@@ -938,6 +947,7 @@ class KratosCharm(CharmBase):
             schemas_configmap_name,
             configmaps_namespace,
             mfa_enabled,
+            oidc_webauthn_sequencing_enabled,
         )
 
     def _patch_statefulset(self) -> None:
@@ -1221,10 +1231,10 @@ class KratosCharm(CharmBase):
             event.fail("MFA type must be specified")
             return
 
-        if mfa_type not in ("totp", "lookup_secret"):
+        if mfa_type not in ("totp", "lookup_secret", "webauthn"):
             event.fail(
                 f"Unsupported MFA credential type {mfa_type}, "
-                "allowed methods are: `totp` and `lookup_secret`"
+                "allowed methods are: `totp`, `lookup_secret` and `webauthn`"
             )
             return
 
