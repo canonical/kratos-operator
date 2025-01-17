@@ -1,0 +1,50 @@
+# reusable workflow triggered manually
+name: Deploy via JIMM
+
+on:
+  workflow_call:
+    inputs:
+        model:
+            type: string
+        revision:
+            type: string
+    secrets:
+        CLIENT_ID:
+            required: true
+        CLIENT_SECRET:
+            required: true
+        JIMM_URL:
+          required: true
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: "Set environment to configure provider"
+        # language=bash
+        run: |
+          echo "TF_VAR_client_id=${{ secrets.CLIENT_ID }}" >> $GITHUB_ENV
+          echo "TF_VAR_client_secret=${{ secrets.CLIENT_SECRET }}" >> $GITHUB_ENV
+          echo "TF_VAR_jimm_url=${{ secrets.JIMM_URL }}" >> $GITHUB_ENV
+      - name: Import application into state if present
+        working-directory: ./deployment
+        run: |
+          terraform init
+          terraform import juju_application.application ${{ inputs.model}}:kratos || true
+        env:
+          TF_VAR_model: ${{ inputs.model }}
+          TF_VAR_revision: ${{ inputs.revision }}
+          TF_VAR_application_name: "kratos"
+      - name: Deploy
+        working-directory: ./deployment
+        run: |
+          terraform apply --auto-approve
+        env:
+          TF_VAR_model: ${{ inputs.model }}
+          TF_VAR_revision: ${{ inputs.revision }}
+          TF_VAR_application_name: "kratos"
