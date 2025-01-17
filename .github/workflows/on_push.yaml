@@ -25,3 +25,8 @@ jobs:
     uses: ./.github/workflows/publish.yaml
     secrets:
       CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
+      JIMM_DEV_CLIENT_ID: ${{ secrets.JIMM_DEV_CLIENT_ID }}
+      JIMM_DEV_CLIENT_SECRET: ${{ secrets.JIMM_DEV_CLIENT_SECRET }}
+      JIMM_STG_CLIENT_ID: ${{ secrets.JIMM_STG_CLIENT_ID }}
+      JIMM_STG_CLIENT_SECRET: ${{ secrets.JIMM_STG_CLIENT_SECRET }}
+      JIMM_URL: ${{ secrets.JIMM_URL }}
