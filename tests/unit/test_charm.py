@@ -119,6 +119,7 @@ def setup_login_ui_relation(harness: Harness) -> tuple[int, dict]:
         "device_verification_url": f"{endpoint}/ui/device_code",
         "post_device_done_url": f"{endpoint}/ui/device_complete",
         "settings_url": f"{endpoint}/ui/settings",
+        "webauthn_settings_url": f"{endpoint}/ui/setup_passkey",
         "recovery_url": f"{endpoint}/ui/recovery",
     }
     harness.update_relation_data(
@@ -1792,6 +1793,11 @@ def test_on_config_changed_when_webauthn_enabled(
                 "settings": {
                     "ui_url": login_databag["settings_url"],
                     "required_aal": "highest_available",
+                    "after": {
+                        "webauthn": {
+                            "default_browser_return_url": login_databag["webauthn_settings_url"],
+                        },
+                    },
                 },
                 "recovery": {
                     "enabled": True,
@@ -1930,6 +1936,11 @@ def test_on_config_changed_when_oidc_webauthn_sequencing_enabled(
                 "settings": {
                     "ui_url": login_databag["settings_url"],
                     "required_aal": "highest_available",
+                    "after": {
+                        "webauthn": {
+                            "default_browser_return_url": login_databag["webauthn_settings_url"],
+                        },
+                    },
                 },
                 "recovery": {
                     "enabled": True,
