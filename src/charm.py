@@ -521,6 +521,7 @@ class KratosCharm(CharmBase):
             error_ui_url=self._get_login_ui_endpoint_info("error_url"),
             settings_ui_url=self._get_login_ui_endpoint_info("settings_url"),
             recovery_ui_url=self._get_login_ui_endpoint_info("recovery_url"),
+            webauthn_settings_url=self._get_login_ui_endpoint_info("webauthn_settings_url"),
             oidc_providers=oidc_providers,
             available_mappers=self._get_available_mappers,
             oauth2_provider_url=self._get_hydra_endpoint_info(),
