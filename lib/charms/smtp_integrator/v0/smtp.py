@@ -1,4 +1,4 @@
-# Copyright 2024 Canonical Ltd.
+# Copyright 2025 Canonical Ltd.
 # Licensed under the Apache2.0. See LICENSE file in charm source for details.
 
 """Library to manage the integration with the SMTP Integrator charm.
@@ -68,7 +68,9 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 10
+LIBPATCH = 14
+
+PYDEPS = ["pydantic>=2"]
 
 # pylint: disable=wrong-import-position
 import itertools
@@ -131,14 +133,14 @@ class SmtpRelationData(BaseModel):
     """
 
     host: str = Field(..., min_length=1)
-    port: int = Field(None, ge=1, le=65536)
+    port: int = Field(..., ge=1, le=65536)
     user: Optional[str] = None
     password: Optional[str] = None
     password_id: Optional[str] = None
     auth_type: AuthType
     transport_security: TransportSecurity
     domain: Optional[str] = None
-    skip_ssl_verify: bool = False
+    skip_ssl_verify: Optional[bool] = False
 
     def to_relation_data(self) -> Dict[str, str]:
         """Convert an instance of SmtpRelationData to the relation representation.
@@ -278,7 +280,9 @@ class SmtpRequires(ops.Object):
         relation = self.model.get_relation(self.relation_name)
         return self._get_relation_data_from_relation(relation) if relation else None
 
-    def _get_relation_data_from_relation(self, relation: ops.Relation) -> SmtpRelationData:
+    def _get_relation_data_from_relation(
+        self, relation: ops.Relation
+    ) -> Optional[SmtpRelationData]:
         """Retrieve the relation data.
 
         Args:
@@ -289,6 +293,8 @@ class SmtpRequires(ops.Object):
         """
         assert relation.app
         relation_data = relation.data[relation.app]
+        if not relation_data:
+            return None
         return SmtpRelationData(
             host=typing.cast(str, relation_data.get("host")),
             port=typing.cast(int, relation_data.get("port")),
