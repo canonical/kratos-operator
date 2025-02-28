@@ -1,4 +1,4 @@
-bcrypt==4.2.0
+bcrypt==4.3.0
 cosl==0.0.24
 ops==2.19.0
 lightkube===0.15.0
