@@ -13,6 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: python -m pip install tox
+      - name: Run tests
+        run: |
+          tox -e unit
+          mkdir coverage
+          cp .coverage coverage/
       - name: Get repo name
         run: echo "REPO_NAME=$(echo ${{ github.repository }} | cut -d'/' -f2)" >> $GITHUB_ENV
       - name: TICS GitHub Action
@@ -25,4 +32,3 @@ jobs:
           installTics: true
           filelist: .
           recalc: ALL
-          
