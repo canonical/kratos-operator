@@ -67,7 +67,7 @@ jobs:
           echo "::set-output name=destination_channel::$destination_channel"
 
       - name: Setup lxd
-        uses: canonical/setup-lxd@v0.1.2
+        uses: canonical/setup-lxd@54a5806e490d92e207b57183cf111ed54bbdeff4 # v0.1.2
         with:
           channel: latest/stable
 
