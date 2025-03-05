@@ -45,14 +45,14 @@ from ops.framework import EventBase, EventSource, Object, ObjectEvents
 from ops.model import TooManyRelatedAppsError
 
 # The unique Charmhub library identifier, never change it
-LIBID = "460ab09e6b874d1c891b67f83586c9a7"
+LIBID = "f59057701b5840849d3cea756af404c6"
 
 # Increment this major API version when introducing breaking changes
 LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 7
+LIBPATCH = 1
 
 RELATION_NAME = "ui-endpoint-info"
 INTERFACE_NAME = "login_ui_endpoints"
