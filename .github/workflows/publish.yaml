@@ -2,16 +2,10 @@
 name: Publish
 
 on:
-  workflow_call:
-    inputs:
-      source_branch:
-        description: Github branch from this repo to publish.  If blank, will use the default branch
-        default: ''
-        required: false
-        type: string
-    secrets:
-      CHARMCRAFT_CREDENTIALS:
-        required: true
+  push:
+    tags:
+      - "v**"
+      - "track**"
 
   workflow_dispatch:
     inputs:
@@ -25,44 +19,85 @@ on:
         required: false
         default: ''
         type: string
+      override-ci:
+        description: Override standard release flow
+        required: true
+        type: boolean
 
 jobs:
-  publish-charm:
+  publish:
     name: Publish Charm
-    runs-on: ubuntu-24.04
+    uses: canonical/identity-team/.github/workflows/charm-publish.yaml@17b1464c20132f69a42ca846cd816715724ea5f3 # v1.4.2
+    with:
+      destination_channel: ${{ inputs.destination_channel}}
+      source_branch: ${{ inputs.source_branch}}
+    secrets:
+      CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS}}
 
+  revision:
+    concurrency:
+      group: ${{ needs.publish.outputs.track }}-${{ needs.publish.outputs.channel }}
+      cancel-in-progress: true
+    needs:
+      - publish
+    outputs:
+      revision: ${{ steps.set-revision.outputs.revision }}
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           fetch-depth: 0
-          ref: ${{ inputs.source_branch }}
-
-      - name: Select charmhub channel
-        uses: canonical/charming-actions/channel@934193396735701141a1decc3613818e412da606 # 2.6.3
-        id: select-channel
-        if: ${{ inputs.destination_channel == '' }}
-
-      # Combine inputs from different sources to a single canonical value so later steps don't
-      # need logic for picking the right one
-      - name: Parse and combine inputs
-        id: parse-inputs
+      - name: Set charm name
+        id: set-charm-name
+        run: echo charm_name=$(cat charmcraft.yaml | yq '.name') >> $GITHUB_OUTPUT
+      - name: Set revision
+        id: set-revision
         run: |
-          # destination_channel
-          destination_channel="${{ inputs.destination_channel || steps.select-channel.outputs.name }}"
-          echo "setting output of destination_channel=$destination_channel"
-          echo "::set-output name=destination_channel::$destination_channel"
+          sudo snap install charmcraft --classic --channel latest/stable
+          revision=$(charmcraft status ${{ env.CHARM_NAME }} --format json | jq '.[] | select(.track == "${{ env.TRACK }}") | .mappings[0].releases[] | select(.channel == "${{ needs.publish.outputs.channel }}") | .revision')
+          echo "setting output of revision=$revision"
+          echo "revision=$revision" >> $GITHUB_OUTPUT
+        env:
+          CHARMCRAFT_AUTH: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
+          CHARM_NAME: ${{ steps.set-charm-name.outputs.charm_name }}
+          # only cater for latest track for now
+          TRACK: latest
 
-      # Required to charmcraft pack in non-destructive mode
-      - name: Setup lxd
-        uses: canonical/setup-lxd@v0.1.2
-        with:
-           channel: latest/stable
+  dev-deploy:
+    concurrency:
+      group: ${{ needs.publish.outputs.track }}-${{ needs.publish.outputs.channel }}
+      cancel-in-progress: true
+    needs:
+      - publish
+      - revision
+    if: ${{ (needs.publish.outputs.channel == 'latest/edge') }}
+    uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@17b1464c20132f69a42ca846cd816715724ea5f3 # v1.4.2
+    with:
+        model: dev-iam
+        revision: ${{ needs.revision.outputs.revision }}
+        channel: ${{ needs.publish.outputs.channel}}
+        application: kratos
+    secrets:
+      CLIENT_ID: ${{ secrets.JIMM_DEV_CLIENT_ID }}
+      CLIENT_SECRET: ${{ secrets.JIMM_DEV_CLIENT_SECRET }}
+      JIMM_URL: ${{ secrets.JIMM_URL }}
 
-      - name: Upload charm to charmhub
-        uses: canonical/charming-actions/upload-charm@934193396735701141a1decc3613818e412da606 # 2.6.3
-        with:
-          credentials: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          channel: ${{ steps.parse-inputs.outputs.destination_channel }}
-          destructive-mode: false
+  stg-deploy:
+    concurrency:
+      group: ${{ needs.publish.outputs.track }}-${{ needs.publish.outputs.channel }}
+      cancel-in-progress: true
+    needs:
+      - publish
+      - revision
+    if: ${{ (needs.publish.outputs.channel == 'latest/stable') }}
+    uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@17b1464c20132f69a42ca846cd816715724ea5f3 # v1.4.2
+    with:
+      model: stg-iam
+      revision: ${{ needs.revision.outputs.revision }}
+      channel: ${{ needs.publish.outputs.channel}}
+      application: kratos
+    secrets:
+        CLIENT_ID: ${{ secrets.JIMM_STG_CLIENT_ID }}
+        CLIENT_SECRET: ${{ secrets.JIMM_STG_CLIENT_SECRET }}
+        JIMM_URL: ${{ secrets.JIMM_URL }}
