@@ -7,7 +7,8 @@
       "bump-patch-for-minor-pre-major": false,
       "draft": false,
       "prerelease": false,
-      "pull-request-title-pattern": "ci: release ${version}"
+      "component": "track/0.4",
+      "pull-request-title-pattern": "ci: release ${component} ${version}"
     }
   },
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
