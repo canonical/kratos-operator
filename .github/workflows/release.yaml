@@ -1,27 +1,19 @@
-# reusable workflow triggered manually
-name: Release charm to other tracks and channels
+name: release
 
 on:
   workflow_dispatch:
-    inputs:
-      destination-channel:
-        description: 'Destination Channel'
-        required: true
-      origin-channel:
-        description: 'Origin Channel'
-        required: true
+  push:
+    branches:
+    - main
+    - "track/**"
+
+permissions:
+    contents: write
+    pull-requests: write
 
 jobs:
-  promote-charm:
-    name: Promote charm
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - name: Release charm to channel
-        uses: canonical/charming-actions/release-charm@934193396735701141a1decc3613818e412da606 # 2.6.3
-        with:
-          credentials: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          destination-channel: ${{ github.event.inputs.destination-channel }}
-          origin-channel: ${{ github.event.inputs.origin-channel }}
-          base-channel: '22.04'
+  release:
+      name: release
+      uses: canonical/identity-team/.github/workflows/charm-release.yaml@17b1464c20132f69a42ca846cd816715724ea5f3 # v1.4.2
+      secrets:
+        PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
