@@ -1,30 +1,6 @@
 # Changelog
 
-## [1.1.1](https://github.com/canonical/kratos-operator/compare/v1.1.0...v1.1.1) (2025-04-01)
-
-
-### Bug Fixes
-
-* address CVEs ([15b37f0](https://github.com/canonical/kratos-operator/commit/15b37f01f8a717f2003369a0302b1f34bafe6a50)), closes [#372](https://github.com/canonical/kratos-operator/issues/372)
-
-## [1.1.0](https://github.com/canonical/kratos-operator/compare/v1.0.0...v1.1.0) (2025-03-26)
-
-
-### Features
-
-* add terraform module ([1a4eb77](https://github.com/canonical/kratos-operator/commit/1a4eb777575cf789cbaf772d5a1040db2d1073ea))
-* add the terraform module ([241729a](https://github.com/canonical/kratos-operator/commit/241729a100da62eb78ab3763c2c318a923a576a6))
-
-
-### Bug Fixes
-
-* fix the lint ci ([c731894](https://github.com/canonical/kratos-operator/commit/c731894146f59c49c67583b7bebe4da5497954f0))
-* fix the lint ci ([45b9d63](https://github.com/canonical/kratos-operator/commit/45b9d6319fe59a2914ceebd40741d316e13cc10c))
-* provide optional flag in charmcraft.yaml ([fc0b664](https://github.com/canonical/kratos-operator/commit/fc0b6644a207ec0cdcfd567866d61982f16ecde1))
-* skip CHANGELOG.md from spell check ([37042e1](https://github.com/canonical/kratos-operator/commit/37042e115f9b97fe788cafcfe0fe113478af4a64))
-* skip CHANGELOG.md from spell check ([7ea81f9](https://github.com/canonical/kratos-operator/commit/7ea81f90386bae2b7e8633f301d6c425b5a130e8))
-
-## 1.0.0 (2025-03-10)
+## 1.0.0 (2025-03-07)
 
 
 ### ⚠ BREAKING CHANGES
@@ -59,8 +35,6 @@
 * support backup codes if mfa enabled ([fb53017](https://github.com/canonical/kratos-operator/commit/fb53017f98683f56e878e237212567299b322e4d))
 * support local identity provider ([f513e35](https://github.com/canonical/kratos-operator/commit/f513e354d6e246c94223661fb238d7be15c314b0))
 * support local identity provider ([85474d8](https://github.com/canonical/kratos-operator/commit/85474d87a075ea41d7eb3da4a5291136c85e2195))
-* support oidc webauthn sequencing mode ([dea7e4e](https://github.com/canonical/kratos-operator/commit/dea7e4e5315379e8c40133a1c6b064405522612d))
-* support oidc webauthn sequencing mode ([b32d5ca](https://github.com/canonical/kratos-operator/commit/b32d5ca57215bfac18899f1f2f65937b8180ff81))
 * updated hydra_endpoints relation name ([7713135](https://github.com/canonical/kratos-operator/commit/7713135d832e9b93954ef7fe81de63a1d8104ef7))
 * updated login_ui_endpoints relation and associated unit tests ([cf00ecf](https://github.com/canonical/kratos-operator/commit/cf00ecf398f8f3e777ead3a4a63349ab52709dd3))
 * updated tracing relation to tracing libpatch 6 ([99018ef](https://github.com/canonical/kratos-operator/commit/99018ef3d79b99851c1c9b283eb3beca0e694b5f))
@@ -148,7 +122,5 @@
 * use http endpoint in kratos-endpoint-info integration ([d777ae1](https://github.com/canonical/kratos-operator/commit/d777ae1fe4aae1862d17b577c7e37ea1c4e59e18))
 * use http endpoint in kratos-endpoint-info integration ([f6b9d0c](https://github.com/canonical/kratos-operator/commit/f6b9d0cffd58a3a475d995c1844e328735ee2f7f))
 * use internal ingress if set, otherwise stick with k8s networking ([e44716a](https://github.com/canonical/kratos-operator/commit/e44716aa8522d1b99a76836b2d612fb15a0eaff8))
-* use LogForwarder to send logs ([c76ebdc](https://github.com/canonical/kratos-operator/commit/c76ebdc7632869f281c0f20e4d75d5b8c57c20f8))
-* use LogForwarder to send logs ([f548145](https://github.com/canonical/kratos-operator/commit/f5481450c8ebe2d6a821fb690c751bbe93756a25))
 * use RENOVATE_TOKEN env var ([809b882](https://github.com/canonical/kratos-operator/commit/809b882c9cebcbb4fe86ba4d068a001a9fd1041d))
 * wait for configmap changes to apply ([0f11ece](https://github.com/canonical/kratos-operator/commit/0f11ece0f4842bbac92ef9156ebff1c647fb275b))
