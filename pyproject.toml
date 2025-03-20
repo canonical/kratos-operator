@@ -15,7 +15,7 @@ log_cli_level = "INFO"
 # Linting and formatting tools configuration
 [tool.codespell]
 # https://github.com/codespell-project/codespell
-skip = ".git,.tox,build,lib,venv,.venv,.mypy_cache,icon.svg,__pycache__"
+skip = ".git,.tox,build,lib,venv,.venv,.mypy_cache,icon.svg,__pycache__,CHANGELOG.md"
 
 [tool.isort]
 # Profiles: https://pycqa.github.io/isort/docs/configuration/profiles.html
