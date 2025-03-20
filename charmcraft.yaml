@@ -25,34 +25,44 @@ requires:
     optional: false
   public-ingress:
     interface: ingress
+    optional: true
   admin-ingress:
     interface: ingress
+    optional: true
   kratos-external-idp:
     interface: external_provider
+    optional: true
   hydra-endpoint-info:
     interface: hydra_endpoints
     limit: 1
+    optional: true
   ui-endpoint-info:
     interface: login_ui_endpoints
     limit: 1
+    optional: true
   logging:
     interface: loki_push_api
+    optional: true
   tracing:
     interface: tracing
     limit: 1
+    optional: true
     description: |
       Provides traces to COS Tempo instance
   smtp:
     interface: smtp
     limit: 1
+    optional: true
   internal-ingress:
     interface: traefik_route
     limit: 1
+    optional: true
     description: |
       Ingress used for cross-cluster communication where network topology is more complex
       than just one k8s cluster
   receive-ca-cert:
     interface: certificate_transfer
+    optional: true
     description: |
       Receive a CA cert.
       This relation can be used with a local CA to obtain the CA cert that was used to sign proxied
