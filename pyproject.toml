@@ -28,7 +28,7 @@ profile = "black"
 line-length = 99
 include = ["pyproject.toml", "src/**/*.py", "tests/**/*.py", "lib/charms/kratos/**/*.py"]
 extend-exclude = ["__pycache__", "*.egg_info", "tests/unit/capture_events.py"]
-target-version = "py38"
+target-version = "py312"
 preview = true
 
 [tool.ruff.lint]
