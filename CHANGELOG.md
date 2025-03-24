@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.1.0](https://github.com/canonical/kratos-operator/compare/v1.0.0...v1.1.0) (2025-03-24)
+
+
+### Features
+
+* add terraform module ([1a4eb77](https://github.com/canonical/kratos-operator/commit/1a4eb777575cf789cbaf772d5a1040db2d1073ea))
+* add the terraform module ([241729a](https://github.com/canonical/kratos-operator/commit/241729a100da62eb78ab3763c2c318a923a576a6))
+
+
+### Bug Fixes
+
+* fix the lint ci ([c731894](https://github.com/canonical/kratos-operator/commit/c731894146f59c49c67583b7bebe4da5497954f0))
+* fix the lint ci ([45b9d63](https://github.com/canonical/kratos-operator/commit/45b9d6319fe59a2914ceebd40741d316e13cc10c))
+* provide optional flag in charmcraft.yaml ([fc0b664](https://github.com/canonical/kratos-operator/commit/fc0b6644a207ec0cdcfd567866d61982f16ecde1))
+* skip CHANGELOG.md from spell check ([37042e1](https://github.com/canonical/kratos-operator/commit/37042e115f9b97fe788cafcfe0fe113478af4a64))
+* skip CHANGELOG.md from spell check ([7ea81f9](https://github.com/canonical/kratos-operator/commit/7ea81f90386bae2b7e8633f301d6c425b5a130e8))
+
 ## 1.0.0 (2025-03-10)
 
 
