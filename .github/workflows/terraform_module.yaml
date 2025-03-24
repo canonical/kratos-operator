@@ -1,0 +1,85 @@
+  name: Pull Request on Terraform Module
+
+  on:
+    pull_request:
+      paths:
+        - 'terraform/**/*.tf'
+
+  jobs:
+    build:
+      name: Terraform Checks and Plans
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout
+          uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+
+        - name: HashiCorp - Setup Terraform
+          uses: hashicorp/setup-terraform@651471c36a6092792c552e8b1bef71e592b462d8 # v3.1.1
+
+        - name: Terraform Format
+          id: fmt
+          run: terraform fmt -recursive -check
+          working-directory: terraform
+
+        - name: Terraform Init
+          id: init
+          run: terraform init
+          working-directory: terraform
+
+        - name: Terraform Validate
+          id: validate
+          run: terraform validate -no-color
+          working-directory: terraform
+
+        - uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+          if: github.event_name == 'pull_request'
+          env:
+            PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+          with:
+            github-token: ${{ secrets.GITHUB_TOKEN }}
+            script: |
+              // 1. Retrieve existing bot comments for the PR
+              const { data: comments } = await github.rest.issues.listComments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+              })
+              const botComment = comments.find(comment => {
+                return comment.user.type === 'Bot' && comment.body.includes('Terraform Format and Style')
+              })
+
+              // 2. Prepare format of the comment
+              const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+              #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+              #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+              <details><summary>Validation Output</summary>
+
+              \`\`\`\n
+              ${{ steps.validate.outputs.stdout }}
+              \`\`\`
+
+              </details>
+
+              *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Workflow: \`${{ github.workflow }}\`*`;
+
+              // 3. If we have a comment, update it, otherwise create a new one
+              if (botComment) {
+                github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: botComment.id,
+                  body: output
+                })
+              } else {
+                github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: output
+                })
+              }
+
+    documentation:
+      name: Render Terraform Docs
+      needs: build
+      uses: ./.github/workflows/documentation.yaml

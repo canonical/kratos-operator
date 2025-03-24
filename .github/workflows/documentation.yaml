@@ -1,0 +1,20 @@
+name: Render Terraform Docs
+on:
+  workflow_call:
+
+jobs:
+  terraform-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Render terraform docs and push changes back to PR branch
+        uses: terraform-docs/gh-actions@v1.3.0
+        with:
+          config-file: terraform/.terraform-docs.yaml
+          working-dir: terraform
+          output-file: MODULE_SPECS.md
+          output-method: inject
+          git-push: "true"
