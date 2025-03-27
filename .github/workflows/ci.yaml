@@ -8,28 +8,19 @@ on:
      - "main"
      - "release-**"
      - "track/**"
+     paths-ignore:
+     - "terraform/**"
    pull_request:
      branches:
      - "*"
+     paths-ignore:
+     - "terraform/**"
 
 jobs:
-  check-changes:
-    name: Check Source File Changes
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            only_terraform:
-              - 'terraform/**/*.tf'
-
   lint:
     name: Lint
     runs-on: ubuntu-24.04
-    needs: check-changes
-    if: ${{ github.event_name == 'pull_request' && needs.check-changes.outputs.only_terraform == 'false' }}
+    if: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Install dependencies
@@ -39,6 +30,4 @@ jobs:
 
   tests:
     name: Run Tests
-    needs: check-changes
-    if: ${{ needs.check-changes.outputs.only_terraform == 'false' }}
     uses: ./.github/workflows/tests.yaml
