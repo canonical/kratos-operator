@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/canonical/kratos-operator/compare/v1.1.0...v1.1.1) (2025-04-01)
+
+
+### Bug Fixes
+
+* address CVEs ([15b37f0](https://github.com/canonical/kratos-operator/commit/15b37f01f8a717f2003369a0302b1f34bafe6a50)), closes [#372](https://github.com/canonical/kratos-operator/issues/372)
+
 ## [1.1.0](https://github.com/canonical/kratos-operator/compare/v1.0.0...v1.1.0) (2025-03-26)
 
 
