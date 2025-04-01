@@ -27,10 +27,11 @@ on:
 jobs:
   publish:
     name: Publish Charm
-    uses: canonical/identity-team/.github/workflows/charm-publish.yaml@v1.7.3
+    uses: canonical/identity-team/.github/workflows/charm-publish.yaml@v1.7.6
     with:
       destination_channel: ${{ inputs.destination_channel}}
       source_branch: ${{ inputs.source_branch}}
+      use-charmcraftcache: true
     secrets:
       CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS}}
 

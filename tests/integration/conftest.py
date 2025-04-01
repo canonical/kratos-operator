@@ -2,6 +2,7 @@
 # See LICENSE file for licensing details.
 
 import os
+from pathlib import Path
 from typing import Tuple
 
 import pytest
@@ -39,3 +40,13 @@ async def password_secret(ops_test: OpsTest) -> Tuple[str, str]:
     await ops_test.model.grant_secret("password", KRATOS_APP)
 
     return secret_id, password
+
+
+@pytest_asyncio.fixture(scope="module")
+async def local_charm(ops_test: OpsTest) -> Path:
+    # in GitHub CI, charms are built with charmcraftcache and uploaded to $CHARM_PATH
+    charm = os.getenv("CHARM_PATH")
+    if not charm:
+        # fall back to build locally - required when run outside of GitHub CI
+        charm = await ops_test.build_charm(".")
+    return charm

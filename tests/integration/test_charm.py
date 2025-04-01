@@ -53,7 +53,7 @@ async def get_app_address(ops_test: OpsTest, app_name: str) -> str:
 
 @pytest.mark.skip_if_deployed
 @pytest.mark.abort_on_fail
-async def test_build_and_deploy(ops_test: OpsTest) -> None:
+async def test_build_and_deploy(ops_test: OpsTest, local_charm: Path) -> None:
     """Build the charm-under-test and deploy it.
 
     Assert on the unit status before any relations/configurations take place.
@@ -64,10 +64,9 @@ async def test_build_and_deploy(ops_test: OpsTest) -> None:
         trust=True,
         config={"plugin_pg_trgm_enable": "True", "plugin_btree_gin_enable": "True"},
     )
-    charm = await ops_test.build_charm(".")
     resources = {"oci-image": METADATA["resources"]["oci-image"]["upstream-source"]}
     await ops_test.model.deploy(
-        charm,
+        entity_url=str(local_charm),
         resources=resources,
         application_name=KRATOS_APP,
         trust=True,

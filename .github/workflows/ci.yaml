@@ -17,17 +17,10 @@ on:
      - "terraform/**"
 
 jobs:
-  lint:
-    name: Lint
-    runs-on: ubuntu-24.04
-    if: ${{ github.event_name == 'pull_request' }}
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - name: Install dependencies
-        run: python3 -m pip install tox
-      - name: Run linters
-        run: tox -e lint
-
   tests:
-    name: Run Tests
-    uses: ./.github/workflows/tests.yaml
+    name: CI
+    uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@v1.7.6
+    with:
+      container-name: "kratos"
+      use-charmcraftcache: true
+      node-size: large
