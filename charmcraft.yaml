@@ -282,6 +282,7 @@ parts:
     charm-binary-python-packages:
       - jsonschema
       - bcrypt
+      - "setuptools>=70.0.0"
     build-packages:
       - rustc
       - cargo
