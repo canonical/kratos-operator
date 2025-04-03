@@ -54,6 +54,9 @@ selfservice:
         {%- endif %}
         {%- if registration_webhook_config or oidc_providers %}
         registration:
+            {%- if registration_ui_url %}
+            ui_url: {{ registration_ui_url }}
+            {%- endif %}
             after:
             {%- if registration_webhook_config %}
                 hooks:
