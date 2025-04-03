@@ -958,8 +958,6 @@ def test_ingress_relation_created(
         "model": json.dumps(harness.model.name),
         "name": json.dumps("kratos"),
         "port": json.dumps(port),
-        "redirect-https": json.dumps(False),
-        "scheme": json.dumps("http"),
         "strip-prefix": json.dumps(True),
     }
 
