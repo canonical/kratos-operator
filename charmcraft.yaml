@@ -40,6 +40,9 @@ requires:
     interface: login_ui_endpoints
     limit: 1
     optional: true
+  kratos-registration-webhook:
+    interface: kratos_registration_webhook
+    optional: true
   logging:
     interface: loki_push_api
     optional: true

@@ -22,7 +22,7 @@ selfservice:
     {%- endif %}
     default_browser_return_url:
         {{ default_browser_return_url | d("http://example-default-return-url.com", true) }}
-    {%- if error_ui_url or login_ui_url or oidc_providers %}
+    {%- if error_ui_url or login_ui_url or oidc_providers or registration_webhook_config %}
     flows:
         {%- if error_ui_url %}
         error:
@@ -52,12 +52,30 @@ selfservice:
                 hooks:
                     - hook: revoke_active_sessions
         {%- endif %}
-        {%- if oidc_providers %}
+        {%- if registration_webhook_config or oidc_providers %}
         registration:
             after:
+            {%- if registration_webhook_config %}
+                hooks:
+                    - hook: web_hook
+                      config:
+                        url: {{ registration_webhook_config.url }}
+                        body: {{ registration_webhook_config.body }}
+                        method: {{ registration_webhook_config.method }}
+                        emit_analytics_event: {{ registration_webhook_config.emit_analytics_event }}
+                        response:
+                            ignore: {{ registration_webhook_config.response.ignore }}
+                            parse: {{ registration_webhook_config.response.parse }}
+                        {%- if registration_webhook_config.auth %}
+                        auth:
+                            name: {{ registration_webhook_config.auth.name }}
+                            value: {{ registration_webhook_config.auth.value }}
+                            in: {{ registration_webhook_config.auth.in }}
+                        {%- endif %}
+            {%- endif %}
                 oidc:
                     hooks:
-                    - hook: session
+                        - hook: session
         {%- endif %}
     {%- endif %}
     {%- if oidc_providers or recovery_ui_url or enable_local_idp and login_ui_url %}

@@ -33,6 +33,7 @@ from charms.identity_platform_login_ui_operator.v0.login_ui_endpoints import (
     LoginUITooManyRelatedAppsError,
 )
 from charms.kratos.v0.kratos_info import KratosInfoProvider
+from charms.kratos.v0.kratos_registration_webhook import KratosRegistrationWebhookRequirer
 from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ClientConfigChangedEvent,
     ClientConfigRemovedEvent,
@@ -108,6 +109,7 @@ from constants import (
     PEER_RELATION_NAME,
     PROMETHEUS_SCRAPE_RELATION_NAME,
     PROVIDERS_CONFIGMAP_FILE_NAME,
+    REGISTRATION_WEBHOOK_RELATION_NAME,
     SECRET_LABEL,
     TRACING_RELATION_NAME,
     WORKLOAD_CONTAINER_NAME,
@@ -173,6 +175,9 @@ class KratosCharm(CharmBase):
 
         self.hydra_endpoints = HydraEndpointsRequirer(self, relation_name=HYDRA_RELATION_NAME)
 
+        self.registration_webhook = KratosRegistrationWebhookRequirer(
+            self, relation_name=REGISTRATION_WEBHOOK_RELATION_NAME
+        )
         self.login_ui_endpoints = LoginUIEndpointsRequirer(
             self, relation_name=LOGIN_UI_RELATION_NAME
         )
@@ -217,6 +222,12 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.on.update_status, self._handle_status_update_config)
         self.framework.observe(self.on.remove, self._on_remove)
         self.framework.observe(self.info_provider.on.ready, self._update_kratos_info_relation_data)
+        self.framework.observe(
+            self.registration_webhook.on.ready, self._handle_status_update_config
+        )
+        self.framework.observe(
+            self.registration_webhook.on.unavailable, self._handle_status_update_config
+        )
         self.framework.observe(
             self.on[HYDRA_RELATION_NAME].relation_changed, self._on_config_changed
         )
@@ -495,6 +506,7 @@ class KratosCharm(CharmBase):
 
         default_schema_id, schemas = self._get_identity_schema_config()
         oidc_providers = self._get_oidc_providers()
+        registration_webhook_config = self._get_registration_webhook_config()
         login_ui_url = self._get_login_ui_endpoint_info("login_url")
         mappers = self._get_claims_mappers()
         cookie_secrets = self._get_secret()
@@ -533,6 +545,7 @@ class KratosCharm(CharmBase):
             enable_oidc_webauthn_sequencing=self.config.get("enable_oidc_webauthn_sequencing"),
             origin=origin,
             domain=parsed_public_url.hostname,
+            registration_webhook_config=registration_webhook_config,
         )
         return rendered
 
@@ -598,6 +611,10 @@ class KratosCharm(CharmBase):
                 return None
 
         return oauth2_provider_url
+
+    def _get_registration_webhook_config(self) -> Optional[dict]:
+        data = self.registration_webhook.consume_relation_data()
+        return data if data else None
 
     def _get_login_ui_endpoint_info(self, key: str) -> Optional[str]:
         try:
@@ -852,7 +869,10 @@ class KratosCharm(CharmBase):
             event.defer()
             return
 
-        if self.config["enable_oidc_webauthn_sequencing"] and self.config["enable_passwordless_login_method"]:
+        if (
+            self.config["enable_oidc_webauthn_sequencing"]
+            and self.config["enable_passwordless_login_method"]
+        ):
             self.unit.status = BlockedStatus(
                 "OIDC-WebAuthn sequencing mode requires `enable_passwordless_login_method=False`. "
                 "Please change the config."
