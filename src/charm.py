@@ -27,10 +27,7 @@ from charms.hydra.v0.hydra_endpoints import (
     HydraEndpointsRequirer,
 )
 from charms.identity_platform_login_ui_operator.v0.login_ui_endpoints import (
-    LoginUIEndpointsRelationDataMissingError,
-    LoginUIEndpointsRelationMissingError,
     LoginUIEndpointsRequirer,
-    LoginUITooManyRelatedAppsError,
 )
 from charms.kratos.v0.kratos_info import KratosInfoProvider
 from charms.kratos.v0.kratos_registration_webhook import KratosRegistrationWebhookRequirer
@@ -507,10 +504,10 @@ class KratosCharm(CharmBase):
         default_schema_id, schemas = self._get_identity_schema_config()
         oidc_providers = self._get_oidc_providers()
         registration_webhook_config = self._get_registration_webhook_config()
-        login_ui_url = self._get_login_ui_endpoint_info("login_url")
         mappers = self._get_claims_mappers()
         cookie_secrets = self._get_secret()
         parsed_public_url = urlparse(self._public_url)
+        ui_endpoint_info = self._get_login_ui_endpoint_info()
 
         allowed_return_urls = []
         origin = ""
@@ -525,15 +522,16 @@ class KratosCharm(CharmBase):
             cookie_secrets=[cookie_secrets] if cookie_secrets else None,
             log_level=self._log_level,
             mappers=mappers,
-            default_browser_return_url=login_ui_url,
+            default_browser_return_url=ui_endpoint_info.get("login_url"),
             allowed_return_urls=allowed_return_urls,
             identity_schemas=schemas,
             default_identity_schema_id=default_schema_id,
-            login_ui_url=login_ui_url,
-            error_ui_url=self._get_login_ui_endpoint_info("error_url"),
-            settings_ui_url=self._get_login_ui_endpoint_info("settings_url"),
-            recovery_ui_url=self._get_login_ui_endpoint_info("recovery_url"),
-            webauthn_settings_url=self._get_login_ui_endpoint_info("webauthn_settings_url"),
+            login_ui_url=ui_endpoint_info.get("login_url"),
+            error_ui_url=ui_endpoint_info.get("error_url"),
+            settings_ui_url=ui_endpoint_info.get("settings_url"),
+            recovery_ui_url=ui_endpoint_info.get("recovery_url"),
+            webauthn_settings_url=ui_endpoint_info.get("webauthn_settings_url"),
+            registration_ui_url=ui_endpoint_info.get("registration_url"),
             oidc_providers=oidc_providers,
             available_mappers=self._get_available_mappers,
             oauth2_provider_url=self._get_hydra_endpoint_info(),
@@ -616,17 +614,8 @@ class KratosCharm(CharmBase):
         data = self.registration_webhook.consume_relation_data()
         return data if data else None
 
-    def _get_login_ui_endpoint_info(self, key: str) -> Optional[str]:
-        try:
-            login_ui_endpoints = self.login_ui_endpoints.get_login_ui_endpoints()
-            return login_ui_endpoints[key]
-        except LoginUIEndpointsRelationDataMissingError:
-            logger.info("No login ui endpoint-info relation data found")
-        except LoginUIEndpointsRelationMissingError:
-            logger.info("No login ui-endpoint-info relation found")
-        except LoginUITooManyRelatedAppsError:
-            logger.info("Too many ui-endpoint-info relation found")
-        return None
+    def _get_login_ui_endpoint_info(self) -> Dict:
+        return self.login_ui_endpoints.get_login_ui_endpoints() or {}
 
     def _get_juju_config_identity_schemas(self) -> Optional[Dict]:
         identity_schemas = self.config.get("identity_schemas")
