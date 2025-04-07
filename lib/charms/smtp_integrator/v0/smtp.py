@@ -1,4 +1,4 @@
-# Copyright 2024 Canonical Ltd.
+# Copyright 2025 Canonical Ltd.
 # Licensed under the Apache2.0. See LICENSE file in charm source for details.
 
 """Library to manage the integration with the SMTP Integrator charm.
@@ -68,7 +68,9 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 10
+LIBPATCH = 15
+
+PYDEPS = ["pydantic>=2"]
 
 # pylint: disable=wrong-import-position
 import itertools
@@ -85,6 +87,14 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_RELATION_NAME = "smtp"
 LEGACY_RELATION_NAME = "smtp-legacy"
+
+
+class SmtpError(Exception):
+    """Common ancestor for Smtp related exceptions."""
+
+
+class SecretError(SmtpError):
+    """Common ancestor for Secrets related exceptions."""
 
 
 class TransportSecurity(str, Enum):
@@ -131,14 +141,14 @@ class SmtpRelationData(BaseModel):
     """
 
     host: str = Field(..., min_length=1)
-    port: int = Field(None, ge=1, le=65536)
+    port: int = Field(..., ge=1, le=65536)
     user: Optional[str] = None
     password: Optional[str] = None
     password_id: Optional[str] = None
     auth_type: AuthType
     transport_security: TransportSecurity
     domain: Optional[str] = None
-    skip_ssl_verify: bool = False
+    skip_ssl_verify: Optional[bool] = False
 
     def to_relation_data(self) -> Dict[str, str]:
         """Convert an instance of SmtpRelationData to the relation representation.
@@ -278,7 +288,9 @@ class SmtpRequires(ops.Object):
         relation = self.model.get_relation(self.relation_name)
         return self._get_relation_data_from_relation(relation) if relation else None
 
-    def _get_relation_data_from_relation(self, relation: ops.Relation) -> SmtpRelationData:
+    def _get_relation_data_from_relation(
+        self, relation: ops.Relation
+    ) -> Optional[SmtpRelationData]:
         """Retrieve the relation data.
 
         Args:
@@ -289,11 +301,27 @@ class SmtpRequires(ops.Object):
         """
         assert relation.app
         relation_data = relation.data[relation.app]
+        if not relation_data:
+            return None
+
+        password = relation_data.get("password")
+        if password is None and relation_data.get("password_id"):
+            try:
+                password = (
+                    self.model.get_secret(id=relation_data.get("password_id"))
+                    .get_content()
+                    .get("password")
+                )
+            except ops.model.ModelError as exc:
+                raise SecretError(
+                    f"Could not consume secret {relation_data.get('password_id')}"
+                ) from exc
+
         return SmtpRelationData(
             host=typing.cast(str, relation_data.get("host")),
             port=typing.cast(int, relation_data.get("port")),
             user=relation_data.get("user"),
-            password=relation_data.get("password"),
+            password=password,
             password_id=relation_data.get("password_id"),
             auth_type=AuthType(relation_data.get("auth_type")),
             transport_security=TransportSecurity(relation_data.get("transport_security")),

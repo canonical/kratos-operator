@@ -41,13 +41,13 @@ from charms.loki_k8s.v1.loki_push_api import LogForwarder
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.smtp_integrator.v0.smtp import SmtpDataAvailableEvent, SmtpRequires
-from charms.tempo_k8s.v2.tracing import TracingEndpointRequirer
+from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer
+from charms.traefik_k8s.v0.traefik_route import TraefikRouteRequirer
 from charms.traefik_k8s.v2.ingress import (
     IngressPerAppReadyEvent,
     IngressPerAppRequirer,
     IngressPerAppRevokedEvent,
 )
-from charms.traefik_route_k8s.v0.traefik_route import TraefikRouteRequirer
 from jinja2 import Template
 from lightkube import Client
 from lightkube.resources.apps_v1 import StatefulSet
