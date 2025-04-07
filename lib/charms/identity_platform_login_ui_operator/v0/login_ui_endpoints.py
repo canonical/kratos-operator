@@ -37,12 +37,14 @@ Class SomeCharm(CharmBase):
 ```
 """
 
+from typing import List
 import logging
-from typing import Dict
+from typing import Dict, Optional
 
 from ops.charm import CharmBase, RelationCreatedEvent
 from ops.framework import EventBase, EventSource, Object, ObjectEvents
-from ops.model import TooManyRelatedAppsError
+from ops import Relation, ModelError
+from pydantic import BaseModel
 
 # The unique Charmhub library identifier, never change it
 LIBID = "f59057701b5840849d3cea756af404c6"
@@ -52,23 +54,24 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 1
+LIBPATCH = 3
 
 RELATION_NAME = "ui-endpoint-info"
 INTERFACE_NAME = "login_ui_endpoints"
 logger = logging.getLogger(__name__)
 
-RELATION_KEYS = [
-    "consent_url",
-    "error_url",
-    "login_url",
-    "oidc_error_url",
-    "device_verification_url",
-    "post_device_done_url",
-    "recovery_url",
-    "settings_url",
-    "webauthn_settings_url",
-]
+
+class LoginUIProviderData(BaseModel):
+    consent_url: Optional[str] = None
+    error_url: Optional[str] = None
+    login_url: Optional[str] = None
+    oidc_error_url: Optional[str] = None
+    device_verification_url: Optional[str] = None
+    post_device_done_url: Optional[str] = None
+    recovery_url: Optional[str] = None
+    registration_url: Optional[str] = None
+    settings_url: Optional[str] = None
+    webauthn_settings_url: Optional[str] = None
 
 
 class LoginUIEndpointsRelationReadyEvent(EventBase):
@@ -100,29 +103,15 @@ class LoginUIEndpointsProvider(Object):
     def _on_provider_endpoints_relation_created(self, event: RelationCreatedEvent) -> None:
         self.on.ready.emit()
 
-    def send_endpoints_relation_data(self, endpoint: str) -> None:
+    def send_endpoints_relation_data(self, data: LoginUIProviderData) -> None:
         """Updates relation with endpoint info."""
         if not self._charm.unit.is_leader():
-            raise LoginUINonLeaderOperationError()
+            return None
 
         relations = self.model.relations[self._relation_name]
 
-        if not endpoint:
-            endpoint_databag = {k: "" for k in RELATION_KEYS}
-        else:
-            endpoint_databag = {
-                "consent_url": f"{endpoint}/ui/consent",
-                "error_url": f"{endpoint}/ui/error",
-                "login_url": f"{endpoint}/ui/login",
-                "oidc_error_url": f"{endpoint}/ui/oidc_error",
-                "device_verification_url": f"{endpoint}/ui/device_code",
-                "post_device_done_url": f"{endpoint}/ui/device_complete",
-                "recovery_url": f"{endpoint}/ui/reset_email",
-                "settings_url": f"{endpoint}/ui/reset_password",
-                "webauthn_settings_url": f"{endpoint}/ui/setup_passkey",
-            }
         for relation in relations:
-            relation.data[self._charm.app].update(endpoint_databag)
+            relation.data[self._charm.app].update(data.model_dump(exclude_none=True))
 
 
 class LoginUIEndpointsRelationError(Exception):
@@ -131,35 +120,11 @@ class LoginUIEndpointsRelationError(Exception):
     pass
 
 
-class LoginUITooManyRelatedAppsError(LoginUIEndpointsRelationError):
-    """Raised when there are more than one ui-endpoints-info relations between Identity Platform Login UI and another component."""
+class LoginUIEndpointsConflictError(LoginUIEndpointsRelationError):
+    """Raised when we got the same uri multiple times."""
 
     def __init__(self) -> None:
-        self.message = f"Too many applications on {RELATION_NAME}"
-        super().__init__(self.message)
-
-
-class LoginUINonLeaderOperationError(LoginUIEndpointsRelationError):
-    """Raised when a non-leader unit wants to call a function intended for leader units."""
-
-    def __init__(self) -> None:
-        self.message = "Calling Identity Platform Login UI unit is not leader"
-        super().__init__(self.message)
-
-
-class LoginUIEndpointsRelationMissingError(LoginUIEndpointsRelationError):
-    """Raised when the relation is missing."""
-
-    def __init__(self) -> None:
-        self.message = "Missing ui-endpoint-info relation with Identity Platform Login UI"
-        super().__init__(self.message)
-
-
-class LoginUIEndpointsRelationDataMissingError(LoginUIEndpointsRelationError):
-    """Raised when information is missing from the relation."""
-
-    def __init__(self, message: str) -> None:
-        self.message = message
+        self.message = "Got the same uri from multiple relations"
         super().__init__(self.message)
 
 
@@ -171,25 +136,35 @@ class LoginUIEndpointsRequirer(Object):
         self.charm = charm
         self._relation_name = relation_name
 
-    def get_login_ui_endpoints(self, relation_id=None) -> Dict:
+    @property
+    def relations(self) -> List[Relation]:
+        """The list of Relation instances associated with this relation_name."""
+        return [
+            relation
+            for relation in self.charm.model.relations[self._relation_name]
+            if relation.active
+        ]
+
+    def _get_login_ui_endpoints_data(self, relation: Relation) -> Optional[Dict]:
+        return relation.data[relation.app] if relation.app else None
+
+    def get_login_ui_endpoints(self, relation_id=None) -> Optional[Dict]:
         """Get the Identity Platform Login UI endpoints."""
+        if relation_id:
+            relations = [self.model.get_relation(self._relation_name, relation_id=relation_id)]
+        else:
+            relations = self.relations
 
-        try:
-            ui_endpoint_relation = self.model.get_relation(self._relation_name, relation_id=relation_id)
-        except TooManyRelatedAppsError:
-            raise LoginUITooManyRelatedAppsError()
+        if not relations:
+            return None
 
-        if ui_endpoint_relation is None:
-            raise LoginUIEndpointsRelationMissingError()
+        data = {}
+        for r in relations:
+            d = self._get_login_ui_endpoints_data(r)
+            if not d:
+                continue
+            if set(d.keys()).intersection(data.keys()):
+                raise LoginUIEndpointsConflictError()
+            data.update(d)
 
-        if not ui_endpoint_relation.app:
-            raise LoginUIEndpointsRelationMissingError()
-
-        ui_endpoint_relation_data = ui_endpoint_relation.data[ui_endpoint_relation.app]
-
-        if any(not ui_endpoint_relation_data.get(k := key) for key in RELATION_KEYS):
-            raise LoginUIEndpointsRelationDataMissingError(
-                f"Missing endpoint {k} in ui-endpoint-info relation data"
-            )
-
-        return ui_endpoint_relation_data
+        return data
