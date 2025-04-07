@@ -1,7 +1,7 @@
 bcrypt==4.3.0
-cosl==0.0.24
+cosl==0.0.57
 ops==2.20.0
-lightkube===0.15.0
+lightkube===0.15.4
 lightkube-models==1.32.0.8
 Jinja2==3.1.6
 jsonschema==4.23.0
