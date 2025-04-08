@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.2](https://github.com/canonical/kratos-operator/compare/v1.1.1...v1.1.2) (2025-04-08)
+
+
+### Bug Fixes
+
+* add kratos_registration_webhook lib ([1f4d132](https://github.com/canonical/kratos-operator/commit/1f4d1321e5cf108a9243185c81f23745965163a5))
+* bump ingress version ([313091f](https://github.com/canonical/kratos-operator/commit/313091f658e1dce535b0e954c116be074019a085))
+* update login_ui lib, add registration_url ([b92f9f0](https://github.com/canonical/kratos-operator/commit/b92f9f0e608e3e3edd80cd0db9ff9786749436c0))
+
 ## [1.1.1](https://github.com/canonical/kratos-operator/compare/v1.1.0...v1.1.1) (2025-04-01)
 
 
