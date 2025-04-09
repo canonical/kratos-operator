@@ -8,18 +8,8 @@ on:
       - "automated-update-charm-libs"
 
 jobs:
-  autoapprove:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - name: Approve PR
-        run: |
-          gh pr review --approve || true
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-      - name: Enable automerge if required
-        if: startsWith(github.ref_name, 'renovate/auto-')
-        run: |
-          gh pr merge --auto --merge || true
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+  auto-approve:
+    name: Auto-approve and merge pull request
+    uses: canonical/identity-team/.github/workflows/pr-auto-approval.yaml@3bcf7c8d36b4e51e5a65d27041389d7456c17b57 # v1.8.0
+    secrets:
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}

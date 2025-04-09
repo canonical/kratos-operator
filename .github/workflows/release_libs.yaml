@@ -9,16 +9,9 @@ on:
       - "lib/charms/kratos/**"
 
 jobs:
-  release-libs:
+  release-lib:
     name: Release any bumped library
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-        with:
-          fetch-depth: 0
-      - name: Release any bumped charm library
-        uses: canonical/charming-actions/release-libraries@main
-        with:
-          credentials: "${{ secrets.CHARMCRAFT_CREDENTIALS }}"
-          github-token: "${{ github.token }}"
+    uses: canonical/identity-team/.github/workflows/charm-libs-release.yaml@3bcf7c8d36b4e51e5a65d27041389d7456c17b57 # v1.8.0
+    secrets:
+      CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}

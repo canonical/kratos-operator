@@ -1,3 +1,4 @@
+name: On Schedule
 on:
   schedule:
     - cron: '0 8 * * MON'
@@ -5,11 +6,14 @@ on:
 jobs:
   update-charm-libs:
     name: Update Charm Libraries
-    uses: ./.github/workflows/update_libs.yaml
+    uses: canonical/identity-team/.github/workflows/charm-libs-update.yaml@3bcf7c8d36b4e51e5a65d27041389d7456c17b57 # v1.8.0
     secrets:
       CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
 
   tests:
-    name: Run Tests
-    uses: ./.github/workflows/tests.yaml
+    name: CI
+    uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@3bcf7c8d36b4e51e5a65d27041389d7456c17b57 # v1.8.0
+    with:
+      container-name: "kratos"
+      use-charmcraftcache: true
