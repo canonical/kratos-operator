@@ -6,29 +6,39 @@ on:
     branches:
       - main
   schedule:
-    - cron:  '0 7 1 * *'
+    - cron:  '0 7 1 * *'  # Runs monthly on the 1st at 07:00 UTC
 
 jobs:
   TICS:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - name: Install dependencies
-        run: python -m pip install tox
-      - name: Run tests
+
+      - name: Install TIOBE dependencies
+        run: |
+          python -m pip install pylint flake8
+
+      - name: Install project dependencies
+        run: |
+          find . -name '*requirements.txt' -exec echo Installing {} \; -exec pip install -r {} \;
+          python -m pip install tox psycopg
+
+      - name: Run coverage tests
         run: |
           tox -e unit
           mkdir coverage
-          cp .coverage coverage/
-      - name: Get repo name
-        run: echo "REPO_NAME=$(echo ${{ github.repository }} | cut -d'/' -f2)" >> $GITHUB_ENV
-      - name: TICS GitHub Action
+          mv coverage.xml ./coverage/
+
+      - name: Set TIOBE project name
+        run: echo "PROJECT_NAME=$(basename "${{ github.repository }}")" >> $GITHUB_ENV
+
+      - name: Run TICS quality analysis
         uses: tiobe/tics-github-action@009979693978bfefad2ad15c1020066694968dc7 # v3
         with:
           mode: qserver
           viewerUrl: https://canonical.tiobe.com/tiobeweb/TICS/api/cfg?name=default
           ticsAuthToken: ${{ secrets.TICSAUTHTOKEN }}
-          project: ${{ env.REPO_NAME }}
+          project: ${{ env.PROJECT_NAME }}
           installTics: true
           filelist: .
           recalc: ALL
