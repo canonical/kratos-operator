@@ -2,50 +2,12 @@
 name: Update Charm Libraries
 
 on:
-  workflow_call:
-    inputs:
-      charmcraft_channel:
-        description: Channel from which to install charmcraft
-        default: 'latest/candidate'
-        required: false
-        type: string
-    secrets:
-      CHARMCRAFT_CREDENTIALS:
-        required: true
-      PAT_TOKEN:
-        required: true
   workflow_dispatch:
-    inputs:
-      charmcraft_channel:
-        description: Channel from which to install charmcraft
-        default: 'latest/candidate'
-        required: false
-        type: string
 
 jobs:
-  update-libs:
-    name: Update charm libraries
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-        with:
-          fetch-depth: 0
-
-      - run: sudo snap install charmcraft --channel ${{ inputs.charmcraft_channel }} --classic
-
-      - name: update charm libs
-        run: charmcraft fetch-lib
-        env:
-          CHARMCRAFT_AUTH: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
-
-      - name: Create Pull Request
-        id: create-pull-request
-        uses: canonical/create-pull-request@main
-        with:
-          github-token: ${{ secrets.PAT_TOKEN }}
-          commit-message: Update charm libs
-          branch-name: 'automated-update-charm-libs'
-          title: (Automated) Update Charm Libs
-          body: Update charm libs
-          upsert: true
-          ignore-no-changes: true
+  update-charm-libs:
+    name: Update Charm Libraries
+    uses: canonical/identity-team/.github/workflows/charm-libs-update.yaml@3bcf7c8d36b4e51e5a65d27041389d7456c17b57 # v1.8.0
+    secrets:
+      CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
