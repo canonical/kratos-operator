@@ -7,37 +7,34 @@
 The provider side is responsible for providing the configuration that kratos
 will use to call this webhook.
 
-The requirer side (kratos) takes the configuration provided and updates its
+The requirer sice (kratos) takes the configuration provided and updates its
 config.
 """
 
+# The unique Charmhub library identifier, never change it
 import logging
-from typing import Annotated, Any, List, Optional, TypeVar, Union
-
-from ops import (
-    CharmBase,
-    EventSource,
-    ModelError,
-    Object,
-    ObjectEvents,
-    Relation,
-    RelationBrokenEvent,
-    RelationCreatedEvent,
-    RelationEvent,
-)
-from pydantic import BaseModel as _BaseModel
+from typing import Annotated, Any, List, Optional, TypeVar, Union, get_args
+from annotated_types import T
+from ops import CharmBase, EventSource, ModelError, Object, ObjectEvents, Relation, RelationBrokenEvent, RelationCreatedEvent, RelationEvent
 from pydantic import (
+    BaseModel as _BaseModel,
     BeforeValidator,
-    Field,
-    FieldValidationInfo,
     PlainSerializer,
     StrictBool,
+    Field,
+    FieldValidationInfo,
 )
 from pydantic_core import from_json
 
+
 LIBID = "37ddb4471fae41adb74299f091ee3a28"
+
+# Increment this major API version when introducing breaking changes
 LIBAPI = 0
-LIBPATCH = 2
+
+# Increment this PATCH version before using `charmcraft publish-lib` or reset
+# to 0 if you are raising the major API version
+LIBPATCH = 1
 
 PYDEPS = ["pydantic"]
 
@@ -47,41 +44,61 @@ logger = logging.getLogger(__name__)
 
 
 class BaseModel(_BaseModel):
-    def __init__(self, **data: Any) -> None:
+    def __init__(__pydantic_self__, **data: Any) -> None:
         # We override the init function to add a reference to self in the context
         # so that "deserialize_model" can use it.
-        self.__pydantic_validator__.validate_python(
+        __pydantic_self__.__pydantic_validator__.validate_python(
             data,
-            self_instance=self,
-            context={"self": self},
+            self_instance=__pydantic_self__,
+            context={"self": __pydantic_self__},
         )
 
 
 def deserialize_bool(v: str | bool) -> bool:
-    if isinstance(v, str):
-        return True if v.casefold() == "true" else False
+        if isinstance(v, str):
+            return True if v.casefold() == "true" else False
 
-    return v
-
-
-def deserialize_model(v: BaseModel | str, info: FieldValidationInfo) -> BaseModel:
-    if isinstance(v, BaseModel):
         return v
 
-    return info.context["self"].model_fields[info.field_name].annotation(**from_json(v))
+
+def deserialize_model(v: Union[BaseModel, str], info: FieldValidationInfo) -> BaseModel:
+        if isinstance(v, BaseModel):
+          return v
+
+        return info.context['self'].model_fields[info.field_name].annotation(**from_json(v))
+
+
+def deserialize_optional_model(v: Union[BaseModel, str], info: FieldValidationInfo) -> Optional[BaseModel]:
+        if v == "":
+            return None
+
+        if isinstance(v, BaseModel):
+          return v
+
+        t = info.context['self'].model_fields[info.field_name].annotation
+        for annotation in get_args(t):
+            if annotation != type(None):
+                return annotation(**from_json(v))
 
 
 SerializableBool = Annotated[
     StrictBool,
     PlainSerializer(lambda v: str(v), return_type=str),
-    BeforeValidator(deserialize_bool),
+    BeforeValidator(deserialize_bool)
 ]
 
 
 SerializableModel = Annotated[
-    TypeVar("BaseModelType", bound=BaseModel),
-    PlainSerializer(lambda v: v.model_dump_json(exclude_none=True), return_type=str),
-    BeforeValidator(deserialize_model),
+    TypeVar('BaseModelType', bound=BaseModel),
+    PlainSerializer(lambda v: v.model_dump_json(), return_type=str),
+    BeforeValidator(deserialize_model)
+]
+
+
+OptionalSerializableModel = Annotated[
+    Optional[TypeVar('BaseModelType', bound=BaseModel)],
+    PlainSerializer(lambda v: v.model_dump_json() if v else "", return_type=str),
+    BeforeValidator(deserialize_optional_model)
 ]
 
 
@@ -91,13 +108,13 @@ class ResponseConfig(BaseModel):
 
 
 class _AuthConfig(BaseModel):
-    name: Optional[str] = "Authorization"
+    name: str = "Authorization"
     value: str
-    in_: Optional[str] = Field(default="header", alias="in")
+    in_: str = Field(default="header", alias="in")
 
 
 class AuthConfig(BaseModel):
-    type: Optional[str] = Field("api_key")
+    type: str = Field(default="api_key")
     config: _AuthConfig
 
 
@@ -107,7 +124,7 @@ class ProviderData(BaseModel):
     method: str
     emit_analytics_event: SerializableBool
     response: SerializableModel[ResponseConfig]
-    auth: Optional[AuthConfig] = None
+    auth: OptionalSerializableModel[AuthConfig] = None
 
 
 class ReadyEvent(RelationEvent):

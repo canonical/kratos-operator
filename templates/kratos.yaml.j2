@@ -71,9 +71,11 @@ selfservice:
                             parse: {{ registration_webhook_config.response.parse }}
                         {%- if registration_webhook_config.auth %}
                         auth:
-                            name: {{ registration_webhook_config.auth.name }}
-                            value: {{ registration_webhook_config.auth.value }}
-                            in: {{ registration_webhook_config.auth.in }}
+                            type: {{ registration_webhook_config.auth.type }}
+                            config:
+                                name: {{ registration_webhook_config.auth.config.name }}
+                                value: {{ registration_webhook_config.auth.config.value }}
+                                in: {{ registration_webhook_config.auth.config.in_ }}
                         {%- endif %}
             {%- endif %}
                 oidc:
