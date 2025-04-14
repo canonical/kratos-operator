@@ -58,26 +58,27 @@ selfservice:
             ui_url: {{ registration_ui_url }}
             {%- endif %}
             after:
-            {%- if registration_webhook_config %}
-                hooks:
-                    - hook: web_hook
-                      config:
-                        url: {{ registration_webhook_config.url }}
-                        body: {{ registration_webhook_config.body }}
-                        method: {{ registration_webhook_config.method }}
-                        emit_analytics_event: {{ registration_webhook_config.emit_analytics_event }}
-                        response:
-                            ignore: {{ registration_webhook_config.response.ignore }}
-                            parse: {{ registration_webhook_config.response.parse }}
-                        {%- if registration_webhook_config.auth %}
-                        auth:
-                            name: {{ registration_webhook_config.auth.name }}
-                            value: {{ registration_webhook_config.auth.value }}
-                            in: {{ registration_webhook_config.auth.in }}
-                        {%- endif %}
-            {%- endif %}
                 oidc:
                     hooks:
+                        {%- if registration_webhook_config %}
+                        - hook: web_hook
+                          config:
+                            url: {{ registration_webhook_config.url }}
+                            body: {{ registration_webhook_config.body }}
+                            method: {{ registration_webhook_config.method }}
+                            emit_analytics_event: {{ registration_webhook_config.emit_analytics_event }}
+                            response:
+                                ignore: {{ registration_webhook_config.response.ignore }}
+                                parse: {{ registration_webhook_config.response.parse }}
+                            {%- if registration_webhook_config.auth %}
+                            auth:
+                                type: {{ registration_webhook_config.auth.type }}
+                                config:
+                                    name: {{ registration_webhook_config.auth.config.name }}
+                                    value: {{ registration_webhook_config.auth.config.value }}
+                                    in: {{ registration_webhook_config.auth.config.in_ }}
+                            {%- endif %}
+                        {%- endif %}
                         - hook: session
         {%- endif %}
     {%- endif %}

@@ -12,7 +12,7 @@ config.
 """
 
 import logging
-from typing import Annotated, Any, List, Optional, TypeVar, Union
+from typing import Annotated, Any, List, Optional, TypeVar, Union, get_args
 
 from ops import (
     CharmBase,
@@ -29,9 +29,9 @@ from pydantic import BaseModel as _BaseModel
 from pydantic import (
     BeforeValidator,
     Field,
-    FieldValidationInfo,
     PlainSerializer,
     StrictBool,
+    ValidationInfo,
 )
 from pydantic_core import from_json
 
@@ -64,11 +64,26 @@ def deserialize_bool(v: str | bool) -> bool:
     return v
 
 
-def deserialize_model(v: BaseModel | str, info: FieldValidationInfo) -> BaseModel:
+def deserialize_model(v: Union[BaseModel, str], info: ValidationInfo) -> BaseModel:
     if isinstance(v, BaseModel):
         return v
 
     return info.context["self"].model_fields[info.field_name].annotation(**from_json(v))
+
+
+def deserialize_optional_model(
+    v: Union[BaseModel, str], info: ValidationInfo
+) -> Optional[BaseModel]:
+    if v == "":
+        return None
+
+    if isinstance(v, BaseModel):
+        return v
+
+    t = info.context["self"].model_fields[info.field_name].annotation
+    for annotation in get_args(t):
+        if annotation is not type(None):
+            return annotation(**from_json(v))
 
 
 SerializableBool = Annotated[
@@ -80,8 +95,15 @@ SerializableBool = Annotated[
 
 SerializableModel = Annotated[
     TypeVar("BaseModelType", bound=BaseModel),
-    PlainSerializer(lambda v: v.model_dump_json(exclude_none=True), return_type=str),
+    PlainSerializer(lambda v: v.model_dump_json(), return_type=str),
     BeforeValidator(deserialize_model),
+]
+
+
+OptionalSerializableModel = Annotated[
+    Optional[TypeVar("BaseModelType", bound=BaseModel)],
+    PlainSerializer(lambda v: v.model_dump_json() if v else "", return_type=str),
+    BeforeValidator(deserialize_optional_model),
 ]
 
 
@@ -91,13 +113,13 @@ class ResponseConfig(BaseModel):
 
 
 class _AuthConfig(BaseModel):
-    name: Optional[str] = "Authorization"
+    name: str = "Authorization"
     value: str
-    in_: Optional[str] = Field(default="header", alias="in")
+    in_: str = Field(default="header", alias="in")
 
 
 class AuthConfig(BaseModel):
-    type: Optional[str] = Field("api_key")
+    type: str = Field(default="api_key")
     config: _AuthConfig
 
 
@@ -107,7 +129,7 @@ class ProviderData(BaseModel):
     method: str
     emit_analytics_event: SerializableBool
     response: SerializableModel[ResponseConfig]
-    auth: Optional[AuthConfig] = None
+    auth: OptionalSerializableModel[AuthConfig] = None
 
 
 class ReadyEvent(RelationEvent):
