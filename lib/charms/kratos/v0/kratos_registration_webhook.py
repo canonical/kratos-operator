@@ -29,9 +29,9 @@ from pydantic import BaseModel as _BaseModel
 from pydantic import (
     BeforeValidator,
     Field,
-    ValidationInfo,
     PlainSerializer,
     StrictBool,
+    ValidationInfo,
 )
 from pydantic_core import from_json
 
