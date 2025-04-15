@@ -37,7 +37,7 @@ from pydantic_core import from_json
 
 LIBID = "37ddb4471fae41adb74299f091ee3a28"
 LIBAPI = 0
-LIBPATCH = 2
+LIBPATCH = 3
 
 PYDEPS = ["pydantic"]
 
@@ -172,6 +172,9 @@ class KratosRegistrationWebhookProvider(Object):
         data: Union[ProviderData],
     ) -> None:
         """Update the integration data."""
+        if not self._charm.unit.is_leader():
+            return None
+
         if not (relations := self._charm.model.relations.get(self._relation_name)):
             return
 
