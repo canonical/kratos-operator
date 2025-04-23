@@ -26,8 +26,6 @@ jobs:
       - name: Run coverage tests
         run: |
           tox -e unit
-          mkdir coverage
-          mv coverage.xml ./coverage/
 
       - name: Set TIOBE project name
         run: echo "PROJECT_NAME=$(basename "${{ github.repository }}")" >> $GITHUB_ENV
