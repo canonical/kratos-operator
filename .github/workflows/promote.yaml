@@ -1,0 +1,29 @@
+name: Promote Charm
+
+on:
+  workflow_dispatch:
+    inputs:
+      origin-channel:
+        description: 'Origin Channel'
+        type: string
+        required: true
+      destination-channel:
+        description: 'Destination Channel'
+        type: string
+        required: true
+      charmcraft-channel:
+        description: 'Snap channel to use when installing charmcraft'
+        required: false
+        type: string
+        default: 'latest/edge'
+
+jobs:
+  promote-charm:
+      name: Promote charm
+      uses: canonical/identity-team/.github/workflows/charm-promotion.yaml@0a32ad19139490d02dd5283ab91a63295c7a803f # v1.8.4
+      with:
+        origin-channel: ${{ github.event.inputs.origin-channel }}
+        destination-channel: ${{ github.event.inputs.destination-channel }}
+        charmcraft-channel: ${{ github.event.inputs.charmcraft-channel }}
+      secrets:
+        CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
