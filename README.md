@@ -282,11 +282,10 @@ juju run kratos/0 run-migration
 The image used by this charm is hosted
 on [Docker Hub](https://hub.docker.com/r/oryd/kratos) and maintained by Ory.
 
-### Security
+## Security
 
-Security issues in IAM stack can be reported
-through [LaunchPad](https://wiki.ubuntu.com/DebuggingSecurity#How%20to%20File).
-Please do not file GitHub issues about security issues.
+Please see [SECURITY.md](https://github.com/canonical/kratos-operator/blob/main/SECURITY.md)
+for guidelines on reporting security issues.
 
 ## Contributing
 
