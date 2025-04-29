@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.3](https://github.com/canonical/kratos-operator/compare/v1.1.2...v1.1.3) (2025-04-29)
+
+
+### Bug Fixes
+
+* check leadership ([300b10f](https://github.com/canonical/kratos-operator/commit/300b10f101fab7595fd0fe84e541b33f7718afbd))
+* clean up webhook logic ([70be0b6](https://github.com/canonical/kratos-operator/commit/70be0b68025fb48ae441a5a286c30bd342017f84))
+* explicitly disable unsupported methods ([e764823](https://github.com/canonical/kratos-operator/commit/e764823a4c89c0c3d534195573d4739c6762f9c0))
+* explicitly disable unsupported methods ([7ebde0d](https://github.com/canonical/kratos-operator/commit/7ebde0da37a8447251f864665c57b5926d2dd4d3))
+* fix the statefulset's name ([266f06d](https://github.com/canonical/kratos-operator/commit/266f06db554bb2fdf0b565dbdcc9166f5fe4907b))
+* fix the statefulset's name ([10c0c52](https://github.com/canonical/kratos-operator/commit/10c0c52d6ae215ada5b7d75b59d8a47cff386fde))
+* fix webhook auth ([5702f05](https://github.com/canonical/kratos-operator/commit/5702f0517a12e9f6116eb6c911e5fac3859e1628))
+
 ## [1.1.2](https://github.com/canonical/kratos-operator/compare/v1.1.1...v1.1.2) (2025-04-08)
 
 
