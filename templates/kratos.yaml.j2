@@ -84,6 +84,12 @@ selfservice:
     {%- endif %}
     {%- if oidc_providers or recovery_ui_url or enable_local_idp and login_ui_url %}
     methods:
+        profile:
+            enabled: False
+        link:
+            enabled: False
+        passkey:
+            enabled: False
         {%- if recovery_ui_url and enable_local_idp %}
         code:
             enabled: True
