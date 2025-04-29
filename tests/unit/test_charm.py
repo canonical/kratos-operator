@@ -435,6 +435,15 @@ def test_on_pebble_ready_has_correct_config_when_database_is_created(
                 },
             },
             "methods": {
+                "profile": {
+                    "enabled": False,
+                },
+                "link": {
+                    "enabled": False,
+                },
+                "passkey": {
+                    "enabled": False,
+                },
                 "code": {
                     "enabled": True,
                 },
@@ -754,6 +763,15 @@ def test_on_config_changed_when_local_idp_enabled_mfa_not_enforced(
                 },
             },
             "methods": {
+                "profile": {
+                    "enabled": False,
+                },
+                "link": {
+                    "enabled": False,
+                },
+                "passkey": {
+                    "enabled": False,
+                },
                 "code": {
                     "enabled": True,
                 },
@@ -1047,6 +1065,15 @@ def test_on_client_config_changed_with_ingress(
                 },
             },
             "methods": {
+                "profile": {
+                    "enabled": False,
+                },
+                "link": {
+                    "enabled": False,
+                },
+                "passkey": {
+                    "enabled": False,
+                },
                 "code": {
                     "enabled": True,
                 },
@@ -1178,6 +1205,15 @@ def test_on_client_config_relation_removed_with_ingress(
                 },
             },
             "methods": {
+                "profile": {
+                    "enabled": False,
+                },
+                "link": {
+                    "enabled": False,
+                },
+                "passkey": {
+                    "enabled": False,
+                },
                 "code": {
                     "enabled": True,
                 },
@@ -1285,6 +1321,15 @@ def test_on_client_config_data_removed_with_ingress(
                 },
             },
             "methods": {
+                "profile": {
+                    "enabled": False,
+                },
+                "link": {
+                    "enabled": False,
+                },
+                "passkey": {
+                    "enabled": False,
+                },
                 "code": {
                     "enabled": True,
                 },
@@ -1387,6 +1432,15 @@ def test_on_config_changed_with_hydra(
                 },
             },
             "methods": {
+                "profile": {
+                    "enabled": False,
+                },
+                "link": {
+                    "enabled": False,
+                },
+                "passkey": {
+                    "enabled": False,
+                },
                 "code": {
                     "enabled": True,
                 },
@@ -1491,6 +1545,15 @@ def test_on_config_changed_when_missing_hydra_relation_data(
                 },
             },
             "methods": {
+                "profile": {
+                    "enabled": False,
+                },
+                "link": {
+                    "enabled": False,
+                },
+                "passkey": {
+                    "enabled": False,
+                },
                 "code": {
                     "enabled": True,
                 },
@@ -1714,6 +1777,15 @@ def test_on_config_changed_when_local_idp_disabled(
                 },
             },
             "methods": {
+                "profile": {
+                    "enabled": False,
+                },
+                "link": {
+                    "enabled": False,
+                },
+                "passkey": {
+                    "enabled": False,
+                },
                 "password": {
                     "enabled": False,
                 },
@@ -1812,6 +1884,15 @@ def test_on_config_changed_when_webauthn_enabled(
                 },
             },
             "methods": {
+                "profile": {
+                    "enabled": False,
+                },
+                "link": {
+                    "enabled": False,
+                },
+                "passkey": {
+                    "enabled": False,
+                },
                 "code": {
                     "enabled": True,
                 },
@@ -1955,6 +2036,15 @@ def test_on_config_changed_when_oidc_webauthn_sequencing_enabled(
                 },
             },
             "methods": {
+                "profile": {
+                    "enabled": False,
+                },
+                "link": {
+                    "enabled": False,
+                },
+                "passkey": {
+                    "enabled": False,
+                },
                 "code": {
                     "enabled": True,
                 },
