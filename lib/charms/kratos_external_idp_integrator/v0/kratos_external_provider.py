@@ -126,7 +126,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 11
+LIBPATCH = 12
 
 PYDEPS = ["jsonschema"]
 
@@ -786,27 +786,33 @@ class ExternalIdpRequirer(Object):
             return
         relation.data[self.model.app].clear()
 
-    def get_providers(self) -> List:
-        """Iterate over the relations and fetch all providers."""
-        providers = []
-        # For each relation get the client credentials and compile them into a
-        # single object
-        for relation in self.model.relations[self._relation_name]:
-            if not relation.app:
-                continue
-            data = relation.data[relation.app]
-            data = _load_data(data, PROVIDER_JSON_SCHEMA)
-            for p in data["providers"]:
-                provider = self._get_provider(p, relation)
-                providers.append(provider)
-
-        return providers
-
     def _get_provider(self, provider: Dict, relation: Relation) -> Provider:
         provider = self._extract_secrets(provider)
         provider["relation_id"] = relation.id
         provider = Provider.from_dict(provider)
         return provider
+
+    def get_providers_from_relation(self, relation: Relation) -> List[Provider]:
+        if not relation.app:
+            return []
+        data = relation.data[relation.app]
+        data = _load_data(data, PROVIDER_JSON_SCHEMA)
+        return [self._get_provider(p, relation) for p in data["providers"]]
+
+    def get_providers(self) -> List[Provider]:
+        """Iterate over the relations and fetch all providers."""
+        return [
+            p for relation in self.relations for p in self.get_providers_from_relation(relation)
+        ]
+
+    @property
+    def relations(self) -> List[Relation]:
+        """The list of Relation instances associated with this relation_name."""
+        return [
+            relation
+            for relation in self._charm.model.relations[self._relation_name]
+            if relation.active
+        ]
 
     def _extract_secrets(self, data: Dict) -> Dict:
         backend = data["secret_backend"]
