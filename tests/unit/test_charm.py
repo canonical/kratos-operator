@@ -980,7 +980,12 @@ def test_ingress_relation_created(
     }
 
 
-def test_on_config_changed_when_no_dns_available(harness: Harness) -> None:
+def test_on_config_changed_when_no_dns_available(
+    harness: Harness,
+    mocked_migration_is_needed: MagicMock,
+) -> None:
+    setup_peer_relation(harness)
+    harness.charm.on.leader_elected.emit()
     setup_postgres_relation(harness)
     setup_external_provider_relation(harness)
 

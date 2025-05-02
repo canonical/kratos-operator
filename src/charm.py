@@ -95,6 +95,7 @@ from constants import (
     INTERNAL_INGRESS_RELATION_NAME,
     KRATOS_ADMIN_PORT,
     KRATOS_CONFIG_MAP_NAME,
+    KRATOS_EXTERNAL_IDP_INTEGRATOR_RELATION_NAME,
     KRATOS_INFO_RELATION_NAME,
     KRATOS_PUBLIC_PORT,
     KRATOS_SERVICE_COMMAND,
@@ -168,7 +169,7 @@ class KratosCharm(CharmBase):
             extra_user_roles="SUPERUSER",
         )
 
-        self.external_provider = ExternalIdpRequirer(self, relation_name="kratos-external-idp")
+        self.external_provider = ExternalIdpRequirer(self, relation_name=KRATOS_EXTERNAL_IDP_INTEGRATOR_RELATION_NAME)
 
         self.hydra_endpoints = HydraEndpointsRequirer(self, relation_name=HYDRA_RELATION_NAME)
 
@@ -845,7 +846,7 @@ class KratosCharm(CharmBase):
             return
 
         if (
-            self.model.relations[KRATOS_INFO_RELATION_NAME]
+            (self.model.relations[KRATOS_INFO_RELATION_NAME] or self.model.relations[KRATOS_EXTERNAL_IDP_INTEGRATOR_RELATION_NAME])
             and self.public_ingress.relation is None
         ):
             self.unit.status = BlockedStatus(
@@ -853,7 +854,7 @@ class KratosCharm(CharmBase):
                 "provide an ingress relation."
             )
             return
-        elif self.model.relations[KRATOS_INFO_RELATION_NAME] and self._public_url is None:
+        elif (self.model.relations[KRATOS_INFO_RELATION_NAME] or self.model.relations[KRATOS_EXTERNAL_IDP_INTEGRATOR_RELATION_NAME]) and self._public_url is None:
             self.unit.status = WaitingStatus("Waiting for ingress")
             event.defer()
             return
@@ -868,6 +869,7 @@ class KratosCharm(CharmBase):
             )
             return
 
+        self._update_kratos_external_idp_configurations()
         self._cleanup_peer_data()
         self.cert_transfer.push_ca_certs()
         self._update_config()
@@ -880,6 +882,7 @@ class KratosCharm(CharmBase):
             self.unit.status = BlockedStatus(
                 "Failed to restart the service, please check the logs"
             )
+            return
 
         if template := self.config.get("recovery_email_template"):
             self._container.push(EMAIL_TEMPLATE_FILE_PATH, template, make_dirs=True)
@@ -1074,29 +1077,20 @@ class KratosCharm(CharmBase):
         self._handle_status_update_config(event)
         self._update_kratos_info_relation_data(event)
 
-    def _on_client_config_changed(self, event: ClientConfigChangedEvent) -> None:
+    def _update_kratos_external_idp_configurations(self) -> None:
         public_url = self._public_url
         if public_url is None:
-            self.unit.status = BlockedStatus(
-                "Cannot add external provider without an external hostname. Please "
-                "provide an ingress relation or an external_url config."
+            return
+
+        for p in self.external_provider.get_providers():
+            self.external_provider.set_relation_registered_provider(
+                join(public_url, f"self-service/methods/oidc/callback/{p.provider_id}"),
+                p.provider_id,
+                p.relation_id,
             )
-            event.defer()
-            return
 
-        self.unit.status = MaintenanceStatus(f"Adding external provider: {event.provider}")
-
-        if self._migration_is_needed():
-            event.defer()
-            logger.info("Database is not created. Deferring event.")
-            return
-
+    def _on_client_config_changed(self, event: ClientConfigChangedEvent) -> None:
         self._handle_status_update_config(event)
-        self.external_provider.set_relation_registered_provider(
-            join(public_url, f"self-service/methods/oidc/callback/{event.provider_id}"),
-            event.provider_id,
-            event.relation_id,
-        )
 
     def _on_client_config_removed(self, event: ClientConfigRemovedEvent) -> None:
         self.unit.status = MaintenanceStatus("Removing external provider")
