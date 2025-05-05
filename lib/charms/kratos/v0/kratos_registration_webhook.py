@@ -37,7 +37,7 @@ from pydantic_core import from_json
 
 LIBID = "37ddb4471fae41adb74299f091ee3a28"
 LIBAPI = 0
-LIBPATCH = 3
+LIBPATCH = 4
 
 PYDEPS = ["pydantic"]
 
@@ -120,7 +120,7 @@ class _AuthConfig(BaseModel):
 
 class AuthConfig(BaseModel):
     type: str = Field(default="api_key")
-    config: _AuthConfig
+    config: SerializableModel[_AuthConfig]
 
 
 class ProviderData(BaseModel):
