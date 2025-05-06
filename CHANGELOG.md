@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.4](https://github.com/canonical/kratos-operator/compare/v1.1.3...v1.1.4) (2025-05-06)
+
+
+### Bug Fixes
+
+* fix auth config parsing ([bc74de1](https://github.com/canonical/kratos-operator/commit/bc74de1efb8a17791b3113a3b44efdb4e9ab7ba4))
+* update all external-idp config in holistic handler ([8e517f5](https://github.com/canonical/kratos-operator/commit/8e517f50a2573f0f19c79091ae213619a9c95794))
+* update charm dependent libs ([6f8c2df](https://github.com/canonical/kratos-operator/commit/6f8c2dfaeaeddd14ae2c6930e1865a552edb5770))
+
 ## [1.1.3](https://github.com/canonical/kratos-operator/compare/v1.1.2...v1.1.3) (2025-04-29)
 
 
