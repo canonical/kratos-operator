@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.6](https://github.com/canonical/kratos-operator/compare/v1.1.5...v1.1.6) (2025-05-09)
+
+
+### Bug Fixes
+
+* fix constraint ([fc0b1be](https://github.com/canonical/kratos-operator/commit/fc0b1be120e0a241ad14f90f6649717aa3e56e20))
+
 ## [1.1.5](https://github.com/canonical/kratos-operator/compare/v1.1.4...v1.1.5) (2025-05-09)
 
 
