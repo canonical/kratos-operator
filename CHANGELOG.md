@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.5](https://github.com/canonical/kratos-operator/compare/v1.1.4...v1.1.5) (2025-05-09)
+
+
+### Bug Fixes
+
+* add pod resource constraints ([d3807cb](https://github.com/canonical/kratos-operator/commit/d3807cbb91eca902dccb1fa9c4424829bb514ca9))
+
 ## [1.1.4](https://github.com/canonical/kratos-operator/compare/v1.1.3...v1.1.4) (2025-05-06)
 
 
