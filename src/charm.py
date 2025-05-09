@@ -38,6 +38,12 @@ from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     Provider,
 )
 from charms.loki_k8s.v1.loki_push_api import LogForwarder
+from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
+    K8sResourcePatchFailedEvent,
+    KubernetesComputeResourcesPatch,
+    ResourceRequirements,
+    adjust_resource_requirements,
+)
 from charms.observability_libs.v0.kubernetes_service_patch import KubernetesServicePatch
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.smtp_integrator.v0.smtp import SmtpDataAvailableEvent, SmtpRequires
@@ -169,7 +175,9 @@ class KratosCharm(CharmBase):
             extra_user_roles="SUPERUSER",
         )
 
-        self.external_provider = ExternalIdpRequirer(self, relation_name=KRATOS_EXTERNAL_IDP_INTEGRATOR_RELATION_NAME)
+        self.external_provider = ExternalIdpRequirer(
+            self, relation_name=KRATOS_EXTERNAL_IDP_INTEGRATOR_RELATION_NAME
+        )
 
         self.hydra_endpoints = HydraEndpointsRequirer(self, relation_name=HYDRA_RELATION_NAME)
 
@@ -210,6 +218,12 @@ class KratosCharm(CharmBase):
             self,
             WORKLOAD_CONTAINER_NAME,
             self._handle_status_update_config,
+        )
+
+        self.resources_patch = KubernetesComputeResourcesPatch(
+            self,
+            WORKLOAD_CONTAINER_NAME,
+            resource_reqs_func=self._resource_reqs_from_config,
         )
 
         self.framework.observe(self.on.install, self._on_install)
@@ -281,6 +295,11 @@ class KratosCharm(CharmBase):
         )
         self.framework.observe(self.on.leader_elected, self._configure_internal_ingress)
         self.framework.observe(self.on.config_changed, self._configure_internal_ingress)
+
+        # resource patching
+        self.framework.observe(
+            self.resources_patch.on.patch_failed, self._on_resource_patch_failed
+        )
 
     @property
     def _http_proxy(self) -> str:
@@ -488,6 +507,11 @@ class KratosCharm(CharmBase):
             schema_file.name[: -len("_schema.jsonnet")]
             for schema_file in MAPPERS_LOCAL_DIR_PATH.iterdir()
         ]
+
+    def _resource_reqs_from_config(self) -> ResourceRequirements:
+        limits = {"cpu": self.model.config.get("cpu"), "memory": self.model.config.get("memory")}
+        requests = {"cpu": "100m", "mem": "200Mi"}
+        return adjust_resource_requirements(limits, requests, adhere_to_requests=True)
 
     def _validate_config_log_level(self) -> bool:
         is_valid = self._log_level in LOG_LEVELS
@@ -846,15 +870,18 @@ class KratosCharm(CharmBase):
             return
 
         if (
-            (self.model.relations[KRATOS_INFO_RELATION_NAME] or self.model.relations[KRATOS_EXTERNAL_IDP_INTEGRATOR_RELATION_NAME])
-            and self.public_ingress.relation is None
-        ):
+            self.model.relations[KRATOS_INFO_RELATION_NAME]
+            or self.model.relations[KRATOS_EXTERNAL_IDP_INTEGRATOR_RELATION_NAME]
+        ) and self.public_ingress.relation is None:
             self.unit.status = BlockedStatus(
                 "Cannot send integration data without an external hostname. Please "
                 "provide an ingress relation."
             )
             return
-        elif (self.model.relations[KRATOS_INFO_RELATION_NAME] or self.model.relations[KRATOS_EXTERNAL_IDP_INTEGRATOR_RELATION_NAME]) and self._public_url is None:
+        elif (
+            self.model.relations[KRATOS_INFO_RELATION_NAME]
+            or self.model.relations[KRATOS_EXTERNAL_IDP_INTEGRATOR_RELATION_NAME]
+        ) and self._public_url is None:
             self.unit.status = WaitingStatus("Waiting for ingress")
             event.defer()
             return
@@ -930,6 +957,10 @@ class KratosCharm(CharmBase):
             return
 
         config_map.delete_all()
+
+    def _on_resource_patch_failed(self, event: K8sResourcePatchFailedEvent) -> None:
+        logger.error(f"Failed to patch resource constraints: {event.message}")
+        self.unit.status = BlockedStatus(event.message)
 
     def _get_tracing_endpoint_info(self) -> str:
         if not self._tracing_ready:
