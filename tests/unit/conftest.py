@@ -17,7 +17,9 @@ from kratos import KratosAPI
 
 
 @pytest.fixture()
-def harness(mocked_kubernetes_service_patcher: MagicMock) -> Harness:
+def harness(
+    mocked_kubernetes_service_patcher: MagicMock,
+) -> Harness:
     harness = Harness(KratosCharm)
     harness.set_model_name("kratos-model")
     harness.set_can_connect("kratos", True)
@@ -25,6 +27,20 @@ def harness(mocked_kubernetes_service_patcher: MagicMock) -> Harness:
     harness.begin()
     harness.add_network("10.0.0.10")
     return harness
+
+
+@pytest.fixture(autouse=True)
+def mocked_k8s_resource_patch(mocker: MockerFixture) -> None:
+    mocker.patch(
+        "charms.observability_libs.v0.kubernetes_compute_resources_patch.ResourcePatcher",
+        autospec=True,
+    )
+    mocker.patch.multiple(
+        "charm.KubernetesComputeResourcesPatch",
+        _namespace="kratos-model",
+        _patch=lambda *a, **kw: True,
+        is_ready=lambda *a, **kw: True,
+    )
 
 
 @pytest.fixture(autouse=True)
