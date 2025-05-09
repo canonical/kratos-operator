@@ -1,5 +1,5 @@
 bcrypt==4.3.0
-cosl==0.0.57
+cosl==0.1.0
 ops==2.21.1
 lightkube===0.15.4
 lightkube-models==1.32.0.8
