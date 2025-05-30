@@ -19,8 +19,9 @@ on:
 jobs:
   tests:
     name: CI
-    uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@6980fa34b31ca8631e6cb2d57980e7e035697a31 # v1.8.5
+    uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@IAM-1424-ck8s-operator-action
     with:
       container-name: "kratos"
       use-charmcraftcache: true
       node-size: large
+      modules: '["test_charm.py"]'

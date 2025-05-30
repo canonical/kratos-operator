@@ -16,6 +16,16 @@ from tests.integration.test_charm import KRATOS_APP
 KUBECONFIG = os.environ.get("TESTING_KUBECONFIG", "~/.kube/config")
 
 
+def pytest_addoption(parser):
+    """Parse additional pytest options.
+
+    Args:
+        parser: Pytest parser.
+    """
+    parser.addoption("--charm-file", action="store")
+    parser.addoption("--kube-config", action="store", default="~/.kube/config")
+
+
 @pytest.fixture(scope="module")
 def client() -> Client:
     return Client(config=KubeConfig.from_file(KUBECONFIG))
@@ -43,9 +53,9 @@ async def password_secret(ops_test: OpsTest) -> Tuple[str, str]:
 
 
 @pytest_asyncio.fixture(scope="module")
-async def local_charm(ops_test: OpsTest) -> Path:
-    # in GitHub CI, charms are built with charmcraftcache and uploaded to $CHARM_PATH
-    charm = os.getenv("CHARM_PATH")
+async def local_charm(ops_test: OpsTest, pytestconfig: pytest.Config) -> Path:
+    # in GitHub CI, charms are built with charmcraftcache and uploaded to $CHARM_PATH or passed as pytest option
+    charm = pytestconfig.getoption("--charm-file") or os.getenv("CHARM_PATH")
     if not charm:
         # fall back to build locally - required when run outside of GitHub CI
         charm = await ops_test.build_charm(".")
