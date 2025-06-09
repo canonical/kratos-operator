@@ -5,7 +5,7 @@ lightkube===0.15.4
 lightkube-models==1.33.1.8
 Jinja2==3.1.6
 jsonschema==4.24.0
-requests==2.32.3
+requests==2.32.4
 tenacity==9.1.2
 pydantic~=2.11.2
 pyyaml==6.0.2
