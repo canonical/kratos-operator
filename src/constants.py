@@ -20,7 +20,7 @@ LOG_LEVELS = ["panic", "fatal", "error", "warn", "info", "debug", "trace"]
 CONFIG_DIR_PATH = Path("/etc/config/kratos")
 CONFIG_FILE_PATH = CONFIG_DIR_PATH / "kratos.yaml"
 IDENTITY_SCHEMAS_LOCAL_DIR_PATH = Path("identity_schemas")
-PROVIDERS_CONFIGMAP_FILE_NAME = "idps.yaml"
+PROVIDERS_CONFIGMAP_FILE_NAME = "idps.json"
 
 # Integration constants
 PEER_RELATION_NAME = "kratos-peers"
