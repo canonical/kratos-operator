@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.7](https://github.com/canonical/kratos-operator/compare/v1.1.6...v1.1.7) (2025-06-19)
+
+
+### Bug Fixes
+
+* align the idp k8s configmap key name ([c268413](https://github.com/canonical/kratos-operator/commit/c26841336ae9ee279fdcf28bb65684d7eaec42be))
+* align the idp k8s configmap key name ([296da36](https://github.com/canonical/kratos-operator/commit/296da363f077a1cfbac339158b7ac280114a513d))
+
 ## [1.1.6](https://github.com/canonical/kratos-operator/compare/v1.1.5...v1.1.6) (2025-05-09)
 
 
