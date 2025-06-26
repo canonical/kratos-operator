@@ -9,6 +9,7 @@
 import base64
 import json
 import logging
+import uuid
 from functools import cached_property
 from os.path import join
 from secrets import token_hex
@@ -1176,6 +1177,13 @@ class KratosCharm(CharmBase):
             event.fail("One of identity-id and email must be provided.")
             return None
 
+        if identity_id:
+            try:
+                uuid.UUID(identity_id)
+            except ValueError:
+                event.fail("The identity-id must be a valid UUID.")
+                return None
+
         if email:
             identity = self.kratos.get_identity_from_email(email)
             if not identity:
@@ -1190,7 +1198,8 @@ class KratosCharm(CharmBase):
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
-        identity_id = self._get_identity_id(event)
+        if not (identity_id := self._get_identity_id(event)):
+            return
 
         event.log("Deleting the identity.")
         try:
@@ -1207,7 +1216,8 @@ class KratosCharm(CharmBase):
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
-        identity_id = self._get_identity_id(event)
+        if not (identity_id := self._get_identity_id(event)):
+            return
 
         if secret_id := event.params.get("password-secret-id"):
             try:
@@ -1240,7 +1250,8 @@ class KratosCharm(CharmBase):
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
-        identity_id = self._get_identity_id(event)
+        if not (identity_id := self._get_identity_id(event)):
+            return
 
         event.log("Invalidating user sessions")
         try:
@@ -1260,8 +1271,6 @@ class KratosCharm(CharmBase):
             return
 
         mfa_type = event.params.get("mfa-type")
-        identity_id = self._get_identity_id(event)
-
         if not mfa_type:
             event.fail("MFA type must be specified")
             return
@@ -1271,6 +1280,9 @@ class KratosCharm(CharmBase):
                 f"Unsupported MFA credential type {mfa_type}, "
                 "allowed methods are: `totp`, `lookup_secret` and `webauthn`"
             )
+            return
+
+        if not (identity_id := self._get_identity_id(event)):
             return
 
         event.log("Resetting user's second authentication factor")
