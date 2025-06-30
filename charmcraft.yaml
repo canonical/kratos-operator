@@ -77,14 +77,17 @@ provides:
     interface: kratos_info
     description: |
       Provides kratos deployment info to a related application
+    optional: true
   metrics-endpoint:
     interface: prometheus_scrape
     description: |
       Provides application metrics to COS Prometheus instance
+    optional: true
   grafana-dashboard:
     description: |
       Forwards the built-in grafana dashboard(s) for monitoring kratos.
     interface: grafana_dashboard
+    optional: true
 config:
   options:
     http_proxy:
