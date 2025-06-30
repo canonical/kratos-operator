@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.7](https://github.com/canonical/kratos-operator/compare/v1.1.6...v1.1.7) (2025-06-30)
+
+
+### Bug Fixes
+
+* align the idp k8s configmap key name ([c268413](https://github.com/canonical/kratos-operator/commit/c26841336ae9ee279fdcf28bb65684d7eaec42be))
+* align the idp k8s configmap key name ([296da36](https://github.com/canonical/kratos-operator/commit/296da363f077a1cfbac339158b7ac280114a513d))
+* validate identity id ([592660f](https://github.com/canonical/kratos-operator/commit/592660fe205288d4a7497c094fe816c664611523))
+* validate that identity id is a uuid ([8169232](https://github.com/canonical/kratos-operator/commit/8169232ed4df1098fbdc88b2f3a2ba3cf9020538))
+
 ## [1.1.6](https://github.com/canonical/kratos-operator/compare/v1.1.5...v1.1.6) (2025-05-09)
 
 
