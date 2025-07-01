@@ -68,15 +68,15 @@ selfservice:
                             method: {{ registration_webhook_config.method }}
                             emit_analytics_event: {{ registration_webhook_config.emit_analytics_event }}
                             response:
-                                ignore: {{ registration_webhook_config.response.ignore }}
-                                parse: {{ registration_webhook_config.response.parse }}
-                            {%- if registration_webhook_config.auth %}
+                                ignore: {{ registration_webhook_config.response_ignore }}
+                                parse: {{ registration_webhook_config.response_parse }}
+                            {%- if registration_webhook_config.auth_enabled %}
                             auth:
-                                type: {{ registration_webhook_config.auth.type }}
+                                type: {{ registration_webhook_config.auth_type }}
                                 config:
-                                    name: {{ registration_webhook_config.auth.config.name }}
-                                    value: {{ registration_webhook_config.auth.config.value }}
-                                    in: {{ registration_webhook_config.auth.config.in_ }}
+                                    name: {{ registration_webhook_config.auth_config_name }}
+                                    value: {{ registration_webhook_config.auth_config_value }}
+                                    in: {{ registration_webhook_config.auth_config_in }}
                             {%- endif %}
                         {%- endif %}
                         - hook: session
