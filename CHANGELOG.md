@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.8](https://github.com/canonical/kratos-operator/compare/v1.1.7...v1.1.8) (2025-07-01)
+
+
+### Bug Fixes
+
+* store api token in juju secret ([783228b](https://github.com/canonical/kratos-operator/commit/783228b0a479599706a33d96f380f2e3431e4436))
+
 ## [1.1.7](https://github.com/canonical/kratos-operator/compare/v1.1.6...v1.1.7) (2025-06-30)
 
 
