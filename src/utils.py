@@ -70,10 +70,20 @@ def normalise_url(url: str) -> str:
 
 
 def run_after_config_updated(func: Callable) -> Callable:
+    """Wait until the config file has been updated.
+
+    The config file in the container comes from a mounted ConfigMap. After a change has
+    been applied to the ConfigMap, we need to wait for kubelet to apply these changes to the
+    pod. By default the kubelet reconciliation loop runs every 1 minute. This decorator allows
+    us to ensure that the configuration file is up-to-date before restarting the service.
+    """
+
     @wraps(func)
     def wrapper(charm: "KratosCharm", *args: Any, **kwargs: Any) -> Optional[Any]:
-        charm.unit.status = WaitingStatus("Waiting for configuration to be updated")
+        if charm._config_file_changed:
+            return func(charm, *args, **kwargs)
 
+        charm.unit.status = WaitingStatus("Waiting for configuration to be updated")
         for attempt in Retrying(
             wait=wait_fixed(5),
         ):

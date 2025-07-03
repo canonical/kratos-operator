@@ -849,8 +849,6 @@ class KratosCharm(CharmBase):
         if not self._validate_config_log_level():
             return
 
-        self.unit.status = MaintenanceStatus("Configuring resources")
-
         if not self.model.relations[DB_RELATION_NAME]:
             self.unit.status = BlockedStatus("Missing required relation with postgresql")
             event.defer()
