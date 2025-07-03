@@ -84,12 +84,25 @@ def test_config_map_update(
     lk_client: MagicMock, mocked_cm: MagicMock, cls: ConfigMapBase, mocked_charm: MagicMock
 ) -> None:
     data = {"a": "b"}
+    cm = cls(lk_client, mocked_charm)
+
+    r = cm.update(data)
+
+    assert r is True
+    assert lk_client.replace.call_args[0][0].data == data
+
+
+@pytest.mark.parametrize("cls", (KratosConfigMap, IdentitySchemaConfigMap, ProvidersConfigMap))
+def test_config_map_update_when_unchanged(
+    lk_client: MagicMock, mocked_cm: MagicMock, cls: ConfigMapBase, mocked_charm: MagicMock
+) -> None:
+    data = {"a": "b"}
     mocked_cm.data = data
     cm = cls(lk_client, mocked_charm)
 
-    cm.update(data)
+    r = cm.update(data)
 
-    assert lk_client.replace.call_args[0][0].data == data
+    assert r is False
 
 
 @pytest.mark.parametrize("cls", (KratosConfigMap, IdentitySchemaConfigMap, ProvidersConfigMap))
@@ -98,13 +111,11 @@ def test_update_map_error(
 ) -> None:
     data = {"data": 1}
     resp = Response(status_code=403, json={"message": "Forbidden", "code": 403})
-    lk_client.get.side_effect = ApiError(response=resp)
+    lk_client.replace.side_effect = ApiError(response=resp)
     cm = cls(lk_client, mocked_charm)
 
-    cm.update(data)
-
-    assert lk_client.get.called
-    assert not lk_client.replace.called
+    with pytest.raises(ApiError):
+        cm.update(data)
 
 
 @pytest.mark.parametrize("cls", (KratosConfigMap, IdentitySchemaConfigMap, ProvidersConfigMap))
