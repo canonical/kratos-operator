@@ -75,22 +75,15 @@ class ConfigMapBase:
         )
         self._client.create(cm)
 
-    def update(self, data: Dict, dump: bool = False) -> bool:
-        """Update the configMap.
-
-        Return value is a boolean indicating whether the cm data changed.
-        """
+    def update(self, data: Dict, dump: bool = False) -> None:
+        """Update the configMap."""
         cm = self._client.get(ConfigMap, self.name, namespace=self.namespace)
 
         if dump:
             data = {k: json.dumps(v) for k, v in data.items()}
 
-        if data == cm.data:
-            return False
-
         cm.data = data
         self._client.replace(cm)
-        return True
 
     def get(self) -> Dict:
         """Get the configMap."""

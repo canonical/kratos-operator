@@ -7,6 +7,7 @@
 """A Juju charm for Ory Kratos."""
 
 import base64
+import hashlib
 import json
 import logging
 import uuid
@@ -58,7 +59,7 @@ from charms.traefik_k8s.v2.ingress import (
 from jinja2 import Template
 from lightkube import Client
 from lightkube.resources.apps_v1 import StatefulSet
-from ops import main
+from ops import StoredState, main
 from ops.charm import (
     ActionEvent,
     CharmBase,
@@ -87,6 +88,7 @@ from ops.pebble import ChangeError, Error, ExecError, Layer
 from tenacity import before_log, retry, stop_after_attempt, wait_exponential
 
 import config_map
+import utils
 from certificate_transfer_integration import CertTransfer
 from config_map import IdentitySchemaConfigMap, KratosConfigMap, ProvidersConfigMap
 from constants import (
@@ -132,11 +134,16 @@ logger = logging.getLogger(__name__)
 class KratosCharm(CharmBase):
     """Charmed Ory Kratos."""
 
+    _stored = StoredState()
+    config_changed = False
+
     def __init__(self, *args: Any) -> None:
         super().__init__(*args)
+        self._stored.set_default(
+            config_hash=None,
+        )
         self._container = self.unit.get_container(WORKLOAD_CONTAINER_NAME)
 
-        self._config_file_changed = False
         self.client = Client(field_manager=self.app.name, namespace=self.model.name)
         self.kratos = KratosAPI(f"http://127.0.0.1:{KRATOS_ADMIN_PORT}", self._container)
         self.kratos_configmap = KratosConfigMap(self.client, self)
@@ -504,6 +511,10 @@ class KratosCharm(CharmBase):
         return self.config["log_level"]
 
     @cached_property
+    def _config_hash(self) -> int:
+        return int(hashlib.md5(self._render_conf_file().encode()).hexdigest(), 16)
+
+    @cached_property
     def _get_available_mappers(self) -> List[str]:
         return [
             schema_file.name[: -len("_schema.jsonnet")]
@@ -615,15 +626,30 @@ class KratosCharm(CharmBase):
         else:
             return f"{method}://{username}:{password}@{server}:{port}/"
 
+    @property
+    def current_config_hash(self) -> Optional[int]:
+        return self._stored.config_hash
+
     @retry(
         wait=wait_exponential(multiplier=3, min=1, max=10),
         stop=stop_after_attempt(5),
         reraise=True,
         before=before_log(logger, logging.DEBUG),
     )
+    def _update_cm(self, content: str) -> None:
+        if self.unit.is_leader():
+            self.kratos_configmap.update({"kratos.yaml": content})
+
     def _update_config(self) -> None:
         conf = self._render_conf_file()
-        self._config_file_changed = self.kratos_configmap.update({"kratos.yaml": conf})
+        config_hash = utils.hash(conf)
+        if config_hash == self.current_config_hash:
+            return
+
+        self._update_cm(conf)
+
+        self._stored.config_hash = config_hash
+        self.config_changed = True
 
     def _get_hydra_endpoint_info(self) -> Optional[str]:
         oauth2_provider_url = None
@@ -831,8 +857,8 @@ class KratosCharm(CharmBase):
         return self._get_peer_data(self._migration_peer_data_key) != self.kratos.get_version()
 
     @run_after_config_updated
-    def _restart_service(self) -> None:
-        if self._config_file_changed:
+    def _restart_service(self, restart: bool = False) -> None:
+        if restart:
             self._container.restart(WORKLOAD_CONTAINER_NAME)
         elif not self._container.get_service(WORKLOAD_CONTAINER_NAME).is_running():
             self._container.start(WORKLOAD_CONTAINER_NAME)
@@ -908,7 +934,7 @@ class KratosCharm(CharmBase):
         # We need to push the layer because this may run before _on_pebble_ready
         self._container.add_layer(WORKLOAD_CONTAINER_NAME, self._pebble_layer, combine=True)
         try:
-            self._restart_service()
+            self._restart_service(restart=self.config_changed)
         except ChangeError as err:
             logger.error(str(err))
             self.unit.status = BlockedStatus(
@@ -942,6 +968,7 @@ class KratosCharm(CharmBase):
 
     def _on_pebble_ready(self, event: PebbleReadyEvent) -> None:
         """Event Handler for pebble ready event."""
+        self.unit.status = MaintenanceStatus("Configuring resources")
         self._patch_statefulset()
         # Necessary directory for log forwarding
         if not self._container.can_connect():
@@ -954,6 +981,7 @@ class KratosCharm(CharmBase):
 
     def _on_config_changed(self, event: ConfigChangedEvent) -> None:
         """Event Handler for config changed event."""
+        self.unit.status = MaintenanceStatus("Configuring resources")
         self._handle_status_update_config(event)
         self._update_kratos_info_relation_data(event)
 
@@ -1028,6 +1056,7 @@ class KratosCharm(CharmBase):
 
     def _on_database_created(self, event: DatabaseCreatedEvent) -> None:
         """Event Handler for database created event."""
+        self.unit.status = MaintenanceStatus("Configuring resources")
         if not self._container.can_connect():
             event.defer()
             logger.info("Cannot connect to Kratos container. Deferring the event.")
@@ -1064,10 +1093,12 @@ class KratosCharm(CharmBase):
 
     def _on_database_changed(self, event: DatabaseEndpointsChangedEvent) -> None:
         """Event Handler for database changed event."""
+        self.unit.status = MaintenanceStatus("Configuring resources")
         self._handle_status_update_config(event)
 
     def _on_database_relation_departed(self, event: RelationDepartedEvent) -> None:
         """Event Handler for database changed event."""
+        self.unit.status = MaintenanceStatus("Configuring resources")
         if event.departing_unit == self.unit:
             return
 

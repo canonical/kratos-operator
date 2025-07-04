@@ -122,9 +122,12 @@ def mocked_pebble_exec_failed(mocked_pebble_exec: MagicMock) -> MagicMock:
 
 @pytest.fixture(autouse=True)
 def mocked_restart_service(mocker: MockerFixture) -> MagicMock:
+    def mock(charm, restart=False):
+        return charm._container.restart(WORKLOAD_CONTAINER_NAME)
+
     return mocker.patch(
         "charm.KratosCharm._restart_service",
-        lambda charm: charm._container.restart(WORKLOAD_CONTAINER_NAME),
+        mock,
     )
 
 
