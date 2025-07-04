@@ -40,7 +40,7 @@ from pydantic import (
 
 LIBID = "37ddb4471fae41adb74299f091ee3a28"
 LIBAPI = 0
-LIBPATCH = 5
+LIBPATCH = 6
 
 PYDEPS = ["pydantic"]
 
@@ -81,14 +81,12 @@ class ProviderData(BaseModel):
 
     @cached_property
     def auth_enabled(self) -> bool:
-        return all(
-            [
-                self.auth_type,
-                self.auth_config_name,
-                self.auth_config_value_secret or self.auth_config_value,
-                self.auth_config_in,
-            ]
-        )
+        return all([
+            self.auth_type,
+            self.auth_config_name,
+            self.auth_config_value_secret or self.auth_config_value,
+            self.auth_config_in,
+        ])
 
     @field_serializer(
         "auth_type",

@@ -136,6 +136,7 @@ class KratosCharm(CharmBase):
         super().__init__(*args)
         self._container = self.unit.get_container(WORKLOAD_CONTAINER_NAME)
 
+        self._config_file_changed = False
         self.client = Client(field_manager=self.app.name, namespace=self.model.name)
         self.kratos = KratosAPI(f"http://127.0.0.1:{KRATOS_ADMIN_PORT}", self._container)
         self.kratos_configmap = KratosConfigMap(self.client, self)
@@ -622,7 +623,7 @@ class KratosCharm(CharmBase):
     )
     def _update_config(self) -> None:
         conf = self._render_conf_file()
-        self.kratos_configmap.update({"kratos.yaml": conf})
+        self._config_file_changed = self.kratos_configmap.update({"kratos.yaml": conf})
 
     def _get_hydra_endpoint_info(self) -> Optional[str]:
         oauth2_provider_url = None
@@ -831,7 +832,12 @@ class KratosCharm(CharmBase):
 
     @run_after_config_updated
     def _restart_service(self) -> None:
-        self._container.restart(WORKLOAD_CONTAINER_NAME)
+        if self._config_file_changed:
+            self._container.restart(WORKLOAD_CONTAINER_NAME)
+        elif not self._container.get_service(WORKLOAD_CONTAINER_NAME).is_running():
+            self._container.start(WORKLOAD_CONTAINER_NAME)
+        else:
+            self._container.replan()
 
     def _handle_status_update_config(self, event: HookEvent) -> None:
         if not self._container.can_connect():
@@ -842,8 +848,6 @@ class KratosCharm(CharmBase):
 
         if not self._validate_config_log_level():
             return
-
-        self.unit.status = MaintenanceStatus("Configuring resources")
 
         if not self.model.relations[DB_RELATION_NAME]:
             self.unit.status = BlockedStatus("Missing required relation with postgresql")
