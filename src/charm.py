@@ -7,6 +7,7 @@
 """A Juju charm for Ory Kratos."""
 
 import base64
+import hashlib
 import json
 import logging
 import uuid
@@ -58,7 +59,7 @@ from charms.traefik_k8s.v2.ingress import (
 from jinja2 import Template
 from lightkube import Client
 from lightkube.resources.apps_v1 import StatefulSet
-from ops import main
+from ops import StoredState, main
 from ops.charm import (
     ActionEvent,
     CharmBase,
@@ -132,11 +133,15 @@ logger = logging.getLogger(__name__)
 class KratosCharm(CharmBase):
     """Charmed Ory Kratos."""
 
+    _stored = StoredState()
+
     def __init__(self, *args: Any) -> None:
         super().__init__(*args)
+        self._stored.set_default(
+            config_hash=None,
+        )
         self._container = self.unit.get_container(WORKLOAD_CONTAINER_NAME)
 
-        self._config_file_changed = False
         self.client = Client(field_manager=self.app.name, namespace=self.model.name)
         self.kratos = KratosAPI(f"http://127.0.0.1:{KRATOS_ADMIN_PORT}", self._container)
         self.kratos_configmap = KratosConfigMap(self.client, self)
@@ -504,6 +509,14 @@ class KratosCharm(CharmBase):
         return self.config["log_level"]
 
     @cached_property
+    def _config_hash(self) -> int:
+        return hashlib.md5(self._render_conf_file().encode()).digest()
+
+    @property
+    def _config_file_changed(self) -> bool:
+        return self._config_hash != self._stored.config_hash
+
+    @cached_property
     def _get_available_mappers(self) -> List[str]:
         return [
             schema_file.name[: -len("_schema.jsonnet")]
@@ -623,7 +636,8 @@ class KratosCharm(CharmBase):
     )
     def _update_config(self) -> None:
         conf = self._render_conf_file()
-        self._config_file_changed = self.kratos_configmap.update({"kratos.yaml": conf})
+        self.kratos_configmap.update({"kratos.yaml": conf})
+        self._stored.config_hash = self._config_hash
 
     def _get_hydra_endpoint_info(self) -> Optional[str]:
         oauth2_provider_url = None
