@@ -1,6 +1,6 @@
 charm={
     name="kratos"
-    units=1
+    units=3
     base="ubuntu@22.04"
     trust=true
     config={
