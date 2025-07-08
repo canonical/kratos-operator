@@ -95,6 +95,8 @@ def mocked_fqdn(mocker: MockerFixture) -> MagicMock:
 def mocked_container(harness: Harness, mocker: MockerFixture) -> Container:
     container = harness.model.unit.get_container("kratos")
     setattr(container, "restart", mocker.MagicMock())
+    setattr(container, "start", mocker.MagicMock())
+    setattr(container, "replan", mocker.MagicMock())
     return container
 
 
@@ -122,12 +124,17 @@ def mocked_pebble_exec_failed(mocked_pebble_exec: MagicMock) -> MagicMock:
 
 @pytest.fixture(autouse=True)
 def mocked_restart_service(mocker: MockerFixture) -> MagicMock:
-    def mock(charm, restart=False):
-        return charm._container.restart(WORKLOAD_CONTAINER_NAME)
+    def restart_service(self, restart: bool = False) -> None:
+        if restart:
+            self._container.restart(WORKLOAD_CONTAINER_NAME)
+        elif not self._container.get_service(WORKLOAD_CONTAINER_NAME).is_running():
+            self._container.start(WORKLOAD_CONTAINER_NAME)
+        else:
+            self._container.replan()
 
     return mocker.patch(
         "charm.KratosCharm._restart_service",
-        mock,
+        restart_service,
     )
 
 
