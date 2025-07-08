@@ -630,6 +630,9 @@ class KratosCharm(CharmBase):
     def current_config_hash(self) -> Optional[int]:
         return self._stored.config_hash
 
+    def fetch_cm(self) -> str:
+        return self.kratos_configmap.get(load=False)["kratos.yaml"]
+
     @retry(
         wait=wait_exponential(multiplier=3, min=1, max=10),
         stop=stop_after_attempt(5),

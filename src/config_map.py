@@ -5,7 +5,7 @@
 
 import json
 import logging
-from typing import Dict
+from typing import Dict, Union
 
 from lightkube import ApiError, Client
 from lightkube.models.meta_v1 import ObjectMeta
@@ -85,7 +85,7 @@ class ConfigMapBase:
         cm.data = data
         self._client.replace(cm)
 
-    def get(self) -> Dict:
+    def get(self, load: bool = True) -> Union[Dict, str]:
         """Get the configMap."""
         try:
             cm = self._client.get(ConfigMap, self.name, namespace=self.namespace)
@@ -95,7 +95,10 @@ class ConfigMapBase:
         if not cm.data:
             return {}
 
-        return {k: json.loads(v) for k, v in cm.data.items()}
+        if load:
+            return {k: json.loads(v) for k, v in cm.data.items()}
+        else:
+            return cm.data
 
     def delete(self) -> None:
         """Delete the configMap."""

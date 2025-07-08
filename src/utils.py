@@ -92,7 +92,7 @@ def run_after_config_updated(func: Callable) -> Callable:
         for attempt in Retrying(
             wait=wait_fixed(5),
         ):
-            expected_config = charm._render_conf_file()
+            expected_config = charm.fetch_cm()
             current_config = charm._container.pull(CONFIG_FILE_PATH).read()
             with attempt:
                 if expected_config != current_config:
