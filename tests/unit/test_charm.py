@@ -5,7 +5,7 @@ import base64
 import json
 from pathlib import Path
 from typing import Any, Dict, Tuple
-from unittest.mock import MagicMock, Mock
+from unittest.mock import MagicMock, Mock, PropertyMock
 
 import pytest
 import requests
@@ -15,7 +15,9 @@ from charms.kratos.v0.kratos_info import KratosInfoRelationReadyEvent
 from ops.model import ActiveStatus, BlockedStatus, Container, WaitingStatus
 from ops.pebble import ExecError, TimeoutError
 from ops.testing import Harness
+from pytest_mock import MockerFixture
 
+import utils
 from constants import INTERNAL_INGRESS_RELATION_NAME
 
 CONFIG_DIR = Path("/etc/config")
@@ -2626,6 +2628,35 @@ def test_run_migration_action(
 
     mocked_run_migration.assert_called_once()
     event.fail.assert_not_called()
+
+
+def test_holistic_handler_without_config_change(
+    harness: Harness,
+    mocker: MockerFixture,
+    mocked_kratos_service: MagicMock,
+    mocked_migration_is_needed: MagicMock,
+    mocked_container: MagicMock,
+) -> None:
+    setup_peer_relation(harness)
+    setup_postgres_relation(harness)
+    setup_ingress_relation(harness, "public")
+    harness.charm.on.leader_elected.emit()
+    container = harness.model.unit.get_container(CONTAINER_NAME)
+    harness.charm.on.kratos_pebble_ready.emit(container)
+    event = MagicMock()
+    mocked_container.restart.reset_mock()
+    mocked_container.start.reset_mock()
+    mocked_container.replan.reset_mock()
+    h = utils.hash(harness.charm._render_conf_file())
+    mocker.patch(
+        "charm.KratosCharm.current_config_hash", new_callable=PropertyMock, return_value=h
+    )
+    harness.charm.config_changed = False
+
+    harness.charm._handle_status_update_config(event)
+
+    mocked_container.restart.assert_not_called()
+    mocked_container.replan.assert_called_once()
 
 
 def test_error_on_run_migration_action(

@@ -5,7 +5,7 @@
 
 import json
 import logging
-from typing import Dict
+from typing import Dict, Union
 
 from lightkube import ApiError, Client
 from lightkube.models.meta_v1 import ObjectMeta
@@ -75,24 +75,17 @@ class ConfigMapBase:
         )
         self._client.create(cm)
 
-    def update(self, data: Dict, dump: bool = False) -> bool:
-        """Update the configMap.
-
-        Return value is a boolean indicating whether the cm data changed.
-        """
+    def update(self, data: Dict, dump: bool = False) -> None:
+        """Update the configMap."""
         cm = self._client.get(ConfigMap, self.name, namespace=self.namespace)
 
         if dump:
             data = {k: json.dumps(v) for k, v in data.items()}
 
-        if data == cm.data:
-            return False
-
         cm.data = data
         self._client.replace(cm)
-        return True
 
-    def get(self) -> Dict:
+    def get(self, load: bool = True) -> Union[Dict, str]:
         """Get the configMap."""
         try:
             cm = self._client.get(ConfigMap, self.name, namespace=self.namespace)
@@ -102,7 +95,10 @@ class ConfigMapBase:
         if not cm.data:
             return {}
 
-        return {k: json.loads(v) for k, v in cm.data.items()}
+        if load:
+            return {k: json.loads(v) for k, v in cm.data.items()}
+        else:
+            return cm.data
 
     def delete(self) -> None:
         """Delete the configMap."""

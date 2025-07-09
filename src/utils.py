@@ -4,6 +4,7 @@
 
 """Utility functions for the Kratos charm."""
 
+import hashlib
 from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 from urllib.parse import urlparse
@@ -69,6 +70,10 @@ def normalise_url(url: str) -> str:
     return parsed_url.geturl()
 
 
+def hash(content: str) -> int:
+    return int(hashlib.md5(content.encode()).hexdigest(), 16)
+
+
 def run_after_config_updated(func: Callable) -> Callable:
     """Wait until the config file has been updated.
 
@@ -80,14 +85,14 @@ def run_after_config_updated(func: Callable) -> Callable:
 
     @wraps(func)
     def wrapper(charm: "KratosCharm", *args: Any, **kwargs: Any) -> Optional[Any]:
-        if charm._config_file_changed:
+        if not charm.config_changed:
             return func(charm, *args, **kwargs)
 
         charm.unit.status = WaitingStatus("Waiting for configuration to be updated")
         for attempt in Retrying(
             wait=wait_fixed(5),
         ):
-            expected_config = charm._render_conf_file()
+            expected_config = charm.fetch_cm()
             current_config = charm._container.pull(CONFIG_FILE_PATH).read()
             with attempt:
                 if expected_config != current_config:
