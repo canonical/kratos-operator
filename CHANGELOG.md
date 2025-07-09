@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.10](https://github.com/canonical/kratos-operator/compare/v1.1.9...v1.1.10) (2025-07-09)
+
+
+### Bug Fixes
+
+* check that relation is active ([56b4adc](https://github.com/canonical/kratos-operator/commit/56b4adc4228607f193db5ed162312f47ba61aec4))
+* do not defer events if not needed ([2eca933](https://github.com/canonical/kratos-operator/commit/2eca9333f6ed28c8868b82e22345ea408e574540))
+
 ## [1.1.9](https://github.com/canonical/kratos-operator/compare/v1.1.8...v1.1.9) (2025-07-09)
 
 
