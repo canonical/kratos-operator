@@ -40,7 +40,7 @@ from pydantic import (
 
 LIBID = "37ddb4471fae41adb74299f091ee3a28"
 LIBAPI = 0
-LIBPATCH = 6
+LIBPATCH = 7
 
 PYDEPS = ["pydantic"]
 
@@ -195,7 +195,7 @@ class KratosRegistrationWebhookRequirer(Object):
     def _on_relation_changed(self, event: RelationCreatedEvent) -> None:
         provider_app = event.relation.app
 
-        if not event.relation.data.get(provider_app):
+        if not event.relation.active or not event.relation.data.get(provider_app):
             return
 
         self.on.ready.emit(event.relation)
@@ -203,6 +203,12 @@ class KratosRegistrationWebhookRequirer(Object):
     def _on_relation_broken(self, event: RelationBrokenEvent) -> None:
         """Handle the event emitted when the integration is broken."""
         self.on.unavailable.emit(event.relation)
+
+    def _get_secret(self, secret_id: str) -> Optional[Secret]:
+        try:
+            return self._charm.model.get_secret(id=secret_id)
+        except ModelError:
+            return None
 
     def consume_relation_data(
         self,
@@ -219,8 +225,8 @@ class KratosRegistrationWebhookRequirer(Object):
 
         provider_data = dict(relation.data.get(relation.app))
         if secret_id := provider_data.get("auth_config_value_secret"):
-            secret = self._charm.model.get_secret(id=secret_id)
-            provider_data["auth_config_value"] = secret.get_content().get("auth-config-value")
+            if secret := self._get_secret(secret_id):
+                provider_data["auth_config_value"] = secret.get_content().get("auth-config-value")
         return ProviderData(**provider_data) if provider_data else None
 
     def _is_relation_active(self, relation: Relation) -> bool:

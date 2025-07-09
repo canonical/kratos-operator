@@ -32,7 +32,15 @@ from charms.identity_platform_login_ui_operator.v0.login_ui_endpoints import (
     LoginUIEndpointsRequirer,
 )
 from charms.kratos.v0.kratos_info import KratosInfoProvider
-from charms.kratos.v0.kratos_registration_webhook import KratosRegistrationWebhookRequirer
+from charms.kratos.v0.kratos_registration_webhook import (
+    KratosRegistrationWebhookRequirer,
+)
+from charms.kratos.v0.kratos_registration_webhook import (
+    ReadyEvent as KratosRegistrationWebhookReadyEvent,
+)
+from charms.kratos.v0.kratos_registration_webhook import (
+    UnavailableEvent as KratosRegistrationWebhookUnavailableEvent,
+)
 from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
     ClientConfigChangedEvent,
     ClientConfigRemovedEvent,
@@ -244,10 +252,10 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.on.remove, self._on_remove)
         self.framework.observe(self.info_provider.on.ready, self._update_kratos_info_relation_data)
         self.framework.observe(
-            self.registration_webhook.on.ready, self._handle_status_update_config
+            self.registration_webhook.on.ready, self._on_registration_webhook_ready
         )
         self.framework.observe(
-            self.registration_webhook.on.unavailable, self._handle_status_update_config
+            self.registration_webhook.on.unavailable, self._on_registration_webhook_unavailable
         )
         self.framework.observe(
             self.on[HYDRA_RELATION_NAME].relation_changed, self._on_config_changed
@@ -870,7 +878,6 @@ class KratosCharm(CharmBase):
 
     def _handle_status_update_config(self, event: HookEvent) -> None:
         if not self._container.can_connect():
-            event.defer()
             logger.info("Cannot connect to Kratos container. Deferring event.")
             self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
@@ -880,12 +887,10 @@ class KratosCharm(CharmBase):
 
         if not self.model.relations[DB_RELATION_NAME]:
             self.unit.status = BlockedStatus("Missing required relation with postgresql")
-            event.defer()
             return
 
         if not self.database.is_resource_created():
             self.unit.status = WaitingStatus("Waiting for database creation")
-            event.defer()
             return
 
         if not self._peers:
@@ -895,12 +900,10 @@ class KratosCharm(CharmBase):
 
         if not self._get_secret():
             self.unit.status = WaitingStatus("Waiting for secret creation")
-            event.defer()
             return
 
         if self._migration_is_needed():
             self.unit.status = WaitingStatus("Waiting for database migration")
-            event.defer()
             return
 
         if (
@@ -987,6 +990,16 @@ class KratosCharm(CharmBase):
         self.unit.status = MaintenanceStatus("Configuring resources")
         self._handle_status_update_config(event)
         self._update_kratos_info_relation_data(event)
+
+    def _on_registration_webhook_ready(self, event: KratosRegistrationWebhookReadyEvent) -> None:
+        self.unit.status = MaintenanceStatus("Configuring resources")
+        self._handle_status_update_config(event)
+
+    def _on_registration_webhook_unavailable(
+        self, event: KratosRegistrationWebhookUnavailableEvent
+    ) -> None:
+        self.unit.status = MaintenanceStatus("Configuring resources")
+        self._handle_status_update_config(event)
 
     def _on_remove(self, event: RemoveEvent) -> None:
         if not self.unit.is_leader():
