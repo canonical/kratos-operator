@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.9](https://github.com/canonical/kratos-operator/compare/v1.1.8...v1.1.9) (2025-07-09)
+
+
+### Bug Fixes
+
+* compare config against cm ([94eb584](https://github.com/canonical/kratos-operator/commit/94eb5848ca98ef6611201b250f85a3bc372cf52f))
+* restart service only when config changed ([259a15a](https://github.com/canonical/kratos-operator/commit/259a15af6f1ce3c36e0c9852bffe8aebc7910475))
+* update run_after_config_updated ([fc8ad80](https://github.com/canonical/kratos-operator/commit/fc8ad802eef641a1bd241f070f7f90c9e632b375))
+* use config hash to restart service ([162382f](https://github.com/canonical/kratos-operator/commit/162382f62d4b9898a94fc776c8e96b8d58d8354f))
+
 ## [1.1.8](https://github.com/canonical/kratos-operator/compare/v1.1.7...v1.1.8) (2025-07-01)
 
 
