@@ -224,12 +224,6 @@ def mocked_delete_identity(mocker: MockerFixture, kratos_identity_json: Dict) ->
 
 
 @pytest.fixture()
-def mocked_list_identity(mocker: MockerFixture, kratos_identity_json: Dict) -> MagicMock:
-    mock = mocker.patch("charm.KratosAPI.list_identities", return_value=[kratos_identity_json])
-    return mock
-
-
-@pytest.fixture()
 def mocked_get_identity_from_email(mocker: MockerFixture, kratos_identity_json: Dict) -> MagicMock:
     mock = mocker.patch(
         "charm.KratosAPI.get_identity_from_email", return_value=kratos_identity_json

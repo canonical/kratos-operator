@@ -14,6 +14,7 @@ import requests
 from ops.model import Container
 
 from constants import CONFIG_FILE_PATH
+from exceptions import TooManyIdentitiesError
 
 logger = logging.getLogger(__name__)
 
@@ -81,33 +82,20 @@ class KratosAPI:
         logger.info(f"Successfully deleted identity: {identity_id}")
         return cmd_output
 
-    def list_identities(self) -> List:
-        """List all identities."""
-        cmd = [
-            "kratos",
-            "list",
-            "identities",
-            "--endpoint",
-            self.kratos_admin_url,
-            "--format",
-            "json",
-        ]
-
-        # TODO: Consider reading from the stream instead of waiting for output
-        cmd_output = json.loads(self._run_cmd(cmd))
-        identities = cmd_output.get("identities")
-        logger.info("Successfully fetched all identities")
-
-        return identities
-
     def get_identity_from_email(self, email: str) -> Optional[Dict]:
         """Get an identity using an email.
 
         This will fetch all identities and iterate over them in memory.
         """
-        ids = self.list_identities()
-        id_ = [identity for identity in ids if identity["traits"].get("email") == email]
-        return id_[0] if id_ else None
+        url = join(self.kratos_admin_url, "admin/identities")
+        r = requests.get(url, {"credentials_identifier": email})
+        r.raise_for_status()
+        identities = r.json()
+        if len(identities) > 1:
+            raise TooManyIdentitiesError()
+        if not identities:
+            return None
+        return identities[0]
 
     def recover_password_with_code(self, identity_id: str, expires_in: str = "1h") -> Dict:
         """Create a one time code for recovering an identity's password."""

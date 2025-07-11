@@ -6,6 +6,7 @@ from typing import Dict, Tuple
 from unittest.mock import MagicMock
 
 import pytest
+import responses
 from ops.pebble import ExecError
 from pytest_mock import MockerFixture
 
@@ -19,8 +20,6 @@ from kratos import KratosAPI
         ("create_identity", ({}, {})),
         ("get_identity", ("id",)),
         ("delete_identity", ("id",)),
-        ("list_identities", ()),
-        ("get_identity_from_email", ("mail",)),
         ("run_migration", ()),
     ],
 )
@@ -128,30 +127,17 @@ def test_delete_identity(
     ]
 
 
-def test_list_identities(
-    kratos_api: KratosAPI, kratos_identity_json: Dict, mocked_kratos_process: MagicMock
-) -> None:
-    mocked_kratos_process.wait_output.return_value = (
-        json.dumps({"identities": [kratos_identity_json]}),
-        None,
-    )
-
-    kratos_api.list_identities()
-
-    assert kratos_api.container.exec.call_args[0][0] == [
-        "kratos",
-        "list",
-        "identities",
-        "--endpoint",
-        kratos_api.kratos_admin_url,
-        "--format",
-        "json",
-    ]
-
-
+@responses.activate
 def test_get_identity_from_email(
-    kratos_api: KratosAPI, kratos_identity_json: Dict, mocked_kratos_process: MagicMock
+    kratos_api: KratosAPI,
+    kratos_identity_json: Dict,
+    mocked_kratos_process: MagicMock,
 ) -> None:
+    responses.get(url="http://localhost:4434/admin/identities", json=[kratos_identity_json])
+
+    ret = kratos_api.get_identity_from_email("identity_id")
+
+    assert ret
     mocked_kratos_process.wait_output.return_value = (
         json.dumps({"identities": [kratos_identity_json]}),
         None,
@@ -159,21 +145,14 @@ def test_get_identity_from_email(
 
     identity = kratos_api.get_identity_from_email(kratos_identity_json["traits"]["email"])
 
-    assert kratos_api.container.exec.call_args[0][0] == [
-        "kratos",
-        "list",
-        "identities",
-        "--endpoint",
-        kratos_api.kratos_admin_url,
-        "--format",
-        "json",
-    ]
     assert identity == kratos_identity_json
 
 
+@responses.activate
 def test_get_identity_from_email_with_wrong_mail(
     kratos_api: KratosAPI, kratos_identity_json: Dict, mocked_kratos_process: MagicMock
 ) -> None:
+    responses.get(url="http://localhost:4434/admin/identities", json=[])
     mocked_kratos_process.wait_output.return_value = (
         json.dumps({"identities": [kratos_identity_json]}),
         None,
