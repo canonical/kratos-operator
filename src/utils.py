@@ -14,8 +14,18 @@ from tenacity import Retrying, TryAgain, wait_fixed
 
 from constants import CONFIG_FILE_PATH
 
+from functools import wraps
+from typing import Any, Callable, Optional, TypeVar
+
+from ops.charm import CharmBase
+
+
 if TYPE_CHECKING:
     from charm import KratosCharm
+
+
+
+CharmEventHandler = TypeVar("CharmEventHandler", bound=Callable[..., Any])
 
 
 def dict_to_action_output(d: Dict) -> Dict:
@@ -101,3 +111,18 @@ def run_after_config_updated(func: Callable) -> Callable:
         return func(charm, *args, **kwargs)
 
     return wrapper
+
+
+
+def leader_unit(func: CharmEventHandler) -> CharmEventHandler:
+    """A decorator, applied to any event hook handler, to validate juju unit leadership."""
+
+    @wraps(func)
+    def wrapper(charm: CharmBase, *args: Any, **kwargs: Any) -> Optional[Any]:
+        if not charm.unit.is_leader():
+            return None
+
+        return func(charm, *args, **kwargs)
+
+    return wrapper  # type: ignore[return-value]
+

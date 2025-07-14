@@ -1,0 +1,58 @@
+{% set identifier = "{}-{}".format(model, app) %}
+{% set public_svc = "http://{}.{}.svc.cluster.local:{}".format(app, model, public_port) %}
+
+{
+  "http": {
+    "routers": {
+      "juju-{{ identifier }}-public-api-router-well-known": {
+        "entryPoints": ["web"],
+        "rule": "Path(`/.well-known/ory/webauthn.js`)",
+        "service": "juju-{{ identifier }}-public-api-service"
+      },
+      "juju-{{ identifier }}-public-api-router-well-known-tls": {
+        "entryPoints": ["websecure"],
+        "rule": "Path(`/.well-known/ory/webauthn.js`)",
+        "service": "juju-{{ identifier }}-public-api-service",
+        "tls": {
+          "domains": [
+            {
+              "main": "{{ external_host }}",
+              "sans": ["*.{{ external_host }}"]
+
+            }
+          ]
+        }
+      },
+      "juju-{{ identifier }}-public-api-router-self-service-oidc-callback": {
+        "entryPoints": ["web"],
+        "rule": "PathPrefix(`/self-service/methods/oidc/callback`)",
+        "service": "juju-{{ identifier }}-public-api-service"
+      },
+      "juju-{{ identifier }}-public-api-router-self-service-oidc-callback-tls": {
+        "entryPoints": ["websecure"],
+        "rule": "PathPrefix(`/self-service/methods/oidc/callback`)",
+        "service": "juju-{{ identifier }}-public-api-service",
+        "tls": {
+          "domains": [
+            {
+              "main": "{{ external_host }}",
+              "sans": ["*.{{ external_host }}"]
+
+            }
+          ]
+        }
+      }
+    },
+    "services": {
+      "juju-{{ identifier }}-public-api-service": {
+        "loadBalancer": {
+          "servers": [
+            {
+              "url": "{{ public_svc }}"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
