@@ -164,20 +164,6 @@ class KratosCharm(CharmBase):
             self, [("admin", KRATOS_ADMIN_PORT), ("public", KRATOS_PUBLIC_PORT)]
         )
         self.smtp = SmtpRequires(self)
-        self.admin_ingress = IngressPerAppRequirer(
-            self,
-            relation_name="admin-ingress",
-            port=KRATOS_ADMIN_PORT,
-            strip_prefix=True,
-            redirect_https=False,
-        )
-        self.public_ingress = IngressPerAppRequirer(
-            self,
-            relation_name="public-ingress",
-            port=KRATOS_PUBLIC_PORT,
-            strip_prefix=True,
-            redirect_https=False,
-        )
 
         # -- ingress via raw traefik_route
         # TraefikRouteRequirer expects an existing relation to be passed as part of the constructor,
@@ -186,6 +172,7 @@ class KratosCharm(CharmBase):
             self,
             self.model.get_relation(INTERNAL_INGRESS_RELATION_NAME),
             INTERNAL_INGRESS_RELATION_NAME,
+            raw=True,
         )  # type: ignore
 
         # public route via raw traefik routing configuration
@@ -193,6 +180,7 @@ class KratosCharm(CharmBase):
             self,
             self.model.get_relation(PUBLIC_ROUTE_INTEGRATION_NAME),
             PUBLIC_ROUTE_INTEGRATION_NAME,
+            raw=True,
         )
 
         self.database = DatabaseRequires(
@@ -278,10 +266,6 @@ class KratosCharm(CharmBase):
         self.framework.observe(
             self.on[DB_RELATION_NAME].relation_departed, self._on_database_relation_departed
         )
-        self.framework.observe(self.admin_ingress.on.ready, self._on_admin_ingress_ready)
-        self.framework.observe(self.admin_ingress.on.revoked, self._on_ingress_revoked)
-        self.framework.observe(self.public_ingress.on.ready, self._on_public_ingress_ready)
-        self.framework.observe(self.public_ingress.on.revoked, self._on_ingress_revoked)
         self.framework.observe(
             self.external_provider.on.client_config_changed, self._on_client_config_changed
         )
@@ -422,7 +406,10 @@ class KratosCharm(CharmBase):
 
     @property
     def _public_url(self) -> Optional[str]:
-        url = self.public_ingress.url
+        if not self.public_route.is_ready():
+            return None
+
+        url = str(PublicRouteData.load(self.public_route).url)
         return normalise_url(url) if url else None
 
     @property
@@ -948,7 +935,7 @@ class KratosCharm(CharmBase):
         if (
             self.model.relations[KRATOS_INFO_RELATION_NAME]
             or self.model.relations[KRATOS_EXTERNAL_IDP_INTEGRATOR_RELATION_NAME]
-        ) and self.public_ingress.relation is None:
+        ) and self.model.get_relation(PUBLIC_ROUTE_INTEGRATION_NAME) is None:
             self.unit.status = BlockedStatus(
                 "Cannot send integration data without an external hostname. Please "
                 "provide an ingress relation."
@@ -1177,27 +1164,6 @@ class KratosCharm(CharmBase):
         ]
         for k in extra_keys:
             self._pop_peer_data(k)
-
-    def _on_admin_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
-        if self.unit.is_leader():
-            logger.info("This app's admin ingress URL: %s", event.url)
-
-        self._handle_status_update_config(event)
-        self._update_kratos_info_relation_data(event)
-
-    def _on_public_ingress_ready(self, event: IngressPerAppReadyEvent) -> None:
-        if self.unit.is_leader():
-            logger.info("This app's public ingress URL: %s", event.url)
-
-        self._handle_status_update_config(event)
-        self._update_kratos_info_relation_data(event)
-
-    def _on_ingress_revoked(self, event: IngressPerAppRevokedEvent) -> None:
-        if self.unit.is_leader():
-            logger.info("This app no longer has ingress")
-
-        self._handle_status_update_config(event)
-        self._update_kratos_info_relation_data(event)
 
     def _update_kratos_external_idp_configurations(self) -> None:
         public_url = self._public_url
