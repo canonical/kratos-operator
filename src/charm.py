@@ -110,6 +110,7 @@ from constants import (
     HYDRA_RELATION_NAME,
     IDENTITY_SCHEMAS_LOCAL_DIR_PATH,
     INTERNAL_INGRESS_RELATION_NAME,
+    PUBLIC_ROUTE_INTEGRATION_NAME,
     KRATOS_ADMIN_PORT,
     KRATOS_CONFIG_MAP_NAME,
     KRATOS_EXTERNAL_IDP_INTEGRATOR_RELATION_NAME,
@@ -129,8 +130,10 @@ from constants import (
     TRACING_RELATION_NAME,
     WORKLOAD_CONTAINER_NAME,
 )
+
+from integrations import PublicRouteData
 from kratos import KratosAPI
-from utils import dict_to_action_output, normalise_url, run_after_config_updated
+from utils import dict_to_action_output, normalise_url, run_after_config_updated, leader_unit
 
 if TYPE_CHECKING:
     from ops.pebble import LayerDict
@@ -184,6 +187,13 @@ class KratosCharm(CharmBase):
             self.model.get_relation(INTERNAL_INGRESS_RELATION_NAME),
             INTERNAL_INGRESS_RELATION_NAME,
         )  # type: ignore
+
+        # public route via raw traefik routing configuration
+        self.public_route = TraefikRouteRequirer(
+            self,
+            self.model.get_relation(PUBLIC_ROUTE_INTEGRATION_NAME),
+            PUBLIC_ROUTE_INTEGRATION_NAME,
+        )
 
         self.database = DatabaseRequires(
             self,
@@ -312,6 +322,20 @@ class KratosCharm(CharmBase):
         )
         self.framework.observe(self.on.leader_elected, self._configure_internal_ingress)
         self.framework.observe(self.on.config_changed, self._configure_internal_ingress)
+
+        # public route
+        self.framework.observe(
+            self.on[PUBLIC_ROUTE_INTEGRATION_NAME].relation_joined,
+            self._on_public_route_joined,
+        )
+        self.framework.observe(
+            self.on[PUBLIC_ROUTE_INTEGRATION_NAME].relation_changed,
+            self._on_public_route_changed,
+        )
+        self.framework.observe(
+            self.on[PUBLIC_ROUTE_INTEGRATION_NAME].relation_broken,
+            self._on_public_route_changed,
+        )
 
         # resource patching
         self.framework.observe(
@@ -487,6 +511,21 @@ class KratosCharm(CharmBase):
         }
 
         return {"http": {"routers": routers, "services": services, "middlewares": middlewares}}
+
+    @leader_unit
+    def _on_public_route_joined(self, event: RelationJoinedEvent) -> None:
+        self.unit.status = MaintenanceStatus("Configuring resources")
+        self.public_route._relation = event.relation
+        self._on_public_route_changed(event)
+
+    @leader_unit
+    def _on_public_route_changed(self, event: RelationEvent) -> None:
+        self.unit.status = MaintenanceStatus("Configuring resources")
+        if self.public_route.is_ready():
+            public_route_config = PublicRouteData.load(self.public_route).config
+            self.public_route.submit_to_traefik(public_route_config)
+            self._handle_status_update_config(event)
+            self._update_kratos_info_relation_data(event)
 
     @property
     def _kratos_endpoints(self) -> Tuple[str, str]:

@@ -36,6 +36,7 @@ PROMETHEUS_SCRAPE_RELATION_NAME = "metrics-endpoint"
 LOKI_PUSH_API_RELATION_NAME = "logging"
 GRAFANA_DASHBOARD_RELATION_NAME = "grafana-dashboard"
 TRACING_RELATION_NAME = "tracing"
+PUBLIC_ROUTE_INTEGRATION_NAME = "public-route"
 
 # Peer data keys
 PEER_KEY_DB_MIGRATE_VERSION = "db_migrate_version"
