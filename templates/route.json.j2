@@ -22,25 +22,6 @@
             }
           ]
         }
-      },
-      "juju-{{ identifier }}-public-api-router-sessions": {
-        "entryPoints": ["web"],
-        "rule": "PathPrefix(`/sessions`)",
-        "service": "juju-{{ identifier }}-public-api-service"
-      },
-      "juju-{{ identifier }}-public-api-router-sessions-tls": {
-        "entryPoints": ["websecure"],
-        "rule": "PathPrefix(`/sessions`)",
-        "service": "juju-{{ identifier }}-public-api-service",
-        "tls": {
-          "domains": [
-            {
-              "main": "{{ external_host }}",
-              "sans": ["*.{{ external_host }}"]
-
-            }
-          ]
-        }
       }
     },
     "services": {
