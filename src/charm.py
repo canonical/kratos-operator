@@ -172,6 +172,7 @@ class KratosCharm(CharmBase):
             self,
             self.model.get_relation(INTERNAL_INGRESS_RELATION_NAME),
             INTERNAL_INGRESS_RELATION_NAME,
+            raw=True,
         )  # type: ignore
 
         # public route via raw traefik routing configuration
@@ -179,6 +180,7 @@ class KratosCharm(CharmBase):
             self,
             self.model.get_relation(PUBLIC_ROUTE_INTEGRATION_NAME),
             PUBLIC_ROUTE_INTEGRATION_NAME,
+            raw=True,
         )
 
         self.database = DatabaseRequires(
