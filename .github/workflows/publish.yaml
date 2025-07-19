@@ -79,6 +79,7 @@ jobs:
         revision: ${{ needs.revision.outputs.revision }}
         channel: ${{ needs.publish.outputs.channel}}
         application: kratos
+        tf-application-resource: module.application.juju_application.application
     secrets:
       CLIENT_ID: ${{ secrets.JIMM_DEV_CLIENT_ID }}
       CLIENT_SECRET: ${{ secrets.JIMM_DEV_CLIENT_SECRET }}
@@ -98,6 +99,7 @@ jobs:
       revision: ${{ needs.revision.outputs.revision }}
       channel: ${{ needs.publish.outputs.channel}}
       application: kratos
+      tf-application-resource: module.application.juju_application.application
     secrets:
         CLIENT_ID: ${{ secrets.JIMM_STG_CLIENT_ID }}
         CLIENT_SECRET: ${{ secrets.JIMM_STG_CLIENT_SECRET }}

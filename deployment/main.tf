@@ -62,19 +62,13 @@ data "juju_model" "model" {
 }
 
 
-resource "juju_application" "application" {
-  model = data.juju_model.model.name
-  name  = var.application_name
-  trust = var.charm.trust
-  units = var.charm.units
-
-  charm {
-    name     = var.charm.name
-    base     = var.charm.base
-    revision = var.revision
-    channel  = var.channel
-  }
-
-  config = var.charm.config
-
+module "application" {
+  source     = "../terraform"
+  model_name = data.juju_model.model.name
+  app_name   = var.application_name
+  units      = var.charm.units
+  base       = var.charm.base
+  config     = var.charm.config
+  channel    = var.channel
+  revision   = var.revision
 }

@@ -5,7 +5,7 @@
  * using the Juju Terraform provider.
  */
 
-resource "juju_application" "kratos" {
+resource "juju_application" "application" {
   name        = var.app_name
   model       = var.model_name
   trust       = true
