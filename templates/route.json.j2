@@ -22,6 +22,25 @@
             }
           ]
         }
+      },
+      "juju-{{ identifier }}-public-api-router-self-service-oidc-callback": {
+        "entryPoints": ["web"],
+        "rule": "PathPrefix(`/self-service/methods/oidc/callback`)",
+        "service": "juju-{{ identifier }}-public-api-service"
+      },
+      "juju-{{ identifier }}-public-api-router-self-service-oidc-callback-tls": {
+        "entryPoints": ["websecure"],
+        "rule": "PathPrefix(`/self-service/methods/oidc/callback`)",
+        "service": "juju-{{ identifier }}-public-api-service",
+        "tls": {
+          "domains": [
+            {
+              "main": "{{ external_host }}",
+              "sans": ["*.{{ external_host }}"]
+
+            }
+          ]
+        }
       }
     },
     "services": {
