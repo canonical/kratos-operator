@@ -3,15 +3,24 @@
 
 {
   "http": {
+    "middlewares": {
+      "juju-sidecar-replace-path-webauthn-{{ identifier }}": {
+        "replacePath": {
+          "path": "/.well-known/ory/webauthn.js"
+        }
+      }
+    },
     "routers": {
       "juju-{{ identifier }}-public-api-router-well-known": {
         "entryPoints": ["web"],
-        "rule": "Path(`/.well-known/ory/webauthn.js`)",
+        "middlewares": ["juju-sidecar-replace-path-webauthn-{{ identifier }}"],
+        "rule": "Path(`/.well-known/webauthn.js`)",
         "service": "juju-{{ identifier }}-public-api-service"
       },
       "juju-{{ identifier }}-public-api-router-well-known-tls": {
         "entryPoints": ["websecure"],
-        "rule": "Path(`/.well-known/ory/webauthn.js`)",
+        "rule": "Path(`/.well-known/webauthn.js`)",
+        "middlewares": ["juju-sidecar-replace-path-webauthn-{{ identifier }}"],
         "service": "juju-{{ identifier }}-public-api-service",
         "tls": {
           "domains": [
