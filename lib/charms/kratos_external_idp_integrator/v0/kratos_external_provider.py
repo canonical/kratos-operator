@@ -110,6 +110,7 @@ from typing import Dict, List, Mapping, Optional, Type
 import jsonschema
 from ops.charm import (
     CharmBase,
+    RelationBrokenEvent,
     RelationChangedEvent,
     RelationDepartedEvent,
     RelationEvent,
@@ -730,9 +731,7 @@ class ExternalIdpRequirer(Object):
         self.framework.observe(
             events.relation_changed, self._on_provider_endpoint_relation_changed
         )
-        self.framework.observe(
-            events.relation_departed, self._on_provider_endpoint_relation_changed
-        )
+        self.framework.observe(events.relation_broken, self._on_provider_endpoint_relation_broken)
 
     def _on_provider_endpoint_relation_changed(self, event: RelationEvent) -> None:
         if not event.app:
@@ -740,14 +739,16 @@ class ExternalIdpRequirer(Object):
 
         data = event.relation.data[event.app]
         data = _load_data(data, PROVIDER_JSON_SCHEMA)
-        providers = data["providers"]
 
-        if len(providers) == 0:
+        if not (providers := data["providers"]):
             self.on.client_config_removed.emit(event.relation.id)
             return
 
         p = self._get_provider(providers[0], event.relation)
         self.on.client_config_changed.emit(p)
+
+    def _on_provider_endpoint_relation_broken(self, event: RelationBrokenEvent) -> None:
+        self.on.client_config_removed.emit(event.relation.id)
 
     def set_relation_registered_provider(
         self, redirect_uri: str, provider_id: str, relation_id: int
