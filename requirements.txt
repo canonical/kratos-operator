@@ -1,6 +1,6 @@
 bcrypt==4.3.0
 cosl==1.0.0
-ops==3.0.0
+ops==3.1.0
 lightkube===0.15.4
 lightkube-models==1.33.1.8
 Jinja2==3.1.6
