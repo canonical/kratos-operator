@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.11](https://github.com/canonical/kratos-operator/compare/v1.1.10...v1.1.11) (2025-07-31)
+
+
+### Bug Fixes
+
+* update charm dependent libs ([d88c488](https://github.com/canonical/kratos-operator/commit/d88c488bf3e854f541387baec0a46fe6278c7ae2))
+* use query param to fetch identity from email ([d272121](https://github.com/canonical/kratos-operator/commit/d272121e85f81e8c596f30086acff37baa89cf0b))
+
 ## [1.1.10](https://github.com/canonical/kratos-operator/compare/v1.1.9...v1.1.10) (2025-07-09)
 
 
