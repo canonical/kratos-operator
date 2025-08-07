@@ -1,16 +1,48 @@
 # Release charm's libraries if they have changed
-name: Release Libraries
+name: Release Charm Library
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - "lib/charms/kratos/**"
+    tags:
+      - "v**"
 
 jobs:
+  filter:
+    name: Check if charm library changes between tags
+    runs-on: ubuntu-latest
+    outputs:
+      run-release: ${{ steps.check.outputs.run_release }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check diff between latest two tags
+        id: check
+        run: |
+          set -e
+
+          TAGS=$(git tag --sort=-creatordate | grep "^v" | head -n 2)
+          LATEST_TAG=$(echo "$TAGS" | sed -n 1p)
+          PREV_TAG=$(echo "$TAGS" | sed -n 2p)
+
+          echo "Latest tag: $LATEST_TAG"
+          echo "Previous tag: $PREV_TAG"
+
+          echo "run_release=false" >> $GITHUB_OUTPUT
+
+          if git diff --name-only "$PREV_TAG" "$LATEST_TAG" | grep -q '^lib/charms/kratos/'; then
+            echo "Changes found in charm library"
+            echo "run_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "No changes found in charm library"
+          fi
+
   release-lib:
     name: Release any bumped library
+    needs: filter
+    if: needs.filter.outputs.run-release == 'true'
     uses: canonical/identity-team/.github/workflows/charm-libs-release.yaml@f18247249f506f3c9210b86e43a2c4dd063088c5 # v1.8.7
     secrets:
       CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
