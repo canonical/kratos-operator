@@ -16,7 +16,7 @@ r"""Library to manage the relation for the data-platform products.
 
 This library contains the Requires and Provides classes for handling the relation
 between an application and multiple managed application supported by the data-team:
-MySQL, Postgresql, MongoDB, Redis, and Kafka.
+MySQL, Postgresql, MongoDB, Redis, Kafka, and Karapace.
 
 ### Database (MySQL, Postgresql, MongoDB, and Redis)
 
@@ -306,6 +306,105 @@ the situation when an application charm requests a new topic to be created.
 It is preferred to subscribe to this event instead of relation changed event to avoid
 creating a new topic when other information other than a topic name is
 exchanged in the relation databag.
+
+### Karapace
+
+This library is the interface to use and interact with the Karapace charm. This library contains
+custom events that add convenience to manage Karapace, and provides methods to consume the
+application related data.
+
+#### Requirer Charm
+
+```python
+
+from charms.data_platform_libs.v0.data_interfaces import (
+    EndpointsChangedEvent,
+    KarapaceRequires,
+    SubjectAllowedEvent,
+)
+
+class ApplicationCharm(CharmBase):
+
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.karapace = KarapaceRequires(self, relation_name="karapace_client", subject="test-subject")
+        self.framework.observe(
+            self.karapace.on.server_changed, self._on_karapace_server_changed
+        )
+        self.framework.observe(
+            self.karapace.on.subject_allowed, self._on_karapace_subject_allowed
+        )
+        self.framework.observe(
+            self.karapace.on.subject_entity_created, self._on_subject_entity_created
+        )
+
+
+    def _on_karapace_server_changed(self, event: EndpointsChangedEvent):
+        # Event triggered when a server endpoint was changed for this application
+        new_server = event.endpoints
+        ...
+
+    def _on_karapace_subject_allowed(self, event: SubjectAllowedEvent):
+        # Event triggered when a subject was allowed for this application
+        username = event.username
+        password = event.password
+        tls = event.tls
+        endpoints = event.endpoints
+        ...
+
+    def _on_subject_entity_created(self, event: SubjectEntityCreatedEvent):
+        # Event triggered when a subject entity was created this application
+        entity_name = event.entity_name
+        entity_password = event.entity_password
+        ...
+```
+
+As shown above, the library provides some custom events to handle specific situations,
+which are listed below:
+
+- subject_allowed: event emitted when the requested subject is allowed.
+- server_changed: event emitted when the server endpoints have changed.
+
+#### Provider Charm
+
+Following the previous example, this is an example of the provider charm.
+
+```python
+class SampleCharm(CharmBase):
+
+from charms.data_platform_libs.v0.data_interfaces import (
+    KarapaceProvides,
+    SubjectRequestedEvent,
+)
+
+    def __init__(self, *args):
+        super().__init__(*args)
+
+        # Default charm events.
+        self.framework.observe(self.on.start, self._on_start)
+
+        # Charm events defined in the Karapace Provides charm library.
+        self.karapace_provider = KarapaceProvides(self, relation_name="karapace_client")
+        self.framework.observe(self.karapace_provider.on.subject_requested, self._on_subject_requested)
+        # Karapace generic helper
+        self.karapace = KarapaceHelper()
+
+    def _on_subject_requested(self, event: SubjectRequestedEvent):
+        # Handle the on_subject_requested event.
+
+        subject = event.subject
+        relation_id = event.relation.id
+        # set connection info in the databag relation
+        self.karapace_provider.set_endpoint(relation_id, self.karapace.get_endpoint())
+        self.karapace_provider.set_credentials(relation_id, username=username, password=password)
+        self.karapace_provider.set_tls(relation_id, "False")
+```
+
+As shown above, the library provides a custom event (subject_requested) to handle
+the situation when an application charm requests a new subject to be created.
+It is preferred to subscribe to this event instead of relation changed event to avoid
+creating a new subject when other information other than a subject name is
+exchanged in the relation databag.
 """
 
 import copy
@@ -318,6 +417,7 @@ from enum import Enum
 from typing import (
     Callable,
     Dict,
+    Final,
     ItemsView,
     KeysView,
     List,
@@ -348,7 +448,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 50
+LIBPATCH = 53
 
 PYDEPS = ["ops>=2.0.0"]
 
@@ -1825,13 +1925,17 @@ class RequirerData(Data):
         additional_secret_fields: Optional[List[str]] = [],
         extra_group_roles: Optional[str] = None,
         entity_type: Optional[str] = None,
+        entity_permissions: Optional[str] = None,
     ):
         """Manager of base client relations."""
         super().__init__(model, relation_name)
         self.extra_user_roles = extra_user_roles
         self.extra_group_roles = extra_group_roles
         self.entity_type = entity_type
+        self.entity_permissions = entity_permissions
+
         self._validate_entity_type()
+        self._validate_entity_permissions()
 
         self._remote_secret_fields = list(self.SECRET_FIELDS)
         self._local_secret_fields = [
@@ -1871,6 +1975,21 @@ class RequirerData(Data):
 
         if self.entity_type == ENTITY_GROUP and self.extra_user_roles:
             raise ValueError("Inconsistent entity information. Use extra_group_roles instead")
+
+    def _validate_entity_permissions(self) -> None:
+        """Validates whether the provided entity permissions follow the right JSON format."""
+        if not self.entity_permissions:
+            return
+
+        accepted_keys = {"resource_name", "resource_type", "privileges"}
+
+        try:
+            permissions = json.loads(self.entity_permissions)
+            for permission in permissions:
+                if permission.keys() != accepted_keys:
+                    raise ValueError("Invalid entity permissions format. See accepted keys")
+        except json.decoder.JSONDecodeError:
+            raise ValueError("Invalid entity permissions format. It must be JSON format")
 
     # Public functions
 
@@ -2040,22 +2159,16 @@ class DataPeerData(RequirerData, ProviderData):
         self,
         model,
         relation_name: str,
-        extra_user_roles: Optional[str] = None,
         additional_secret_fields: Optional[List[str]] = [],
         additional_secret_group_mapping: Dict[str, str] = {},
         secret_field_name: Optional[str] = None,
         deleted_label: Optional[str] = None,
-        extra_group_roles: Optional[str] = None,
-        entity_type: Optional[str] = None,
     ):
         RequirerData.__init__(
             self,
-            model,
-            relation_name,
-            extra_user_roles,
-            additional_secret_fields,
-            extra_group_roles,
-            entity_type,
+            model=model,
+            relation_name=relation_name,
+            additional_secret_fields=additional_secret_fields,
         )
         self.secret_field_name = secret_field_name if secret_field_name else self.SECRET_FIELD_NAME
         self.deleted_label = deleted_label
@@ -2572,26 +2685,20 @@ class DataPeer(DataPeerData, DataPeerEventHandlers):
         self,
         charm,
         relation_name: str,
-        extra_user_roles: Optional[str] = None,
         additional_secret_fields: Optional[List[str]] = [],
         additional_secret_group_mapping: Dict[str, str] = {},
         secret_field_name: Optional[str] = None,
         deleted_label: Optional[str] = None,
         unique_key: str = "",
-        extra_group_roles: Optional[str] = None,
-        entity_type: Optional[str] = None,
     ):
         DataPeerData.__init__(
             self,
             charm.model,
             relation_name,
-            extra_user_roles,
             additional_secret_fields,
             additional_secret_group_mapping,
             secret_field_name,
             deleted_label,
-            extra_group_roles,
-            entity_type,
         )
         DataPeerEventHandlers.__init__(self, charm, self, unique_key)
 
@@ -2612,26 +2719,20 @@ class DataPeerUnit(DataPeerUnitData, DataPeerEventHandlers):
         self,
         charm,
         relation_name: str,
-        extra_user_roles: Optional[str] = None,
         additional_secret_fields: Optional[List[str]] = [],
         additional_secret_group_mapping: Dict[str, str] = {},
         secret_field_name: Optional[str] = None,
         deleted_label: Optional[str] = None,
         unique_key: str = "",
-        extra_group_roles: Optional[str] = None,
-        entity_type: Optional[str] = None,
     ):
         DataPeerData.__init__(
             self,
             charm.model,
             relation_name,
-            extra_user_roles,
             additional_secret_fields,
             additional_secret_group_mapping,
             secret_field_name,
             deleted_label,
-            extra_group_roles,
-            entity_type,
         )
         DataPeerEventHandlers.__init__(self, charm, self, unique_key)
 
@@ -2670,26 +2771,20 @@ class DataPeerOtherUnit(DataPeerOtherUnitData, DataPeerOtherUnitEventHandlers):
         unit: Unit,
         charm: CharmBase,
         relation_name: str,
-        extra_user_roles: Optional[str] = None,
         additional_secret_fields: Optional[List[str]] = [],
         additional_secret_group_mapping: Dict[str, str] = {},
         secret_field_name: Optional[str] = None,
         deleted_label: Optional[str] = None,
-        extra_group_roles: Optional[str] = None,
-        entity_type: Optional[str] = None,
     ):
         DataPeerOtherUnitData.__init__(
             self,
             unit,
             charm.model,
             relation_name,
-            extra_user_roles,
             additional_secret_fields,
             additional_secret_group_mapping,
             secret_field_name,
             deleted_label,
-            extra_group_roles,
-            entity_type,
         )
         DataPeerOtherUnitEventHandlers.__init__(self, charm, self)
 
@@ -2758,6 +2853,14 @@ class EntityProvidesEvent(RelationEvent):
             return None
 
         return self.relation.data[self.relation.app].get("entity-type")
+
+    @property
+    def entity_permissions(self) -> Optional[str]:
+        """Returns the entity_permissions that were requested."""
+        if not self.relation.app:
+            return None
+
+        return self.relation.data[self.relation.app].get("entity-permissions")
 
 
 class EntityRequiresEvent(RelationEventWithSecret):
@@ -2896,6 +2999,10 @@ class DatabaseEntityRequestedEvent(DatabaseProvidesEvent, EntityProvidesEvent):
     """Event emitted when a new entity is requested for use on this relation."""
 
 
+class DatabaseEntityPermissionsChangedEvent(DatabaseProvidesEvent, EntityProvidesEvent):
+    """Event emitted when existing entity permissions are changed on this relation."""
+
+
 class DatabaseProvidesEvents(CharmEvents):
     """Database events.
 
@@ -2904,6 +3011,7 @@ class DatabaseProvidesEvents(CharmEvents):
 
     database_requested = EventSource(DatabaseRequestedEvent)
     database_entity_requested = EventSource(DatabaseEntityRequestedEvent)
+    database_entity_permissions_changed = EventSource(DatabaseEntityPermissionsChangedEvent)
 
 
 class DatabaseRequiresEvent(RelationEventWithSecret):
@@ -3165,6 +3273,20 @@ class DatabaseProviderEventHandlers(ProviderEventHandlers):
             # To avoid unnecessary application restarts do not trigger other events.
             return
 
+        # Emit a permissions changed event if the setup key (database name)
+        # was added to the relation databag, and the entity-permissions key changed.
+        if (
+            "database" not in diff.added
+            and "entity-type" not in diff.added
+            and ("entity-permissions" in diff.added or "entity-permissions" in diff.changed)
+        ):
+            getattr(self.on, "database_entity_permissions_changed").emit(
+                event.relation, app=event.app, unit=event.unit
+            )
+
+            # To avoid unnecessary application restarts do not trigger other events.
+            return
+
     def _on_secret_changed_event(self, event: SecretChangedEvent) -> None:
         """Event emitted when the secret has changed."""
         pass
@@ -3192,6 +3314,7 @@ class DatabaseRequirerData(RequirerData):
         external_node_connectivity: bool = False,
         extra_group_roles: Optional[str] = None,
         entity_type: Optional[str] = None,
+        entity_permissions: Optional[str] = None,
     ):
         """Manager of database client relations."""
         super().__init__(
@@ -3201,6 +3324,7 @@ class DatabaseRequirerData(RequirerData):
             additional_secret_fields,
             extra_group_roles,
             entity_type,
+            entity_permissions,
         )
         self.database = database_name
         self.relations_aliases = relations_aliases
@@ -3388,6 +3512,8 @@ class DatabaseRequirerEventHandlers(RequirerEventHandlers):
             event_data["extra-group-roles"] = self.relation_data.extra_group_roles
         if self.relation_data.entity_type:
             event_data["entity-type"] = self.relation_data.entity_type
+        if self.relation_data.entity_permissions:
+            event_data["entity-permissions"] = self.relation_data.entity_permissions
 
         # set external-node-connectivity field
         if self.relation_data.external_node_connectivity:
@@ -3490,6 +3616,7 @@ class DatabaseRequires(DatabaseRequirerData, DatabaseRequirerEventHandlers):
         external_node_connectivity: bool = False,
         extra_group_roles: Optional[str] = None,
         entity_type: Optional[str] = None,
+        entity_permissions: Optional[str] = None,
     ):
         DatabaseRequirerData.__init__(
             self,
@@ -3502,6 +3629,7 @@ class DatabaseRequires(DatabaseRequirerData, DatabaseRequirerEventHandlers):
             external_node_connectivity,
             extra_group_roles,
             entity_type,
+            entity_permissions,
         )
         DatabaseRequirerEventHandlers.__init__(self, charm, self)
 
@@ -3583,6 +3711,10 @@ class TopicEntityRequestedEvent(KafkaProvidesEvent, EntityProvidesEvent):
     """Event emitted when a new entity is requested for use on this relation."""
 
 
+class TopicEntityPermissionsChangedEvent(KafkaProvidesEvent, EntityProvidesEvent):
+    """Event emitted when existing entity permissions are changed on this relation."""
+
+
 class KafkaProvidesEvents(CharmEvents):
     """Kafka events.
 
@@ -3591,6 +3723,7 @@ class KafkaProvidesEvents(CharmEvents):
 
     topic_requested = EventSource(TopicRequestedEvent)
     topic_entity_requested = EventSource(TopicEntityRequestedEvent)
+    topic_entity_permissions_changed = EventSource(TopicEntityPermissionsChangedEvent)
     mtls_cert_updated = EventSource(KafkaClientMtlsCertUpdatedEvent)
 
 
@@ -3751,6 +3884,20 @@ class KafkaProviderEventHandlers(ProviderEventHandlers):
             # To avoid unnecessary application restarts do not trigger other events.
             return
 
+        # Emit a permissions changed event if the setup key (topic name)
+        # was added to the relation databag, and the entity-permissions key changed.
+        if (
+            "topic" not in diff.added
+            and "entity-type" not in diff.added
+            and ("entity-permissions" in diff.added or "entity-permissions" in diff.changed)
+        ):
+            getattr(self.on, "topic_entity_permissions_changed").emit(
+                event.relation, app=event.app, unit=event.unit
+            )
+
+            # To avoid unnecessary application restarts do not trigger other events.
+            return
+
     def _on_secret_changed_event(self, event: SecretChangedEvent):
         """Event notifying about a new value of a secret."""
         if not event.secret.label:
@@ -3801,6 +3948,7 @@ class KafkaRequirerData(RequirerData):
         mtls_cert: Optional[str] = None,
         extra_group_roles: Optional[str] = None,
         entity_type: Optional[str] = None,
+        entity_permissions: Optional[str] = None,
     ):
         """Manager of Kafka client relations."""
         super().__init__(
@@ -3810,6 +3958,7 @@ class KafkaRequirerData(RequirerData):
             additional_secret_fields,
             extra_group_roles,
             entity_type,
+            entity_permissions,
         )
         self.topic = topic
         self.consumer_group_prefix = consumer_group_prefix or ""
@@ -3873,6 +4022,8 @@ class KafkaRequirerEventHandlers(RequirerEventHandlers):
             relation_data["extra-group-roles"] = self.relation_data.extra_group_roles
         if self.relation_data.entity_type:
             relation_data["entity-type"] = self.relation_data.entity_type
+        if self.relation_data.entity_permissions:
+            relation_data["entity-permissions"] = self.relation_data.entity_permissions
 
         self.relation_data.update_relation_data(event.relation.id, relation_data)
 
@@ -3941,6 +4092,7 @@ class KafkaRequires(KafkaRequirerData, KafkaRequirerEventHandlers):
         mtls_cert: Optional[str] = None,
         extra_group_roles: Optional[str] = None,
         entity_type: Optional[str] = None,
+        entity_permissions: Optional[str] = None,
     ) -> None:
         KafkaRequirerData.__init__(
             self,
@@ -3953,8 +4105,557 @@ class KafkaRequires(KafkaRequirerData, KafkaRequirerEventHandlers):
             mtls_cert=mtls_cert,
             extra_group_roles=extra_group_roles,
             entity_type=entity_type,
+            entity_permissions=entity_permissions,
         )
         KafkaRequirerEventHandlers.__init__(self, charm, self)
+
+
+# Karapace related events
+
+
+class KarapaceProvidesEvent(RelationEvent):
+    """Base class for Karapace events."""
+
+    @property
+    def subject(self) -> Optional[str]:
+        """Returns the subject that was requested."""
+        if not self.relation.app:
+            return None
+
+        return self.relation.data[self.relation.app].get("subject")
+
+
+class SubjectRequestedEvent(KarapaceProvidesEvent):
+    """Event emitted when a new subject is requested for use on this relation."""
+
+    @property
+    def extra_user_roles(self) -> Optional[str]:
+        """Returns the extra user roles that were requested."""
+        if not self.relation.app:
+            return None
+
+        return self.relation.data[self.relation.app].get("extra-user-roles")
+
+
+class SubjectEntityRequestedEvent(KarapaceProvidesEvent, EntityProvidesEvent):
+    """Event emitted when a new entity is requested for use on this relation."""
+
+
+class SubjectEntityPermissionsChangedEvent(KarapaceProvidesEvent, EntityProvidesEvent):
+    """Event emitted when existing entity permissions are changed on this relation."""
+
+
+class KarapaceProvidesEvents(CharmEvents):
+    """Karapace events.
+
+    This class defines the events that the Karapace can emit.
+    """
+
+    subject_requested = EventSource(SubjectRequestedEvent)
+    subject_entity_requested = EventSource(SubjectEntityRequestedEvent)
+    subject_entity_permissions_changed = EventSource(SubjectEntityPermissionsChangedEvent)
+
+
+class KarapaceRequiresEvent(RelationEvent):
+    """Base class for Karapace events."""
+
+    @property
+    def subject(self) -> Optional[str]:
+        """Returns the subject."""
+        if not self.relation.app:
+            return None
+
+        return self.relation.data[self.relation.app].get("subject")
+
+    @property
+    def endpoints(self) -> Optional[str]:
+        """Returns a comma-separated list of broker uris."""
+        if not self.relation.app:
+            return None
+
+        return self.relation.data[self.relation.app].get("endpoints")
+
+
+class SubjectAllowedEvent(AuthenticationEvent, KarapaceRequiresEvent):
+    """Event emitted when a new subject ACL is created for use on this relation."""
+
+
+class SubjectEntityCreatedEvent(EntityRequiresEvent, KarapaceRequiresEvent):
+    """Event emitted when a new entity is created for use on this relation."""
+
+
+class EndpointsChangedEvent(AuthenticationEvent, KarapaceRequiresEvent):
+    """Event emitted when the endpoints are changed."""
+
+
+class KarapaceRequiresEvents(CharmEvents):
+    """Karapace events.
+
+    This class defines the events that Karapace can emit.
+    """
+
+    subject_allowed = EventSource(SubjectAllowedEvent)
+    subject_entity_created = EventSource(SubjectEntityCreatedEvent)
+    server_changed = EventSource(EndpointsChangedEvent)
+
+
+# Karapace Provides and Requires
+
+
+class KarapaceProviderData(ProviderData):
+    """Provider-side of the Karapace relation."""
+
+    RESOURCE_FIELD = "subject"
+
+    def __init__(self, model: Model, relation_name: str) -> None:
+        super().__init__(model, relation_name)
+
+    def set_subject(self, relation_id: int, subject: str) -> None:
+        """Set subject name in the application relation databag.
+
+        Args:
+            relation_id: the identifier for a particular relation.
+            subject: the subject name.
+        """
+        self.update_relation_data(relation_id, {"subject": subject})
+
+    def set_endpoint(self, relation_id: int, endpoint: str) -> None:
+        """Set the endpoint in the application relation databag.
+
+        Args:
+            relation_id: the identifier for a particular relation.
+            endpoint: the server address.
+        """
+        self.update_relation_data(relation_id, {"endpoints": endpoint})
+
+
+class KarapaceProviderEventHandlers(ProviderEventHandlers):
+    """Provider-side of the Karapace relation."""
+
+    on = KarapaceProvidesEvents()  # pyright: ignore [reportAssignmentType]
+
+    def __init__(self, charm: CharmBase, relation_data: KarapaceProviderData) -> None:
+        super().__init__(charm, relation_data)
+        # Just to keep lint quiet, can't resolve inheritance. The same happened in super().__init__() above
+        self.relation_data = relation_data
+
+    def _on_relation_changed_event(self, event: RelationChangedEvent) -> None:
+        """Event emitted when the relation has changed."""
+        super()._on_relation_changed_event(event)
+
+        # Leader only
+        if not self.relation_data.local_unit.is_leader():
+            return
+
+        # Check which data has changed to emit customs events.
+        diff = self._diff(event)
+
+        # Validate entity information is not dynamically changed
+        self._validate_entity_consistency(event, diff)
+
+        # Emit a subject requested event if the setup key (subject name)
+        # was added to the relation databag, but the entity-type key was not.
+        if "subject" in diff.added and "entity-type" not in diff.added:
+            getattr(self.on, "subject_requested").emit(
+                event.relation, app=event.app, unit=event.unit
+            )
+
+            # To avoid unnecessary application restarts do not trigger other events.
+            return
+
+        # Emit an entity requested event if the setup key (subject name)
+        # was added to the relation databag, in addition to the entity-type key.
+        if "subject" in diff.added and "entity-type" in diff.added:
+            getattr(self.on, "subject_entity_requested").emit(
+                event.relation, app=event.app, unit=event.unit
+            )
+
+            # To avoid unnecessary application restarts do not trigger other events.
+            return
+
+        # Emit a permissions changed event if the setup key (subject name)
+        # was added to the relation databag, and the entity-permissions key changed.
+        if (
+            "subject" not in diff.added
+            and "entity-type" not in diff.added
+            and ("entity-permissions" in diff.added or "entity-permissions" in diff.changed)
+        ):
+            getattr(self.on, "subject_entity_permissions_changed").emit(
+                event.relation, app=event.app, unit=event.unit
+            )
+
+            # To avoid unnecessary application restarts do not trigger other events.
+            return
+
+    def _on_secret_changed_event(self, event: SecretChangedEvent):
+        """Event notifying about a new value of a secret."""
+        pass
+
+
+class KarapaceProvides(KarapaceProviderData, KarapaceProviderEventHandlers):
+    """Provider-side of the Karapace relation."""
+
+    def __init__(self, charm: CharmBase, relation_name: str) -> None:
+        KarapaceProviderData.__init__(self, charm.model, relation_name)
+        KarapaceProviderEventHandlers.__init__(self, charm, self)
+
+
+class KarapaceRequirerData(RequirerData):
+    """Requirer-side of the Karapace relation."""
+
+    def __init__(
+        self,
+        model: Model,
+        relation_name: str,
+        subject: str,
+        extra_user_roles: Optional[str] = None,
+        additional_secret_fields: Optional[List[str]] = [],
+        extra_group_roles: Optional[str] = None,
+        entity_type: Optional[str] = None,
+        entity_permissions: Optional[str] = None,
+    ):
+        """Manager of Karapace client relations."""
+        super().__init__(
+            model,
+            relation_name,
+            extra_user_roles,
+            additional_secret_fields,
+            extra_group_roles,
+            entity_type,
+            entity_permissions,
+        )
+        self.subject = subject
+
+    @property
+    def subject(self):
+        """Topic to use in Karapace."""
+        return self._subject
+
+    @subject.setter
+    def subject(self, value):
+        # Avoid wildcards
+        if value == "*":
+            raise ValueError(f"Error on subject '{value}', cannot be a wildcard.")
+        self._subject = value
+
+
+class KarapaceRequirerEventHandlers(RequirerEventHandlers):
+    """Requires-side of the Karapace relation."""
+
+    on = KarapaceRequiresEvents()  # pyright: ignore [reportAssignmentType]
+
+    def __init__(self, charm: CharmBase, relation_data: KarapaceRequirerData) -> None:
+        super().__init__(charm, relation_data)
+        # Just to keep lint quiet, can't resolve inheritance. The same happened in super().__init__() above
+        self.relation_data = relation_data
+
+    def _on_relation_created_event(self, event: RelationCreatedEvent) -> None:
+        """Event emitted when the Karapace relation is created."""
+        super()._on_relation_created_event(event)
+
+        if not self.relation_data.local_unit.is_leader():
+            return
+
+        # Sets subject and extra user roles
+        relation_data = {"subject": self.relation_data.subject}
+
+        if self.relation_data.extra_user_roles:
+            relation_data["extra-user-roles"] = self.relation_data.extra_user_roles
+        if self.relation_data.extra_group_roles:
+            relation_data["extra-group-roles"] = self.relation_data.extra_group_roles
+        if self.relation_data.entity_type:
+            relation_data["entity-type"] = self.relation_data.entity_type
+        if self.relation_data.entity_permissions:
+            relation_data["entity-permissions"] = self.relation_data.entity_permissions
+
+        self.relation_data.update_relation_data(event.relation.id, relation_data)
+
+    def _on_secret_changed_event(self, event: SecretChangedEvent):
+        """Event notifying about a new value of a secret."""
+        pass
+
+    def _on_relation_changed_event(self, event: RelationChangedEvent) -> None:
+        """Event emitted when the Karapace relation has changed."""
+        # Check which data has changed to emit customs events.
+        diff = self._diff(event)
+
+        # Check if the subject ACLs are created
+        # (the Karapace charm shared the credentials).
+
+        # Register all new secrets with their labels
+        if any(newval for newval in diff.added if self.relation_data._is_secret_field(newval)):
+            self.relation_data._register_secrets_to_relation(event.relation, diff.added)
+
+        app_databag = get_encoded_dict(event.relation, event.app, "data")
+        if app_databag is None:
+            app_databag = {}
+
+        if self._main_credentials_shared(diff) and "entity-type" not in app_databag:
+            # Emit the default event (the one without an alias).
+            logger.info("subject ACL created at %s", datetime.now())
+            getattr(self.on, "subject_allowed").emit(
+                event.relation, app=event.app, unit=event.unit
+            )
+
+            # To avoid unnecessary application restarts do not trigger other events.
+            return
+
+        if self._entity_credentials_shared(diff) and "entity-type" in app_databag:
+            # Emit the default event (the one without an alias).
+            logger.info("entity created at %s", datetime.now())
+            getattr(self.on, "subject_entity_created").emit(
+                event.relation, app=event.app, unit=event.unit
+            )
+
+            # To avoid unnecessary application restarts do not trigger other events.
+            return
+
+        # Emit an endpoints changed event if the Karapace endpoints added or changed
+        # this info in the relation databag.
+        if "endpoints" in diff.added or "endpoints" in diff.changed:
+            # Emit the default event (the one without an alias).
+            logger.info("endpoints changed on %s", datetime.now())
+            getattr(self.on, "server_changed").emit(
+                event.relation, app=event.app, unit=event.unit
+            )  # here check if this is the right design
+
+            # To avoid unnecessary application restarts do not trigger other events.
+            return
+
+
+class KarapaceRequires(KarapaceRequirerData, KarapaceRequirerEventHandlers):
+    """Provider-side of the Karapace relation."""
+
+    def __init__(
+        self,
+        charm: CharmBase,
+        relation_name: str,
+        subject: str,
+        extra_user_roles: Optional[str] = None,
+        additional_secret_fields: Optional[List[str]] = [],
+        extra_group_roles: Optional[str] = None,
+        entity_type: Optional[str] = None,
+        entity_permissions: Optional[str] = None,
+    ) -> None:
+        KarapaceRequirerData.__init__(
+            self,
+            charm.model,
+            relation_name,
+            subject,
+            extra_user_roles,
+            additional_secret_fields,
+            extra_group_roles,
+            entity_type,
+            entity_permissions,
+        )
+        KarapaceRequirerEventHandlers.__init__(self, charm, self)
+
+
+# Kafka Connect Events
+
+
+class KafkaConnectProvidesEvent(RelationEvent):
+    """Base class for Kafka Connect Provider events."""
+
+    @property
+    def plugin_url(self) -> Optional[str]:
+        """Returns the REST endpoint URL which serves the connector plugin."""
+        if not self.relation.app:
+            return None
+
+        return self.relation.data[self.relation.app].get("plugin-url")
+
+
+class IntegrationRequestedEvent(KafkaConnectProvidesEvent):
+    """Event emitted when a new integrator boots up and is ready to serve the connector plugin."""
+
+
+class KafkaConnectProvidesEvents(CharmEvents):
+    """Kafka Connect Provider Events."""
+
+    integration_requested = EventSource(IntegrationRequestedEvent)
+
+
+class KafkaConnectRequiresEvent(AuthenticationEvent):
+    """Base class for Kafka Connect Requirer events."""
+
+    @property
+    def plugin_url(self) -> Optional[str]:
+        """Returns the REST endpoint URL which serves the connector plugin."""
+        if not self.relation.app:
+            return None
+
+        return self.relation.data[self.relation.app].get("plugin-url")
+
+
+class IntegrationCreatedEvent(KafkaConnectRequiresEvent):
+    """Event emitted when the credentials are created for this integrator."""
+
+
+class IntegrationEndpointsChangedEvent(KafkaConnectRequiresEvent):
+    """Event emitted when Kafka Connect REST endpoints change."""
+
+
+class KafkaConnectRequiresEvents(CharmEvents):
+    """Kafka Connect Requirer Events."""
+
+    integration_created = EventSource(IntegrationCreatedEvent)
+    integration_endpoints_changed = EventSource(IntegrationEndpointsChangedEvent)
+
+
+class KafkaConnectProviderData(ProviderData):
+    """Provider-side of the Kafka Connect relation."""
+
+    RESOURCE_FIELD = "plugin-url"
+
+    def __init__(self, model: Model, relation_name: str) -> None:
+        super().__init__(model, relation_name)
+
+    def set_endpoints(self, relation_id: int, endpoints: str) -> None:
+        """Sets REST endpoints of the Kafka Connect service."""
+        self.update_relation_data(relation_id, {"endpoints": endpoints})
+
+
+class KafkaConnectProviderEventHandlers(EventHandlers):
+    """Provider-side implementation of the Kafka Connect event handlers."""
+
+    on = KafkaConnectProvidesEvents()  # pyright: ignore [reportAssignmentType]
+
+    def __init__(self, charm: CharmBase, relation_data: KafkaConnectProviderData) -> None:
+        super().__init__(charm, relation_data)
+        self.relation_data = relation_data
+
+    def _on_relation_changed_event(self, event: RelationChangedEvent) -> None:
+        """Event emitted when the relation has changed."""
+        # Leader only
+        if not self.relation_data.local_unit.is_leader():
+            return
+
+        # Check which data has changed to emit customs events.
+        diff = self._diff(event)
+
+        if "plugin-url" in diff.added:
+            getattr(self.on, "integration_requested").emit(
+                event.relation, app=event.app, unit=event.unit
+            )
+
+    def _on_secret_changed_event(self, event: SecretChangedEvent):
+        """Event notifying about a new value of a secret."""
+        pass
+
+
+class KafkaConnectProvides(KafkaConnectProviderData, KafkaConnectProviderEventHandlers):
+    """Provider-side implementation of the Kafka Connect relation."""
+
+    def __init__(self, charm: CharmBase, relation_name: str) -> None:
+        KafkaConnectProviderData.__init__(self, charm.model, relation_name)
+        KafkaConnectProviderEventHandlers.__init__(self, charm, self)
+
+
+# Sentinel value passed from Kafka Connect requirer side when it does not need to serve any plugins.
+PLUGIN_URL_NOT_REQUIRED: Final[str] = "NOT-REQUIRED"
+
+
+class KafkaConnectRequirerData(RequirerData):
+    """Requirer-side of the Kafka Connect relation."""
+
+    def __init__(
+        self,
+        model: Model,
+        relation_name: str,
+        plugin_url: str,
+        extra_user_roles: Optional[str] = None,
+        additional_secret_fields: Optional[List[str]] = [],
+    ):
+        """Manager of Kafka client relations."""
+        super().__init__(
+            model,
+            relation_name,
+            extra_user_roles=extra_user_roles,
+            additional_secret_fields=additional_secret_fields,
+        )
+        self.plugin_url = plugin_url
+
+    @property
+    def plugin_url(self):
+        """The REST endpoint URL which serves the connector plugin."""
+        return self._plugin_url
+
+    @plugin_url.setter
+    def plugin_url(self, value):
+        self._plugin_url = value
+
+
+class KafkaConnectRequirerEventHandlers(RequirerEventHandlers):
+    """Requirer-side of the Kafka Connect relation."""
+
+    on = KafkaConnectRequiresEvents()  # pyright: ignore [reportAssignmentType]
+
+    def __init__(self, charm: CharmBase, relation_data: KafkaConnectRequirerData) -> None:
+        super().__init__(charm, relation_data)
+        self.relation_data = relation_data
+
+    def _on_relation_created_event(self, event: RelationCreatedEvent) -> None:
+        """Event emitted when the Kafka Connect relation is created."""
+        super()._on_relation_created_event(event)
+
+        if not self.relation_data.local_unit.is_leader():
+            return
+
+        relation_data = {"plugin-url": self.relation_data.plugin_url}
+        self.relation_data.update_relation_data(event.relation.id, relation_data)
+
+    def _on_secret_changed_event(self, event: SecretChangedEvent):
+        """Event notifying about a new value of a secret."""
+        pass
+
+    def _on_relation_changed_event(self, event: RelationChangedEvent) -> None:
+        """Event emitted when the Kafka Connect relation has changed."""
+        # Check which data has changed to emit customs events.
+        diff = self._diff(event)
+
+        # Register all new secrets with their labels
+        if any(newval for newval in diff.added if self.relation_data._is_secret_field(newval)):
+            self.relation_data._register_secrets_to_relation(event.relation, diff.added)
+
+        if self._main_credentials_shared(diff):
+            logger.info("integration created at %s", datetime.now())
+            getattr(self.on, "integration_created").emit(
+                event.relation, app=event.app, unit=event.unit
+            )
+            return
+
+        # Emit an endpoints changed event if the provider added or
+        # changed this info in the relation databag.
+        if "endpoints" in diff.added or "endpoints" in diff.changed:
+            # Emit the default event (the one without an alias).
+            logger.info("endpoints changed on %s", datetime.now())
+            getattr(self.on, "integration_endpoints_changed").emit(
+                event.relation, app=event.app, unit=event.unit
+            )
+            return
+
+
+class KafkaConnectRequires(KafkaConnectRequirerData, KafkaConnectRequirerEventHandlers):
+    """Requirer-side implementation of the Kafka Connect relation."""
+
+    def __init__(
+        self,
+        charm: CharmBase,
+        relation_name: str,
+        plugin_url: str,
+        extra_user_roles: Optional[str] = None,
+        additional_secret_fields: Optional[List[str]] = [],
+    ) -> None:
+        KafkaConnectRequirerData.__init__(
+            self,
+            charm.model,
+            relation_name,
+            plugin_url,
+            extra_user_roles=extra_user_roles,
+            additional_secret_fields=additional_secret_fields,
+        )
+        KafkaConnectRequirerEventHandlers.__init__(self, charm, self)
 
 
 # Opensearch related events
@@ -3988,6 +4689,10 @@ class IndexEntityRequestedEvent(OpenSearchProvidesEvent, EntityProvidesEvent):
     """Event emitted when a new entity is requested for use on this relation."""
 
 
+class IndexEntityPermissionsChangedEvent(OpenSearchProvidesEvent, EntityProvidesEvent):
+    """Event emitted when existing entity permissions are changed on this relation."""
+
+
 class OpenSearchProvidesEvents(CharmEvents):
     """OpenSearch events.
 
@@ -3996,6 +4701,7 @@ class OpenSearchProvidesEvents(CharmEvents):
 
     index_requested = EventSource(IndexRequestedEvent)
     index_entity_requested = EventSource(IndexEntityRequestedEvent)
+    index_entity_permissions_changed = EventSource(IndexEntityPermissionsChangedEvent)
 
 
 class OpenSearchRequiresEvent(DatabaseRequiresEvent):
@@ -4107,6 +4813,20 @@ class OpenSearchProvidesEventHandlers(ProviderEventHandlers):
             # To avoid unnecessary application restarts do not trigger other events.
             return
 
+        # Emit a permissions changed event if the setup key (index name)
+        # was added to the relation databag, and the entity-permissions key changed.
+        if (
+            "index" not in diff.added
+            and "entity-type" not in diff.added
+            and ("entity-permissions" in diff.added or "entity-permissions" in diff.changed)
+        ):
+            getattr(self.on, "index_entity_permissions_changed").emit(
+                event.relation, app=event.app, unit=event.unit
+            )
+
+            # To avoid unnecessary application restarts do not trigger other events.
+            return
+
     def _on_secret_changed_event(self, event: SecretChangedEvent) -> None:
         """Event emitted when the relation data has changed."""
         pass
@@ -4132,6 +4852,7 @@ class OpenSearchRequiresData(RequirerData):
         additional_secret_fields: Optional[List[str]] = [],
         extra_group_roles: Optional[str] = None,
         entity_type: Optional[str] = None,
+        entity_permissions: Optional[str] = None,
     ):
         """Manager of OpenSearch client relations."""
         super().__init__(
@@ -4141,6 +4862,7 @@ class OpenSearchRequiresData(RequirerData):
             additional_secret_fields,
             extra_group_roles,
             entity_type,
+            entity_permissions,
         )
         self.index = index
 
@@ -4172,6 +4894,8 @@ class OpenSearchRequiresEventHandlers(RequirerEventHandlers):
             data["extra-group-roles"] = self.relation_data.extra_group_roles
         if self.relation_data.entity_type:
             data["entity-type"] = self.relation_data.entity_type
+        if self.relation_data.entity_permissions:
+            data["entity-permissions"] = self.relation_data.entity_permissions
 
         self.relation_data.update_relation_data(event.relation.id, data)
 
@@ -4270,6 +4994,7 @@ class OpenSearchRequires(OpenSearchRequiresData, OpenSearchRequiresEventHandlers
         additional_secret_fields: Optional[List[str]] = [],
         extra_group_roles: Optional[str] = None,
         entity_type: Optional[str] = None,
+        entity_permissions: Optional[str] = None,
     ) -> None:
         OpenSearchRequiresData.__init__(
             self,
@@ -4280,6 +5005,7 @@ class OpenSearchRequires(OpenSearchRequiresData, OpenSearchRequiresEventHandlers
             additional_secret_fields,
             extra_group_roles,
             entity_type,
+            entity_permissions,
         )
         OpenSearchRequiresEventHandlers.__init__(self, charm, self)
 
@@ -4482,6 +5208,7 @@ class EtcdRequirerData(RequirerData):
         additional_secret_fields: Optional[List[str]] = [],
         extra_group_roles: Optional[str] = None,
         entity_type: Optional[str] = None,
+        entity_permissions: Optional[str] = None,
     ):
         """Manager of Etcd client relations."""
         super().__init__(
@@ -4491,6 +5218,7 @@ class EtcdRequirerData(RequirerData):
             additional_secret_fields,
             extra_group_roles,
             entity_type,
+            entity_permissions,
         )
         self.prefix = prefix
         self.mtls_cert = mtls_cert
@@ -4603,6 +5331,7 @@ class EtcdRequires(EtcdRequirerData, EtcdRequirerEventHandlers):
         additional_secret_fields: Optional[List[str]] = [],
         extra_group_roles: Optional[str] = None,
         entity_type: Optional[str] = None,
+        entity_permissions: Optional[str] = None,
     ) -> None:
         EtcdRequirerData.__init__(
             self,
@@ -4614,6 +5343,7 @@ class EtcdRequires(EtcdRequirerData, EtcdRequirerEventHandlers):
             additional_secret_fields,
             extra_group_roles,
             entity_type,
+            entity_permissions,
         )
         EtcdRequirerEventHandlers.__init__(self, charm, self)
         if not self.secrets_enabled:
