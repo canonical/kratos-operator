@@ -1,3 +1,26 @@
+{%- set allowed_oidc_provider_configurations = [
+    'id',
+    'provider',
+    'label',
+    'client_id',
+    'client_secret',
+    'issuer_url',
+    'auth_url',
+    'token_url',
+    'mapper_url',
+    'scope',
+    'microsoft_tenant',
+    'subject_source',
+    'apple_team_id',
+    'apple_private_key_id',
+    'apple_private_key',
+    'requested_claims',
+    'organization_id',
+    'additional_id_token_audiences',
+    'claims_source',
+    'pkce',
+] %}
+
 log:
     level: {{ log_level }}
     format: json
@@ -134,8 +157,8 @@ selfservice:
             config:
                 providers:
                 {%- for provider in oidc_providers %}
-                    {% set config = provider.config() %}
-                    - {% for key, value in config.items() -%}
+                    {% set config = provider.model_dump() %}
+                    - {% for key, value in config.items() if key in allowed_oidc_provider_configurations and value is not none -%}
                       {{ key }}: {{ value }}
                       {% endfor -%}
                       {%- if not config["mapper_url"] %}

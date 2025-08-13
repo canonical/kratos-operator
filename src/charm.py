@@ -41,11 +41,12 @@ from charms.kratos.v0.kratos_registration_webhook import (
 from charms.kratos.v0.kratos_registration_webhook import (
     UnavailableEvent as KratosRegistrationWebhookUnavailableEvent,
 )
-from charms.kratos_external_idp_integrator.v0.kratos_external_provider import (
+from charms.kratos_external_idp_integrator.v1.kratos_external_provider import (
     ClientConfigChangedEvent,
     ClientConfigRemovedEvent,
     ExternalIdpRequirer,
     Provider,
+    RequirerProviders,
 )
 from charms.loki_k8s.v1.loki_push_api import LogForwarder
 from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
@@ -779,10 +780,13 @@ class KratosCharm(CharmBase):
 
     def _get_oidc_providers(self) -> Optional[List]:
         providers = self.external_provider.get_providers()
-        if p := self.providers_configmap.get():
+
+        if cm_providers := self.providers_configmap.get():
             providers.extend([
-                Provider.from_dict(provider) for provider in p[PROVIDERS_CONFIGMAP_FILE_NAME]
+                Provider.model_validate(cm_provider)
+                for cm_provider in cm_providers[PROVIDERS_CONFIGMAP_FILE_NAME]
             ])
+
         return providers
 
     def _get_database_relation_info(self) -> Optional[Dict]:
@@ -1165,11 +1169,18 @@ class KratosCharm(CharmBase):
         if public_url is None:
             return
 
-        for p in self.external_provider.get_providers():
-            self.external_provider.set_relation_registered_provider(
-                join(public_url, f"self-service/methods/oidc/callback/{p.provider_id}"),
-                p.provider_id,
-                p.relation_id,
+        for provider in self.external_provider.get_providers():
+            self.external_provider.update_registered_provider(
+                RequirerProviders.model_validate([
+                    {
+                        "provider_id": provider.id,
+                        "redirect_uri": join(
+                            public_url,
+                            f"self-service/methods/oidc/callback/{provider.id}",
+                        ),
+                    }
+                ]),
+                provider.relation_id,
             )
 
     def _on_client_config_changed(self, event: ClientConfigChangedEvent) -> None:
@@ -1178,7 +1189,7 @@ class KratosCharm(CharmBase):
     def _on_client_config_removed(self, event: ClientConfigRemovedEvent) -> None:
         self.unit.status = MaintenanceStatus("Removing external provider")
         self._handle_status_update_config(event)
-        self.external_provider.remove_relation_registered_provider(event.relation_id)
+        self.external_provider.remove_registered_provider(int(event.relation_id))
 
     def _on_smtp_data_available(self, event: SmtpDataAvailableEvent):
         logger.info("Updating smtp mail courier configuration")
