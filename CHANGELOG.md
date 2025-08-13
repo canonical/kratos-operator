@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/canonical/kratos-operator/compare/v1.1.11...v1.2.0) (2025-08-11)
+
+
+### Features
+
+* update juju_application resource name ([836e00f](https://github.com/canonical/kratos-operator/commit/836e00f63623f0e0524ac795ac62dd073cddaef5))
+
+
+### Bug Fixes
+
+* use terraform module in deployment ([a6bdc44](https://github.com/canonical/kratos-operator/commit/a6bdc441e2339bcdfadfdb344ef77b85755e42f9))
+
 ## [1.1.11](https://github.com/canonical/kratos-operator/compare/v1.1.10...v1.1.11) (2025-07-31)
 
 
