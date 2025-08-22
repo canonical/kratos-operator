@@ -44,9 +44,13 @@ def mocked_k8s_resource_patch(mocker: MockerFixture) -> None:
 
 
 @pytest.fixture(autouse=True)
-def lk_client(mocker: MockerFixture) -> None:
-    mock_lightkube = mocker.patch("charm.Client", autospec=True)
-    return mock_lightkube.return_value
+def mocked_k8s_client(mocker: MockerFixture) -> None:
+    mocker.patch("charm.Client", autospec=True)
+
+
+@pytest.fixture
+def mocked_container() -> MagicMock:
+    return create_autospec(Container)
 
 
 @pytest.fixture
