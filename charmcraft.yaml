@@ -204,14 +204,13 @@ actions:
         description: The user's email
         type: string
   delete-identity:
-    description: Delete a user using either the identity ID or the user email.
+    description: Delete a user using the identity ID.
     params:
       identity-id:
         description: The Identity ID
         type: string
-      email:
-        description: The user's email
-        type: string
+    required:
+      - identity-id
   create-admin-account:
     description: |
       Create an admin user. If no password was provided, the command will return a
@@ -231,49 +230,52 @@ actions:
       name:
         description: The admin's name
         type: string
-      phone_number:
+      phone-number:
         description: The admin's phone number
         type: string
-    required: ["username", "email"]
+    required:
+      - username
+      - email
   reset-password:
     description: |
-      Reset password of an identity using either the identity ID or user email.
-      Required: one of `identity-id` or `email`
+      Reset password of an identity using either the identity ID.
     params:
       identity-id:
         description: The Identity ID
-        type: string
-      email:
-        description: The user's email
         type: string
       password-secret-id:
         description: |
           The juju secret that contains the password to set for an identity. If
           not provided, a self-service recovery link will be returned.
         type: string
+    required:
+      - identity-id
   invalidate-identity-sessions:
     description: |
-      Invalidate all user sessions using either the identity ID or user email.
+      Invalidate all user sessions using the identity ID.
     params:
       identity-id:
         description: The Identity ID
         type: string
-      email:
-        description: The user's email
-        type: string
+    required:
+      - identity-id
   reset-identity-mfa:
     description: |
-      Reset identity's second authentication factor using either the identity ID or user email.
+      Reset identity's second authentication factor using the identity ID.
     params:
       identity-id:
         description: The Identity ID
-        type: string
-      email:
-        description: The user's email
         type: string
       mfa-type:
         description: The type of credentials to be removed, one of `totp`, `lookup_secret` or `webauthn`.
         type: string
+        enum:
+          - totp
+          - lookup_secret
+          - webauthn
+    required:
+      - identity-id
+      - mfa-type
   run-migration:
     description: |
       Run a migration, this is needed after upgrades. This is a non-reversible operation.
