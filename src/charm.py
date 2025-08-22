@@ -17,7 +17,6 @@ from secrets import token_hex
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
-import requests
 from charms.data_platform_libs.v0.data_interfaces import (
     DatabaseCreatedEvent,
     DatabaseEndpointsChangedEvent,
@@ -99,6 +98,8 @@ from tenacity import before_log, retry, stop_after_attempt, wait_exponential
 import config_map
 import utils
 from certificate_transfer_integration import CertTransfer
+from cli import CommandLine
+from clients import HTTPClient, Identity
 from config_map import IdentitySchemaConfigMap, KratosConfigMap, ProvidersConfigMap
 from constants import (
     CONFIG_DIR_PATH,
@@ -130,6 +131,14 @@ from constants import (
     TRACING_RELATION_NAME,
     WORKLOAD_CONTAINER_NAME,
 )
+from exceptions import (
+    ClientRequestError,
+    IdentityCredentialsNotExistError,
+    IdentityNotExistsError,
+    IdentitySessionsNotExistError,
+    MigrationError,
+    TooManyIdentitiesError,
+)
 from kratos import KratosAPI
 from utils import dict_to_action_output, normalise_url, run_after_config_updated
 
@@ -152,6 +161,7 @@ class KratosCharm(CharmBase):
             config_hash=None,
         )
         self._container = self.unit.get_container(WORKLOAD_CONTAINER_NAME)
+        self._cli = CommandLine(self._container)
 
         self.client = Client(field_manager=self.app.name, namespace=self.model.name)
         self.kratos = KratosAPI(f"http://127.0.0.1:{KRATOS_ADMIN_PORT}", self._container)
@@ -1203,30 +1213,29 @@ class KratosCharm(CharmBase):
         identity_id = event.params.get("identity-id")
         email = event.params.get("email")
         if identity_id and email:
-            event.fail("Only one of identity-id and email can be provided.")
-            return
-        elif not identity_id and not email:
-            event.fail("One of identity-id and email must be provided.")
+            event.fail("Provide only one of 'identity-id' or 'email', not both.")
             return
 
-        event.log("Fetching the identity.")
-        if email:
+        if not identity_id and not email:
+            event.fail("You must provide either 'identity-id' or 'email'.")
+            return
+
+        with HTTPClient(base_url=f"http://127.0.0.1:{KRATOS_ADMIN_PORT}") as client:
             try:
-                identity = self.kratos.get_identity_from_email(email)
-            except Error as e:
-                event.fail(f"Something went wrong when trying to run the command: {e}")
+                identity = Identity(client).get(identity_id=identity_id, email=email)
+            except IdentityNotExistsError:
+                event.fail("Identity not found.")
                 return
-            if not identity:
-                event.fail("Couldn't retrieve identity_id from email.")
+            except TooManyIdentitiesError:
+                event.fail(
+                    f"Multiple identities found for email '{email}'. Please provide an identity-id instead."
+                )
                 return
-        else:
-            try:
-                identity = self.kratos.get_identity(identity_id=identity_id)
-            except Error as e:
-                event.fail(f"Something went wrong when trying to run the command: {e}")
+            except ClientRequestError:
+                event.fail(f"Failed to fetch the identity for {email or identity_id}.")
                 return
 
-        event.log("Successfully got the identity.")
+        event.log("Successfully fetched the identity.")
         event.set_results(dict_to_action_output(identity))
 
     def _get_identity_id(self, event: ActionEvent) -> Optional[str]:
@@ -1260,15 +1269,16 @@ class KratosCharm(CharmBase):
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
-        if not (identity_id := self._get_identity_id(event)):
-            return
-
-        event.log("Deleting the identity.")
-        try:
-            self.kratos.delete_identity(identity_id=identity_id)
-        except Error as e:
-            event.fail(f"Something went wrong when trying to run the command: {e}")
-            return
+        identity_id = event.params.get("identity-id")
+        with HTTPClient(base_url=f"http://127.0.0.1:{KRATOS_ADMIN_PORT}") as client:
+            try:
+                client.delete_identity(identity_id)
+            except IdentityNotExistsError:
+                event.fail(f"Identity {identity_id} does not exists")
+                return
+            except ClientRequestError:
+                event.fail(f"Failed to delete the identity for {identity_id}")
+                return
 
         event.log(f"Successfully deleted the identity: {identity_id}.")
         event.set_results({"identity-id": identity_id})
@@ -1278,88 +1288,78 @@ class KratosCharm(CharmBase):
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
-        if not (identity_id := self._get_identity_id(event)):
-            return
-
-        if secret_id := event.params.get("password-secret-id"):
+        password = None
+        password_secret_id = event.params.get("password-secret-id")
+        if password_secret_id:
             try:
-                juju_secret = self.model.get_secret(id=secret_id)
+                juju_secret = self.model.get_secret(id=password_secret_id)
                 password = juju_secret.get_content().get("password")
             except SecretNotFoundError:
-                event.fail("Secret not found")
+                event.fail("Juju secret is not found")
                 return
             except ModelError as err:
-                event.fail(f"An error occurred: {err}")
+                event.fail(f"An error occurred when fetching the juju secret: {err}")
                 return
 
-        event.log("Resetting password")
+        identity_id = event.params.get("identity-id")
+        with HTTPClient(base_url=f"http://127.0.0.1:{KRATOS_ADMIN_PORT}") as client:
+            try:
+                if password:
+                    res = Identity(client).reset_password(identity_id, password)
+                else:
+                    res = client.create_recovery_code(identity_id)
+            except IdentityNotExistsError:
+                event.fail(f"Identity {identity_id} does not exists")
+                return
+            except ClientRequestError:
+                event.fail("Failed to request Kratos API.")
+                return
 
-        try:
-            if secret_id:
-                ret = self.kratos.reset_password(identity_id=identity_id, password=password)
-                event.log("Password changed successfully")
-            else:
-                ret = self.kratos.recover_password_with_code(identity_id=identity_id)
-                event.log("Follow the link to reset the user's password")
-        except requests.exceptions.RequestException as e:
-            event.fail(f"Failed to request Kratos API: {e}")
-            return
+        if password:
+            event.log("Password was changed successfully")
+        else:
+            event.log(
+                "Recovery code created successfully. Use the returned link to reset the identity's password."
+            )
 
-        event.set_results(dict_to_action_output(ret))
+        event.set_results(dict_to_action_output(res))
 
     def _on_invalidate_identity_sessions_action(self, event: ActionEvent) -> None:
         if not self._kratos_service_is_running:
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
-        if not (identity_id := self._get_identity_id(event)):
-            return
-
-        event.log("Invalidating user sessions")
-        try:
-            sessions_invalidated = self.kratos.invalidate_sessions(identity_id=identity_id)
-            if not sessions_invalidated:
-                event.log("User has no sessions")
+        identity_id = event.params.get("identity-id")
+        with HTTPClient(base_url=f"http://127.0.0.1:{KRATOS_ADMIN_PORT}") as client:
+            try:
+                client.invalidate_sessions(identity_id)
+            except IdentitySessionsNotExistError:
+                event.fail(f"Identity {identity_id} has no sessions.")
                 return
-        except requests.exceptions.RequestException as e:
-            event.fail(f"Failed to request Kratos API: {e}")
-            return
+            except ClientRequestError:
+                event.fail(f"Failed to invalidate and delete sessions for identity {identity_id}")
+                return
 
-        event.log("User sessions have been invalidated and deleted")
+        event.log("Successfully invalidated and deleted the sessions.")
 
     def _on_reset_identity_mfa_action(self, event: ActionEvent) -> None:
         if not self._kratos_service_is_running:
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
+        identity_id = event.params.get("identity-id")
         mfa_type = event.params.get("mfa-type")
-        if not mfa_type:
-            event.fail("MFA type must be specified")
-            return
-
-        if mfa_type not in ("totp", "lookup_secret", "webauthn"):
-            event.fail(
-                f"Unsupported MFA credential type {mfa_type}, "
-                "allowed methods are: `totp`, `lookup_secret` and `webauthn`"
-            )
-            return
-
-        if not (identity_id := self._get_identity_id(event)):
-            return
-
-        event.log("Resetting user's second authentication factor")
-        try:
-            credential_deleted = self.kratos.delete_mfa_credential(
-                identity_id=identity_id, mfa_type=mfa_type
-            )
-            if not credential_deleted:
-                event.log(f"User has no {mfa_type} credentials")
+        with HTTPClient(base_url=f"http://127.0.0.1:{KRATOS_ADMIN_PORT}") as client:
+            try:
+                client.delete_mfa_credential(identity_id, mfa_type)
+            except IdentityCredentialsNotExistError:
+                event.fail(f"Identity {identity_id} has no {mfa_type} credentials.")
                 return
-        except requests.exceptions.RequestException as e:
-            event.fail(f"Failed to request Kratos API: {e}")
-            return
+            except ClientRequestError:
+                event.fail(f"Failed to reset the {mfa_type} credentials.")
+                return
 
-        event.log("Second authentication factor was reset")
+        event.log(f"Successfully reset the {mfa_type} credentials for identity {identity_id}")
 
     def _on_create_admin_account_action(self, event: ActionEvent) -> None:
         if not self._kratos_service_is_running:
@@ -1367,67 +1367,69 @@ class KratosCharm(CharmBase):
             return
 
         traits = {
-            "username": event.params["username"],
-            "name": event.params.get("name"),
+            "username": event.params.get("username"),
             "email": event.params.get("email"),
-            "phone_number": event.params.get("phone_number"),
+            "name": event.params.get("name"),
+            "phone_number": event.params.get("phone-number"),
         }
         traits = {k: v for k, v in traits.items() if v is not None}
+
         password = None
-        if secret_id := event.params.get("password-secret-id"):
+        password_secret_id = event.params.get("password-secret-id")
+        if password_secret_id:
             try:
-                juju_secret = self.model.get_secret(id=secret_id)
+                juju_secret = self.model.get_secret(id=password_secret_id)
                 password = juju_secret.get_content().get("password")
             except SecretNotFoundError:
-                event.fail("Secret not found")
+                event.fail("Juju secret is not found")
                 return
             except ModelError as err:
-                event.fail(f"An error occurred: {err}")
+                event.fail(f"An error occurred when fetching the juju secret: {err}")
                 return
 
-        event.log("Creating admin account.")
-        try:
-            identity = self.kratos.create_identity(traits, "admin_v0", password=password)
-        except Error as e:
-            event.fail(f"Something went wrong when trying to run the command: {e}")
-            return
-
-        identity_id = identity["id"]
-        res = {"identity-id": identity_id}
-        event.log(f"Successfully created admin account: {identity_id}.")
-        if not password:
-            event.log("Creating recovery code for resetting admin password.")
+        with HTTPClient(base_url=f"http://127.0.0.1:{KRATOS_ADMIN_PORT}") as client:
             try:
-                link = self.kratos.recover_password_with_code(identity_id)
-            except requests.exceptions.RequestException as e:
-                event.fail(f"Failed to request Kratos API: {e}")
+                identity = client.create_identity(traits, schema_id="admin_v0", password=password)
+            except ClientRequestError:
+                event.fail("Failed to create the admin account.")
                 return
-            res["password-reset-link"] = link["recovery_link"]
-            res["password-reset-code"] = link["recovery_code"]
-            res["expires-at"] = link["expires_at"]
 
-        event.set_results(res)
+            identity_id = identity["id"]
+            event.log(f"Successfully created the admin account: {identity_id}.")
+            res = {"identity-id": identity_id}
+            if not password:
+                try:
+                    recovery = client.create_recovery_code(identity_id)
+                except ClientRequestError:
+                    event.fail("Failed to create recovery code for the admin account.")
+                    return
+
+                res.update(recovery)
+
+        event.set_results(dict_to_action_output(res))
 
     def _on_run_migration_action(self, event: ActionEvent) -> None:
         if not self._container.can_connect():
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
-        timeout = float(event.params.get("timeout", 120))
-        event.log("Migrating database.")
-        try:
-            self.kratos.run_migration(timeout=timeout, dsn=self._dsn)
-        except Error as e:
-            err_msg = e.stderr if isinstance(e, ExecError) else e
-            event.fail(f"Database migration action failed: {err_msg}")
-            return
-        event.log("Successfully migrated the database.")
-
         if not self._peers:
             event.fail("Peer relation not ready. Failed to store migration version")
             return
-        self._set_peer_data(self._migration_peer_data_key, self.kratos.get_version())
-        event.log("Updated migration version in peer data.")
+
+        event.log("Start migrating the database")
+
+        timeout = float(event.params.get("timeout", 120))
+        try:
+            self._cli.migrate(dsn=self._dsn, timeout=timeout)
+        except MigrationError as err:
+            event.fail(f"Database migration failed: {err}")
+            return
+        else:
+            event.log("Successfully migrated the database.")
+
+        self._set_peer_data(self._migration_peer_data_key, self._cli.get_service_version())
+        event.log("Successfully updated migration version")
 
     def _configure_internal_ingress(self, event: HookEvent) -> None:
         """Method setting up the internal networking.
