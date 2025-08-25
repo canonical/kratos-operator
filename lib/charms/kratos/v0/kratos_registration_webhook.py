@@ -40,7 +40,7 @@ from pydantic import (
 
 LIBID = "37ddb4471fae41adb74299f091ee3a28"
 LIBAPI = 0
-LIBPATCH = 7
+LIBPATCH = 4
 
 PYDEPS = ["pydantic"]
 
