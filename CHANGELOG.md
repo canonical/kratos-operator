@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.0.0](https://github.com/canonical/kratos-operator/compare/v1.2.0...v2.0.0) (2025-08-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* use kratos external provider library v1
+
+### Bug Fixes
+
+* downgrade charm lib version ([0c392f3](https://github.com/canonical/kratos-operator/commit/0c392f38a2e3e6810793eda99a1e332bda9bb4bd))
+
+
+### Code Refactoring
+
+* use kratos external provider library v1 ([e3e9bc8](https://github.com/canonical/kratos-operator/commit/e3e9bc8a6974d5a30ca0ea915d75d22c11a9bf36))
+
 ## [1.2.0](https://github.com/canonical/kratos-operator/compare/v1.1.11...v1.2.0) (2025-08-11)
 
 
