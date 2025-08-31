@@ -18,7 +18,7 @@ from ops.testing import Harness
 from pytest_mock import MockerFixture
 
 import utils
-from constants import INTERNAL_INGRESS_RELATION_NAME
+from constants import INTERNAL_INGRESS_INTEGRATION_NAME
 
 CONFIG_DIR = Path("/etc/config")
 CONTAINER_NAME = "kratos"
@@ -76,7 +76,7 @@ def setup_ingress_relation(harness: Harness, type: str) -> int:
 
 def setup_internal_ingress_relation(harness: Harness, type: str) -> int:
     relation_id = harness.add_relation(
-        f"{INTERNAL_INGRESS_RELATION_NAME}",
+        f"{INTERNAL_INGRESS_INTEGRATION_NAME}",
         f"{type}-traefik",
     )
     harness.add_relation_unit(
