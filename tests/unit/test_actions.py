@@ -1,6 +1,7 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+import uuid
 from unittest.mock import MagicMock
 
 import pytest
@@ -172,7 +173,7 @@ class TestDeleteIdentityAction:
             match="Service is not ready. Please re-run the action when the charm is active",
         ):
             ctx.run(
-                ctx.on.action(name="delete-identity", params={"identity-id": "identity-id"}),
+                ctx.on.action(name="delete-identity", params={"identity-id": str(uuid.uuid4())}),
                 state_in,
             )
 
@@ -189,9 +190,9 @@ class TestDeleteIdentityAction:
         container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
         state_in = testing.State(containers={container})
 
-        with pytest.raises(testing.ActionFailed, match="Identity identity-id does not exist"):
+        with pytest.raises(testing.ActionFailed, match="Identity .* does not exist"):
             ctx.run(
-                ctx.on.action(name="delete-identity", params={"identity-id": "identity-id"}),
+                ctx.on.action(name="delete-identity", params={"identity-id": str(uuid.uuid4())}),
                 state_in,
             )
 
@@ -210,7 +211,7 @@ class TestDeleteIdentityAction:
 
         with pytest.raises(testing.ActionFailed, match="Failed to delete the identity"):
             ctx.run(
-                ctx.on.action(name="delete-identity", params={"identity-id": "identity-id"}),
+                ctx.on.action(name="delete-identity", params={"identity-id": str(uuid.uuid4())}),
                 state_in,
             )
 
@@ -221,18 +222,20 @@ class TestDeleteIdentityAction:
         mocked_workload_service_running: MagicMock,
         mocked_client: MagicMock,
     ) -> None:
+        identity_id = str(uuid.uuid4())
+
         ctx = testing.Context(KratosCharm)
         container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
         state_in = testing.State(containers={container})
 
         ctx.run(
-            ctx.on.action(name="delete-identity", params={"identity-id": "identity-id"}),
+            ctx.on.action(name="delete-identity", params={"identity-id": identity_id}),
             state_in,
         )
 
         mocked_client.delete_identity.assert_called()
-        assert "Successfully deleted the identity: identity-id" in ctx.action_logs
-        assert ctx.action_results == {"id": "identity-id"}
+        assert f"Successfully deleted the identity: {identity_id}" in ctx.action_logs
+        assert ctx.action_results == {"id": identity_id}
 
 
 class TestResetPasswordAction:
@@ -265,7 +268,7 @@ class TestResetPasswordAction:
             match="Service is not ready. Please re-run the action when the charm is active",
         ):
             ctx.run(
-                ctx.on.action(name="reset-password", params={"identity-id": "identity-id"}),
+                ctx.on.action(name="reset-password", params={"identity-id": str(uuid.uuid4())}),
                 state_in,
             )
 
@@ -284,9 +287,9 @@ class TestResetPasswordAction:
         container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
         state_in = testing.State(containers={container})
 
-        with pytest.raises(testing.ActionFailed, match="Identity identity-id does not exist"):
+        with pytest.raises(testing.ActionFailed, match="Identity .* does not exist"):
             ctx.run(
-                ctx.on.action(name="reset-password", params={"identity-id": "identity-id"}),
+                ctx.on.action(name="reset-password", params={"identity-id": str(uuid.uuid4())}),
                 state_in,
             )
 
@@ -307,7 +310,7 @@ class TestResetPasswordAction:
 
         with pytest.raises(testing.ActionFailed, match="Failed to request Kratos API"):
             ctx.run(
-                ctx.on.action(name="reset-password", params={"identity-id": "identity-id"}),
+                ctx.on.action(name="reset-password", params={"identity-id": str(uuid.uuid4())}),
                 state_in,
             )
 
@@ -330,7 +333,8 @@ class TestResetPasswordAction:
         state_in = testing.State(containers={container})
 
         ctx.run(
-            ctx.on.action(name="reset-password", params={"identity-id": "identity-id"}), state_in
+            ctx.on.action(name="reset-password", params={"identity-id": str(uuid.uuid4())}),
+            state_in,
         )
 
         mocked_reset_password.assert_not_called()
@@ -350,7 +354,8 @@ class TestResetPasswordAction:
         mocked_reset_password: MagicMock,
         mocked_client: MagicMock,
     ) -> None:
-        mocked_reset_password.return_value = {"id": "identity-id"}
+        identity_id = str(uuid.uuid4())
+        mocked_reset_password.return_value = {"id": identity_id}
 
         ctx = testing.Context(KratosCharm)
         container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
@@ -360,7 +365,7 @@ class TestResetPasswordAction:
         ctx.run(
             ctx.on.action(
                 name="reset-password",
-                params={"identity-id": "identity-id", "password-secret-id": "password_secret_id"},
+                params={"identity-id": identity_id, "password-secret-id": "password_secret_id"},
             ),
             state_in,
         )
@@ -368,7 +373,7 @@ class TestResetPasswordAction:
         mocked_reset_password.assert_called()
         mocked_client.create_recovery_code.assert_not_called()
         assert "Password was changed successfully" in ctx.action_logs
-        assert ctx.action_results == {"id": "identity-id"}
+        assert ctx.action_results == {"id": identity_id}
 
 
 class TestInvalidateIdentitySessionsAction:
@@ -396,7 +401,7 @@ class TestInvalidateIdentitySessionsAction:
         ):
             ctx.run(
                 ctx.on.action(
-                    name="invalidate-identity-sessions", params={"identity-id": "identity-id"}
+                    name="invalidate-identity-sessions", params={"identity-id": str(uuid.uuid4())}
                 ),
                 state_in,
             )
@@ -408,6 +413,7 @@ class TestInvalidateIdentitySessionsAction:
         mocked_workload_service_running: MagicMock,
         mocked_client: MagicMock,
     ) -> None:
+        identity_id = str(uuid.uuid4())
         mocked_client.invalidate_sessions.side_effect = IdentitySessionsNotExistError
 
         ctx = testing.Context(KratosCharm)
@@ -416,13 +422,13 @@ class TestInvalidateIdentitySessionsAction:
 
         ctx.run(
             ctx.on.action(
-                name="invalidate-identity-sessions", params={"identity-id": "identity-id"}
+                name="invalidate-identity-sessions", params={"identity-id": identity_id}
             ),
             state_in,
         )
 
         mocked_client.invalidate_sessions.assert_called()
-        assert "Identity identity-id has no sessions" in ctx.action_logs
+        assert f"Identity {identity_id} has no sessions" in ctx.action_logs
 
     def test_when_invalidate_sessions_failed(
         self,
@@ -438,7 +444,7 @@ class TestInvalidateIdentitySessionsAction:
         with pytest.raises(testing.ActionFailed, match="Failed to invalidate and delete sessions"):
             ctx.run(
                 ctx.on.action(
-                    name="invalidate-identity-sessions", params={"identity-id": "identity-id"}
+                    name="invalidate-identity-sessions", params={"identity-id": str(uuid.uuid4())}
                 ),
                 state_in,
             )
@@ -456,7 +462,7 @@ class TestInvalidateIdentitySessionsAction:
 
         ctx.run(
             ctx.on.action(
-                name="invalidate-identity-sessions", params={"identity-id": "identity-id"}
+                name="invalidate-identity-sessions", params={"identity-id": str(uuid.uuid4())}
             ),
             state_in,
         )
@@ -627,7 +633,9 @@ class TestListOIDCAccountsAction:
             match="Service is not ready. Please re-run the action when the charm is active",
         ):
             ctx.run(
-                ctx.on.action(name="list-oidc-accounts", params={"identity-id": "identity-id"}),
+                ctx.on.action(
+                    name="list-oidc-accounts", params={"identity-id": str(uuid.uuid4())}
+                ),
                 state_in,
             )
 
@@ -644,11 +652,11 @@ class TestListOIDCAccountsAction:
         container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
         state_in = testing.State(containers={container})
 
-        with pytest.raises(testing.ActionFailed, match="Identity identity-id does not exist"):
+        with pytest.raises(testing.ActionFailed, match="Identity .* does not exist"):
             ctx.run(
                 ctx.on.action(
                     name="list-oidc-accounts",
-                    params={"identity-id": "identity-id"},
+                    params={"identity-id": str(uuid.uuid4())},
                 ),
                 state_in,
             )
@@ -668,12 +676,12 @@ class TestListOIDCAccountsAction:
 
         with pytest.raises(
             testing.ActionFailed,
-            match="Failed to fetch the identity OIDC credentials for identity-id",
+            match="Failed to fetch the identity OIDC credentials for .*",
         ):
             ctx.run(
                 ctx.on.action(
                     name="list-oidc-accounts",
-                    params={"identity-id": "identity-id"},
+                    params={"identity-id": str(uuid.uuid4())},
                 ),
                 state_in,
             )
@@ -694,7 +702,7 @@ class TestListOIDCAccountsAction:
         ctx.run(
             ctx.on.action(
                 name="list-oidc-accounts",
-                params={"identity-id": "identity-id"},
+                params={"identity-id": str(uuid.uuid4())},
             ),
             state_in,
         )
@@ -716,7 +724,7 @@ class TestListOIDCAccountsAction:
         ctx.run(
             ctx.on.action(
                 name="list-oidc-accounts",
-                params={"identity-id": "identity-id"},
+                params={"identity-id": str(uuid.uuid4())},
             ),
             state_in,
         )
@@ -752,7 +760,7 @@ class TestUnlinkOIDCAccountAction:
             ctx.run(
                 ctx.on.action(
                     name="unlink-oidc-account",
-                    params={"identity-id": "identity-id", "credential-id": "credential-id"},
+                    params={"identity-id": str(uuid.uuid4()), "credential-id": "credential-id"},
                 ),
                 state_in,
             )
@@ -764,6 +772,7 @@ class TestUnlinkOIDCAccountAction:
         mocked_workload_service_running: MagicMock,
         mocked_client: MagicMock,
     ) -> None:
+        identity_id = str(uuid.uuid4())
         mocked_client.delete_mfa_credential.side_effect = IdentityCredentialsNotExistError
 
         ctx = testing.Context(KratosCharm)
@@ -773,12 +782,12 @@ class TestUnlinkOIDCAccountAction:
         ctx.run(
             ctx.on.action(
                 name="unlink-oidc-account",
-                params={"identity-id": "identity-id", "credential-id": "credential-id"},
+                params={"identity-id": identity_id, "credential-id": "credential-id"},
             ),
             state_in,
         )
 
-        assert "Identity identity-id has no oidc credentials" in ctx.action_logs
+        assert f"Identity {identity_id} has no oidc credentials" in ctx.action_logs
         mocked_client.delete_mfa_credential.assert_called()
 
     def test_when_delete_credential_failed(
@@ -799,7 +808,7 @@ class TestUnlinkOIDCAccountAction:
             ctx.run(
                 ctx.on.action(
                     name="unlink-oidc-account",
-                    params={"identity-id": "identity-id", "credential-id": "credential-id"},
+                    params={"identity-id": str(uuid.uuid4()), "credential-id": "credential-id"},
                 ),
                 state_in,
             )
@@ -811,6 +820,8 @@ class TestUnlinkOIDCAccountAction:
         mocked_workload_service_running: MagicMock,
         mocked_client: MagicMock,
     ) -> None:
+        identity_id = str(uuid.uuid4())
+
         ctx = testing.Context(KratosCharm)
         container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
         state_in = testing.State(containers={container})
@@ -818,12 +829,14 @@ class TestUnlinkOIDCAccountAction:
         ctx.run(
             ctx.on.action(
                 name="unlink-oidc-account",
-                params={"identity-id": "identity-id", "credential-id": "credential-id"},
+                params={"identity-id": identity_id, "credential-id": "credential-id"},
             ),
             state_in,
         )
 
-        assert "Successfully unlink the oidc account for identity identity-id" in ctx.action_logs
+        assert (
+            f"Successfully unlink the oidc account for identity {identity_id}" in ctx.action_logs
+        )
         mocked_client.delete_mfa_credential.assert_called()
 
 
@@ -853,7 +866,31 @@ class TestResetIdentityMFAAction:
             ctx.run(
                 ctx.on.action(
                     name="reset-identity-mfa",
-                    params={"identity-id": "identity-id", "mfa-type": "mfa-type"},
+                    params={"identity-id": str(uuid.uuid4()), "mfa-type": "totp"},
+                ),
+                state_in,
+            )
+
+        mocked_client.delete_mfa_credential.assert_not_called()
+
+    def test_when_credential_type_not_supported(
+        self,
+        mocked_workload_service_running: MagicMock,
+        mocked_client: MagicMock,
+    ) -> None:
+        identity_id = str(uuid.uuid4())
+
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(containers={container})
+
+        with pytest.raises(
+            testing.ActionFailed, match="Unsupported MFA credential type lookupsecret"
+        ):
+            ctx.run(
+                ctx.on.action(
+                    name="reset-identity-mfa",
+                    params={"identity-id": identity_id, "mfa-type": "lookupsecret"},
                 ),
                 state_in,
             )
@@ -865,6 +902,7 @@ class TestResetIdentityMFAAction:
         mocked_workload_service_running: MagicMock,
         mocked_client: MagicMock,
     ) -> None:
+        identity_id = str(uuid.uuid4())
         mocked_client.delete_mfa_credential.side_effect = IdentityCredentialsNotExistError
 
         ctx = testing.Context(KratosCharm)
@@ -874,12 +912,12 @@ class TestResetIdentityMFAAction:
         ctx.run(
             ctx.on.action(
                 name="reset-identity-mfa",
-                params={"identity-id": "identity-id", "mfa-type": "mfa-type"},
+                params={"identity-id": identity_id, "mfa-type": "totp"},
             ),
             state_in,
         )
 
-        assert "Identity identity-id has no mfa-type credentials" in ctx.action_logs
+        assert f"Identity {identity_id} has no totp credentials." in ctx.action_logs
         mocked_client.delete_mfa_credential.assert_called()
 
     def test_when_delete_credential_failed(
@@ -895,12 +933,12 @@ class TestResetIdentityMFAAction:
 
         with pytest.raises(
             testing.ActionFailed,
-            match="Failed to reset the mfa-type credentials",
+            match="Failed to reset the totp credentials",
         ):
             ctx.run(
                 ctx.on.action(
                     name="reset-identity-mfa",
-                    params={"identity-id": "identity-id", "mfa-type": "mfa-type"},
+                    params={"identity-id": str(uuid.uuid4()), "mfa-type": "totp"},
                 ),
                 state_in,
             )
@@ -912,6 +950,8 @@ class TestResetIdentityMFAAction:
         mocked_workload_service_running: MagicMock,
         mocked_client: MagicMock,
     ) -> None:
+        identity_id = str(uuid.uuid4())
+
         ctx = testing.Context(KratosCharm)
         container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
         state_in = testing.State(containers={container})
@@ -919,13 +959,13 @@ class TestResetIdentityMFAAction:
         ctx.run(
             ctx.on.action(
                 name="reset-identity-mfa",
-                params={"identity-id": "identity-id", "mfa-type": "mfa-type"},
+                params={"identity-id": identity_id, "mfa-type": "totp"},
             ),
             state_in,
         )
 
         assert (
-            "Successfully reset the mfa-type credentials for identity identity-id"
+            f"Successfully reset the totp credentials for identity {identity_id}"
             in ctx.action_logs
         )
         mocked_client.delete_mfa_credential.assert_called()

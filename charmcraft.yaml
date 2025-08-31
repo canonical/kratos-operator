@@ -1,4 +1,4 @@
-# Copyright 2022 Canonical Ltd.
+# Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 name: kratos
@@ -204,13 +204,14 @@ actions:
         description: The user's email
         type: string
   delete-identity:
-    description: Delete a user using the identity ID.
+    description: Delete a user using the identity ID or the user email.
     params:
       identity-id:
         description: The Identity ID
         type: string
-    required:
-      - identity-id
+      email:
+        description: The user's email
+        type: string
   create-admin-account:
     description: |
       Create an admin user. If no password was provided, the command will return a
@@ -238,27 +239,29 @@ actions:
       - email
   reset-password:
     description: |
-      Reset password of an identity using either the identity ID.
+      Reset password of an identity using the identity ID or the user email.
     params:
       identity-id:
         description: The Identity ID
+        type: string
+      email:
+        description: The user's email
         type: string
       password-secret-id:
         description: |
           The juju secret that contains the password to set for an identity. If
           not provided, a self-service recovery link will be returned.
         type: string
-    required:
-      - identity-id
   invalidate-identity-sessions:
     description: |
-      Invalidate all user sessions using the identity ID.
+      Invalidate all user sessions using the identity ID or the user email.
     params:
       identity-id:
         description: The Identity ID
         type: string
-    required:
-      - identity-id
+      email:
+        description: The user's email
+        type: string
   reset-identity-mfa:
     description: |
       Reset identity's second authentication factor using the identity ID or the user email.
@@ -280,25 +283,28 @@ actions:
       - mfa-type
   list-oidc-accounts:
     description: |
-      Retrieve the list of OIDC accounts identifiers linked to an identity using the identity ID.
+      Retrieve the list of OIDC accounts identifiers linked to an identity using the identity ID or the user email.
     params:
       identity-id:
         description: The Identity ID
         type: string
-    required:
-      - identity-id
+      email:
+        description: The user's email
+        type: string
   unlink-oidc-account:
     description: |
-      Unlink a user's external identity provider account from their identity using the identity ID.
+      Unlink a user's external identity provider account from their identity using the identity ID or the user email.
     params:
       identity-id:
         description: The Identity ID
+        type: string
+      email:
+        description: The user's email
         type: string
       credential-id:
         description: The OIDC credential ID to unlink. Run `list-identity-linked-oidc-accounts` to list available credentials.
         type: string
     required:
-      - identity-id
       - credential-id
   run-migration:
     description: |
