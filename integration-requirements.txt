@@ -1,5 +1,4 @@
 pytest
 juju
 pytest-operator==0.43.1
-requests
 -r requirements.txt

@@ -32,7 +32,7 @@ class CommandLine:
         try:
             stdout = self._run_cmd(cmd)
         except Error as err:
-            logger.error("Failed to fetch the OpenFGA version: %s", err)
+            logger.error("Failed to fetch the Kratos version: %s", err)
             return None
 
         matched = VERSION_REGEX.search(stdout)
