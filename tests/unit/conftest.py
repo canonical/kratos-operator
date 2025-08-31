@@ -12,7 +12,7 @@ from ops.testing import Harness
 from pytest_mock import MockerFixture
 
 from charm import KratosCharm
-from constants import WORKLOAD_CONTAINER_NAME
+from constants import WORKLOAD_CONTAINER
 from kratos import KratosAPI
 
 
@@ -126,9 +126,9 @@ def mocked_pebble_exec_failed(mocked_pebble_exec: MagicMock) -> MagicMock:
 def mocked_restart_service(mocker: MockerFixture) -> MagicMock:
     def restart_service(self, restart: bool = False) -> None:
         if restart:
-            self._container.restart(WORKLOAD_CONTAINER_NAME)
-        elif not self._container.get_service(WORKLOAD_CONTAINER_NAME).is_running():
-            self._container.start(WORKLOAD_CONTAINER_NAME)
+            self._container.restart(WORKLOAD_CONTAINER)
+        elif not self._container.get_service(WORKLOAD_CONTAINER).is_running():
+            self._container.start(WORKLOAD_CONTAINER)
         else:
             self._container.replan()
 

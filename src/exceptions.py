@@ -6,6 +6,18 @@ class CharmError(Exception):
     """Base class for custom charm errors."""
 
 
+class MigrationError(CharmError):
+    """Error for database migration."""
+
+
+class PebbleServiceError(CharmError):
+    """Error for pebble related operations."""
+
+
+class ConfigMapError(CharmError):
+    """Error for failed ConfigMap operations."""
+
+
 class ActionError(CharmError):
     """Base class for charm action errors."""
 
@@ -28,7 +40,3 @@ class IdentitySessionsNotExistError(ActionError):
 
 class ClientRequestError(ActionError):
     """Error when requesting Kratos fails."""
-
-
-class MigrationError(CharmError):
-    """Error for database migration."""

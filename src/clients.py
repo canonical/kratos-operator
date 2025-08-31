@@ -73,7 +73,7 @@ class HTTPClient:
 
     def create_identity(
         self, traits: dict, *, schema_id: str = "default", password: Optional[str] = None
-    ) -> Optional[dict]:
+    ) -> dict:
         """More information: https://www.ory.sh/docs/kratos/reference/api#tag/identity/operation/createIdentity."""
         identity = {"traits": traits, "schema_id": schema_id}
         if password:
