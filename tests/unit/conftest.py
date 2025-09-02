@@ -269,6 +269,18 @@ def mocked_delete_mfa_credential(mocker: MockerFixture) -> MagicMock:
 
 
 @pytest.fixture()
+def mocked_list_oidc_identifiers(mocker: MockerFixture) -> MagicMock:
+    mock = mocker.patch("charm.KratosAPI.list_oidc_identifiers", return_value=["some-idp:123456"])
+    return mock
+
+
+@pytest.fixture()
+def mocked_delete_oidc_credential(mocker: MockerFixture) -> MagicMock:
+    mock = mocker.patch("charm.KratosAPI.delete_oidc_credential", return_value=True)
+    return mock
+
+
+@pytest.fixture()
 def mocked_create_identity(mocker: MockerFixture, kratos_identity_json: Dict) -> MagicMock:
     mock = mocker.patch("charm.KratosAPI.create_identity", return_value=kratos_identity_json)
     return mock

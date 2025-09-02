@@ -43,6 +43,7 @@ IDENTITY_SCHEMA = {
     },
 }
 IDENTITY_ID = "c0a0a2e0-b7d0-4e4e-9b8a-3f1c7a5d9f2b"
+CREDENTIAL_ID = "some-idp:123456"
 PROJ_ROOT_DIR = Path(__file__).parents[2]
 
 
@@ -2116,6 +2117,8 @@ def test_on_config_changed_when_oidc_webauthn_sequencing_enabled(
         "_on_run_migration_action",
         "_on_invalidate_identity_sessions_action",
         "_on_reset_identity_mfa_action",
+        "_on_list_oidc_accounts_action",
+        "_on_unlink_oidc_account_action",
     ],
 )
 def test_actions_when_cannot_connect(harness: Harness, action: str) -> None:
@@ -2412,6 +2415,121 @@ def test_reset_password_action_with_code_with_email(
     harness.charm._on_reset_password_action(event)
 
     event.set_results.assert_called()
+
+
+def test_list_oidc_accounts_action_with_identity_id(
+    harness: Harness, mocked_kratos_service: MagicMock, mocked_list_oidc_identifiers: MagicMock
+) -> None:
+    event = MagicMock()
+    event.params = {"identity-id": IDENTITY_ID}
+
+    harness.charm._on_list_oidc_accounts_action(event)
+
+    event.set_results.assert_called_with({"identifiers": "some-idp:123456"})
+
+
+def test_list_oidc_accounts_action_with_email(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_get_identity_from_email: MagicMock,
+    mocked_list_oidc_identifiers: MagicMock,
+) -> None:
+    event = MagicMock()
+    event.params = {"email": "test@example.com"}
+
+    harness.charm._on_list_oidc_accounts_action(event)
+
+    event.set_results.assert_called_with({"identifiers": "some-idp:123456"})
+
+
+def test_list_oidc_accounts_action_when_no_credentials(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_list_oidc_identifiers: MagicMock,
+) -> None:
+    mocked_list_oidc_identifiers.return_value = None
+    params = {"identity-id": IDENTITY_ID}
+
+    action_output = harness.run_action("list-oidc-accounts", params)
+
+    assert "User has no OIDC credentials" in action_output.logs
+
+
+def test_error_on_list_oidc_accounts_action(
+    harness: Harness, mocked_kratos_service: MagicMock, mocked_list_oidc_identifiers: MagicMock
+) -> None:
+    event = MagicMock()
+    mocked_list_oidc_identifiers.side_effect = requests.exceptions.HTTPError()
+    event.params = {"identity-id": IDENTITY_ID}
+
+    harness.charm._on_list_oidc_accounts_action(event)
+
+    event.fail.assert_called()
+
+
+def test_error_on_unlink_oidc_account_action_with_identity_id_when_credential_id_not_provided(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_delete_oidc_credential: MagicMock,
+) -> None:
+    event = MagicMock()
+    event.params = {"identity-id": IDENTITY_ID}
+
+    harness.charm._on_unlink_oidc_account_action(event)
+
+    event.fail.assert_called_with("The OIDC credential ID must be specified")
+
+
+def test_unlink_oidc_account_action_with_identity_id(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_delete_oidc_credential: MagicMock,
+) -> None:
+    params = {"identity-id": IDENTITY_ID, "credential-id": CREDENTIAL_ID}
+
+    action_output = harness.run_action("unlink-oidc-account", params)
+
+    assert "Account has been unlinked successfully" in action_output.logs
+
+
+def test_unlink_oidc_account_action_with_email(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_get_identity_from_email: MagicMock,
+    mocked_delete_oidc_credential: MagicMock,
+) -> None:
+    params = {"email": "test@example.com", "credential-id": CREDENTIAL_ID}
+
+    action_output = harness.run_action("unlink-oidc-account", params)
+
+    assert "Account has been unlinked successfully" in action_output.logs
+
+
+def test_unlink_oidc_account_action_with_identity_id_when_no_oidc_credentials(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_delete_oidc_credential: MagicMock,
+) -> None:
+    mocked_delete_oidc_credential.return_value = False
+    params = {"identity-id": IDENTITY_ID, "credential-id": CREDENTIAL_ID}
+
+    action_output = harness.run_action("unlink-oidc-account", params)
+
+    assert f"User has no {CREDENTIAL_ID} credentials" in action_output.logs
+
+
+def test_error_on_unlink_oidc_account_action_with_identity_id(
+    harness: Harness,
+    mocked_kratos_service: MagicMock,
+    mocked_delete_oidc_credential: MagicMock,
+) -> None:
+    event = MagicMock()
+    mocked_delete_oidc_credential.side_effect = requests.exceptions.HTTPError()
+    event.params = {"credential-id": "123"}
+
+    harness.charm._on_unlink_oidc_account_action(event)
+
+    event.fail.assert_called()
 
 
 def test_error_on_reset_mfa_action_with_identity_id_when_mfa_type_not_provided(
