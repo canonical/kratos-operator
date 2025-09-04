@@ -110,7 +110,7 @@ class DatabaseConfig:
             database=requirer.database,
             username=integration_data.get("username", ""),
             password=integration_data.get("password", ""),
-            migration_version=f"db_migration_version_{integration_id}",
+            migration_version=f"migration_version_{integration_id}",
         )
 
 
