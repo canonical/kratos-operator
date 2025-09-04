@@ -1,6 +1,4 @@
+-r requirements.txt
+coverage[toml]
 pytest
 pytest-mock
-coverage[toml]
-ipdb
-responses
--r requirements.txt

@@ -861,7 +861,7 @@ class KratosCharm(CharmBase):
             try:
                 client.invalidate_sessions(identity_id)
             except IdentitySessionsNotExistError:
-                event.fail(f"Identity {identity_id} has no sessions.")
+                event.log(f"Identity {identity_id} has no sessions.")
                 return
             except ClientRequestError:
                 event.fail(f"Failed to invalidate and delete sessions for identity {identity_id}")
@@ -880,7 +880,7 @@ class KratosCharm(CharmBase):
             try:
                 client.delete_mfa_credential(identity_id, mfa_type)
             except IdentityCredentialsNotExistError:
-                event.fail(f"Identity {identity_id} has no {mfa_type} credentials.")
+                event.log(f"Identity {identity_id} has no {mfa_type} credentials.")
                 return
             except ClientRequestError:
                 event.fail(f"Failed to reset the {mfa_type} credentials.")
