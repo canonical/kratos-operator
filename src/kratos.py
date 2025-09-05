@@ -139,6 +139,39 @@ class KratosAPI:
 
         return r.json()
 
+    def list_oidc_identifiers(self, identity_id: str) -> Optional[List[str]]:
+        """Fetch OIDC credentials identifiers for an identity."""
+        url = join(self.kratos_admin_url, f"admin/identities/{identity_id}")
+
+        try:
+            r = requests.get(url, params={"include_credential": "oidc"})
+            r.raise_for_status()
+            data = r.json()
+        except requests.exceptions.HTTPError as err:
+            logger.error(f"Failed to fetch OIDC credential identifiers: {err}")
+            return None
+
+        oidc_creds = data.get("credentials", {}).get("oidc")
+
+        return oidc_creds.get("identifiers") if oidc_creds else None
+
+    def delete_oidc_credential(self, identity_id: str, credential_id: str) -> Optional[bool]:
+        """Unlink social sign in account from an identity by deleting an OIDC credential."""
+        url = join(self.kratos_admin_url, f"admin/identities/{identity_id}/credentials/oidc")
+
+        try:
+            r = requests.delete(url, params={"identifier": credential_id})
+            # This endpoint returns 204 if credentials were deleted or 404 if the identity had no credentials
+            # for the given oidc identifier
+            r.raise_for_status()
+        except requests.exceptions.HTTPError as err:
+            if err.response.status_code == 404:
+                logger.info("No OIDC credentials found for the identifier")
+                return False
+            raise err
+
+        return True
+
     def invalidate_sessions(self, identity_id: str) -> Optional[bool]:
         """Invalidate and delete all sessions that belong to an identity."""
         url = join(self.kratos_admin_url, f"admin/identities/{identity_id}/sessions")

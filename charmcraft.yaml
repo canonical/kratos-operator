@@ -274,6 +274,29 @@ actions:
       mfa-type:
         description: The type of credentials to be removed, one of `totp`, `lookup_secret` or `webauthn`.
         type: string
+  unlink-oidc-account:
+    description: |
+      Unlink a user's external identity provider account from their identity using the identity ID or user email.
+    params:
+      identity-id:
+        description: The Identity ID
+        type: string
+      email:
+        description: The user's email
+        type: string
+      credential-id:
+        description: The OIDC credential ID to unlink. Run `list-identity-linked-oidc-accounts` to list available credentials.
+        type: string
+  list-oidc-accounts:
+    description: |
+      Retrieve the list of OIDC accounts identifiers linked to an identity using the identity ID or user email.
+    params:
+      identity-id:
+        description: The Identity ID
+        type: string
+      email:
+        description: The user's email
+        type: string
   run-migration:
     description: |
       Run a migration, this is needed after upgrades. This is a non-reversible operation.

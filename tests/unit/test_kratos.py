@@ -203,6 +203,22 @@ def test_delete_mfa_credential(kratos_api: KratosAPI, mocker: MockerFixture) -> 
     assert ret
 
 
+def test_list_oidc_identifiers(kratos_api: KratosAPI, mocker: MockerFixture) -> None:
+    mocker.patch("requests.get")
+
+    ret = kratos_api.list_oidc_identifiers("identity_id")
+
+    assert ret
+
+
+def test_delete_oidc_credential(kratos_api: KratosAPI, mocker: MockerFixture) -> None:
+    mocker.patch("requests.delete")
+
+    ret = kratos_api.delete_oidc_credential("identity_id", "some-idp:123456")
+
+    assert ret
+
+
 def test_run_migration(kratos_api: KratosAPI, mocked_kratos_process: MagicMock) -> None:
     expected_output = "success"
     mocked_kratos_process.wait_output.return_value = (expected_output, None)
