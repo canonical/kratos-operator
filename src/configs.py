@@ -295,7 +295,7 @@ class ConfigMapIdentitySchemaProvider(IdentitySchemaProvider):
         if not (identity_schemas := self._schemas_configmap.get()):
             return None
 
-        if not (default_schema_id := identity_schemas.pop("default.schema")):
+        if not (default_schema_id := identity_schemas.pop("default.schema", "")):
             logger.error("Identity schemas ConfigMap does not contain `default.schema`")
             return None
 
