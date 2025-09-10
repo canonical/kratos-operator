@@ -61,7 +61,7 @@ from charms.traefik_k8s.v2.ingress import (
     IngressPerAppRevokedEvent,
 )
 from lightkube import Client
-from ops import EventBase, main
+from ops import EventBase, UpdateStatusEvent, main
 from ops.charm import (
     ActionEvent,
     CharmBase,
@@ -114,6 +114,7 @@ from constants import (
     KRATOS_PUBLIC_PORT,
     LOGGING_INTEGRATION_NAME,
     LOGIN_UI_INTEGRATION_NAME,
+    PEER_INTEGRATION_NAME,
     PROMETHEUS_SCRAPE_INTEGRATION_NAME,
     REGISTRATION_WEBHOOK_INTEGRATION_NAME,
     TRACING_INTEGRATION_NAME,
@@ -272,9 +273,9 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.on.leader_elected, self._on_leader_elected)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.kratos_pebble_ready, self._on_kratos_pebble_ready)
-        self.framework.observe(self.on.update_status, self._holistic_handler)
         self.framework.observe(self.on.remove, self._on_remove)
-        self.framework.observe(self.on.upgrade_charm, self._on_upgrade)
+        self.framework.observe(self.on.upgrade_charm, self._on_upgrade_charm)
+        self.framework.observe(self.on.update_status, self._on_update_status)
 
         # kratos-info
         self.framework.observe(
@@ -400,7 +401,7 @@ class KratosCharm(CharmBase):
         )
 
     @property
-    def migration_is_needed(self) -> Optional[bool]:
+    def migration_needed(self) -> Optional[bool]:
         if not peer_integration_exists(self):
             return None
 
@@ -434,7 +435,7 @@ class KratosCharm(CharmBase):
             self.unit.status = WaitingStatus("Waiting for secret creation")
             return
 
-        if self.migration_is_needed:
+        if self.migration_needed:
             self.unit.status = WaitingStatus("Waiting for database migration")
             return
 
@@ -539,22 +540,23 @@ class KratosCharm(CharmBase):
 
         self._holistic_handler(event)
 
-    def _on_upgrade(self, event: UpgradeCharmEvent) -> None:
+    def _on_upgrade_charm(self, event: UpgradeCharmEvent) -> None:
         create_configmaps(
             k8s_client=self._k8s_client,
             namespace=self.model.name,
             app_name=self.app.name,
         )
 
+    @leader_unit
     def _on_remove(self, event: RemoveEvent) -> None:
-        if not self.unit.is_leader():
-            return
-
         remove_configmaps(
             k8s_client=self._k8s_client,
             namespace=self.model.name,
             app_name=self.app.name,
         )
+
+    def _on_update_status(self, event: UpdateStatusEvent) -> None:
+        self._holistic_handler(event)
 
     def _on_registration_webhook_ready(self, event: KratosRegistrationWebhookReadyEvent) -> None:
         self.unit.status = MaintenanceStatus("Configuring resources")
@@ -597,11 +599,11 @@ class KratosCharm(CharmBase):
 
         if not container_connectivity(self):
             event.defer()
-            self.unit.status = WaitingStatus("Container is not connected yet.")
+            self.unit.status = WaitingStatus("Container is not connected yet")
             return
 
         if not peer_integration_exists(self):
-            self.unit.status = WaitingStatus("Waiting for peer relation")
+            self.unit.status = WaitingStatus(f"Missing integration {PEER_INTEGRATION_NAME}")
             event.defer()
             return
 
@@ -610,7 +612,7 @@ class KratosCharm(CharmBase):
             event.defer()
             return
 
-        if not self.migration_is_needed:
+        if not self.migration_needed:
             self._holistic_handler(event)
             return
 
@@ -718,22 +720,22 @@ class KratosCharm(CharmBase):
         identity_id = event.params.get("identity-id")
         email = event.params.get("email")
         if identity_id and email:
-            event.fail("Provide only one of 'identity-id' or 'email', not both.")
+            event.fail("Provide only one of 'identity-id' or 'email', not both")
             return
 
         if not identity_id and not email:
-            event.fail("You must provide either 'identity-id' or 'email'.")
+            event.fail("You must provide either 'identity-id' or 'email'")
             return
 
         with HTTPClient(base_url=f"http://127.0.0.1:{KRATOS_ADMIN_PORT}") as client:
             try:
                 identity = Identity(client).get(identity_id=identity_id, email=email)
             except IdentityNotExistsError:
-                event.fail("Identity not found.")
+                event.fail("Identity not found")
                 return
             except TooManyIdentitiesError:
                 event.fail(
-                    f"Multiple identities found for email '{email}'. Please provide an identity-id instead."
+                    f"Multiple identities found for email '{email}'. Please provide an identity-id instead"
                 )
                 return
             except ClientRequestError:
@@ -753,14 +755,14 @@ class KratosCharm(CharmBase):
             try:
                 client.delete_identity(identity_id)
             except IdentityNotExistsError:
-                event.fail(f"Identity {identity_id} does not exists")
+                event.fail(f"Identity {identity_id} does not exist")
                 return
             except ClientRequestError:
                 event.fail(f"Failed to delete the identity for {identity_id}")
                 return
 
-        event.log(f"Successfully deleted the identity: {identity_id}.")
-        event.set_results({"identity-id": identity_id})
+        event.log(f"Successfully deleted the identity: {identity_id}")
+        event.set_results({"id": identity_id})
 
     def _on_reset_password_action(self, event: ActionEvent) -> None:
         if not self._workload_service.is_running:
@@ -788,17 +790,17 @@ class KratosCharm(CharmBase):
                 else:
                     res = client.create_recovery_code(identity_id)
             except IdentityNotExistsError:
-                event.fail(f"Identity {identity_id} does not exists")
+                event.fail(f"Identity {identity_id} does not exist")
                 return
             except ClientRequestError:
-                event.fail("Failed to request Kratos API.")
+                event.fail("Failed to request Kratos API")
                 return
 
         if password:
             event.log("Password was changed successfully")
         else:
             event.log(
-                "Recovery code created successfully. Use the returned link to reset the identity's password."
+                "Recovery code created successfully. Use the returned link to reset the identity's password"
             )
 
         event.set_results(dict_to_action_output(res))
@@ -861,13 +863,13 @@ class KratosCharm(CharmBase):
             try:
                 client.invalidate_sessions(identity_id)
             except IdentitySessionsNotExistError:
-                event.log(f"Identity {identity_id} has no sessions.")
+                event.log(f"Identity {identity_id} has no sessions")
                 return
             except ClientRequestError:
                 event.fail(f"Failed to invalidate and delete sessions for identity {identity_id}")
                 return
 
-        event.log("Successfully invalidated and deleted the sessions.")
+        event.log("Successfully invalidated and deleted the sessions")
 
     def _on_reset_identity_mfa_action(self, event: ActionEvent) -> None:
         if not self._workload_service.is_running:
@@ -918,17 +920,17 @@ class KratosCharm(CharmBase):
             try:
                 identity = client.create_identity(traits, schema_id="admin_v0", password=password)
             except ClientRequestError:
-                event.fail("Failed to create the admin account.")
+                event.fail("Failed to create the admin account")
                 return
 
             identity_id = identity["id"]
-            event.log(f"Successfully created the admin account: {identity_id}.")
+            event.log(f"Successfully created the admin account: {identity_id}")
             res = {"identity-id": identity_id}
             if not password:
                 try:
                     recovery = client.create_recovery_code(identity_id)
                 except ClientRequestError:
-                    event.fail("Failed to create recovery code for the admin account.")
+                    event.fail("Failed to create recovery code for the admin account")
                     return
 
                 res.update(recovery)
@@ -936,12 +938,12 @@ class KratosCharm(CharmBase):
         event.set_results(dict_to_action_output(res))
 
     def _on_run_migration_action(self, event: ActionEvent) -> None:
-        if not self._container.can_connect():
+        if not self._workload_service.is_running:
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
         if not peer_integration_exists(self):
-            event.fail("Peer relation not ready. Failed to store migration version")
+            event.fail("Peer integration is not ready")
             return
 
         event.log("Start migrating the database")

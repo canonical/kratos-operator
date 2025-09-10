@@ -257,6 +257,7 @@ class SmtpData:
             server=smtp_data.host,
             port=smtp_data.port,
             transport_security=smtp_data.transport_security,
+            skip_ssl_verify="true" if smtp_data.skip_ssl_verify else "false",
         )
 
 
