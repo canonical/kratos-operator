@@ -217,6 +217,16 @@ async def test_reset_password_action_with_recovery_code(
     assert res["recovery-code"]
 
 
+async def test_list_oidc_accounts(kratos_unit: Unit, request: pytest.FixtureRequest) -> None:
+    identity_id = request.config.cache.get("identity-id", "")
+
+    action = await kratos_unit.run_action("list-oidc-accounts", **{"identity-id": identity_id})
+
+    res = await action.wait()
+
+    assert res.status == "completed"
+
+
 async def test_reset_identity_mfa_action(
     kratos_unit: Unit, request: pytest.FixtureRequest
 ) -> None:
@@ -227,6 +237,22 @@ async def test_reset_identity_mfa_action(
         **{
             "identity-id": identity_id,
             "mfa-type": "webauthn",
+        },
+    )
+
+    res = await action.wait()
+
+    assert res.status == "completed"
+
+
+async def test_unlink_oidc_account(kratos_unit: Unit, request: pytest.FixtureRequest) -> None:
+    identity_id = request.config.cache.get("identity-id", "")
+
+    action = await kratos_unit.run_action(
+        "unlink-oidc-account",
+        **{
+            "identity-id": identity_id,
+            "credential-id": "credential-id",
         },
     )
 
@@ -267,7 +293,7 @@ async def test_delete_identity_action(kratos_unit: Unit, request: pytest.Fixture
     )
 
     res = await action.wait()
-    assert res.message == "Identity not found."
+    assert res.message == "Identity not found"
 
 
 async def test_identity_schemas_config(
