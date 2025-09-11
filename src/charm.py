@@ -372,6 +372,8 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.on.get_identity_action, self._on_get_identity_action)
         self.framework.observe(self.on.delete_identity_action, self._on_delete_identity_action)
         self.framework.observe(self.on.reset_password_action, self._on_reset_password_action)
+        self.framework.observe(self.on.list_oidc_accounts_action, self._on_list_oidc_accounts_action)
+        self.framework.observe(self.on.unlink_oidc_account_action, self._on_unlink_oidc_account_action)
         self.framework.observe(
             self.on.invalidate_identity_sessions_action,
             self._on_invalidate_identity_sessions_action,
@@ -802,6 +804,54 @@ class KratosCharm(CharmBase):
             )
 
         event.set_results(dict_to_action_output(res))
+
+    def _on_list_oidc_accounts_action(self, event: ActionEvent) -> None:
+        if not self._kratos_service_is_running:
+            event.fail("Service is not ready. Please re-run the action when the charm is active")
+            return
+
+        if not (identity_id := self._get_identity_id(event)):
+            return
+
+        event.log("Retrieving OIDC credentials identifiers")
+        try:
+            identifiers = self.kratos.list_oidc_identifiers(identity_id=identity_id)
+            if not identifiers:
+                event.log("User has no OIDC credentials")
+                return
+        except requests.exceptions.RequestException as e:
+            event.fail(f"Failed to request Kratos API: {e}")
+            return
+
+        event.log("Successfully retrieved OIDC credentials identifiers.")
+        event.set_results({"identifiers": "\n".join(identifiers)})
+
+    def _on_unlink_oidc_account_action(self, event: ActionEvent) -> None:
+        if not self._kratos_service_is_running:
+            event.fail("Service is not ready. Please re-run the action when the charm is active")
+            return
+
+        credential_id = event.params.get("credential-id")
+        if not credential_id:
+            event.fail("The OIDC credential ID must be specified")
+            return
+
+        if not (identity_id := self._get_identity_id(event)):
+            return
+
+        event.log("Unlinking account")
+        try:
+            credential_deleted = self.kratos.delete_oidc_credential(
+                identity_id=identity_id, credential_id=credential_id
+            )
+            if not credential_deleted:
+                event.log(f"User has no {credential_id} credentials")
+                return
+        except requests.exceptions.RequestException as e:
+            event.fail(f"Failed to request Kratos API: {e}")
+            return
+
+        event.log("Account has been unlinked successfully")
 
     def _on_invalidate_identity_sessions_action(self, event: ActionEvent) -> None:
         if not self._workload_service.is_running:
