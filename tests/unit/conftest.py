@@ -25,6 +25,11 @@ def mocked_k8s_resource_patch(mocker: MockerFixture) -> None:
     )
 
 
+@pytest.fixture(autouse=True)
+def mocked_k8s_client(mocker: MockerFixture) -> None:
+    mocker.patch("charm.Client", autospec=True)
+
+
 @pytest.fixture
 def mocked_container() -> MagicMock:
     return create_autospec(Container)

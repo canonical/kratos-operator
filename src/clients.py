@@ -37,10 +37,12 @@ class HTTPClient:
     ) -> None:
         self._session.close()
 
-    def get_identity(self, identity_id: str) -> dict:
+    def get_identity(self, identity_id: str, *, params: Optional[dict] = None) -> dict:
         """More information: https://www.ory.sh/docs/kratos/reference/api#tag/identity/operation/getIdentity."""
         try:
-            resp = self._session.get(f"{self._base_url}/admin/identities/{identity_id}")
+            resp = self._session.get(
+                f"{self._base_url}/admin/identities/{identity_id}", params=params
+            )
             resp.raise_for_status()
         except requests.exceptions.HTTPError as err:
             if err.response.status_code == 404:
@@ -157,11 +159,14 @@ class HTTPClient:
 
         return resp.json()
 
-    def delete_mfa_credential(self, identity_id: str, mfa_type: str) -> None:
+    def delete_mfa_credential(
+        self, identity_id: str, mfa_type: str, *, params: Optional[dict] = None
+    ) -> None:
         """More information: https://www.ory.sh/docs/kratos/reference/api#tag/identity/operation/deleteIdentityCredentials."""
         try:
             resp = self._session.delete(
-                f"{self._base_url}/admin/identities/{identity_id}/credentials/{mfa_type}"
+                f"{self._base_url}/admin/identities/{identity_id}/credentials/{mfa_type}",
+                params=params,
             )
             resp.raise_for_status()
         except requests.exceptions.HTTPError as err:
@@ -201,3 +206,11 @@ class Identity:
     def reset_password(self, identity_id: str, password: str) -> dict:
         identity = self.get(identity_id)
         return self._client.reset_password(identity, password)
+
+    def get_oidc_identifiers(self, identity_id: str) -> list[str]:
+        identity = self._client.get_identity(
+            identity_id,
+            params={"include_credential": "oidc"},
+        )
+        oidc_creds = identity.get("credentials", {}).get("oidc", {})
+        return oidc_creds.get("identifiers", [])

@@ -11,6 +11,7 @@ from charm import KratosCharm
 from constants import WORKLOAD_CONTAINER
 from exceptions import (
     ClientRequestError,
+    IdentityCredentialsNotExistError,
     IdentityNotExistsError,
     IdentitySessionsNotExistError,
     MigrationError,
@@ -602,6 +603,332 @@ class TestCreateAdminAccountAction:
         mocked_client.create_recovery_code.assert_not_called()
         assert "Successfully created the admin account: identity-id" in ctx.action_logs
         assert ctx.action_results == {"identity-id": "identity-id"}
+
+
+class TestListOIDCAccountsAction:
+    @pytest.fixture
+    def mocked_get_oidc_identifiers(self, mocker: MockerFixture) -> MagicMock:
+        mocked = mocker.patch("charm.Identity.get_oidc_identifiers", autospec=True)
+        return mocked
+
+    def test_when_workload_service_not_running(
+        self,
+        mocked_workload_service_running: MagicMock,
+        mocked_get_oidc_identifiers: MagicMock,
+    ) -> None:
+        mocked_workload_service_running.return_value = False
+
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(containers={container})
+
+        with pytest.raises(
+            testing.ActionFailed,
+            match="Service is not ready. Please re-run the action when the charm is active",
+        ):
+            ctx.run(
+                ctx.on.action(name="list-oidc-accounts", params={"identity-id": "identity-id"}),
+                state_in,
+            )
+
+        mocked_get_oidc_identifiers.assert_not_called()
+
+    def test_when_identity_not_found(
+        self,
+        mocked_workload_service_running: MagicMock,
+        mocked_get_oidc_identifiers: MagicMock,
+    ) -> None:
+        mocked_get_oidc_identifiers.side_effect = IdentityNotExistsError
+
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(containers={container})
+
+        with pytest.raises(testing.ActionFailed, match="Identity identity-id does not exist"):
+            ctx.run(
+                ctx.on.action(
+                    name="list-oidc-accounts",
+                    params={"identity-id": "identity-id"},
+                ),
+                state_in,
+            )
+
+        mocked_get_oidc_identifiers.assert_called()
+
+    def test_when_get_identity_failed(
+        self,
+        mocked_workload_service_running: MagicMock,
+        mocked_get_oidc_identifiers: MagicMock,
+    ) -> None:
+        mocked_get_oidc_identifiers.side_effect = ClientRequestError
+
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(containers={container})
+
+        with pytest.raises(
+            testing.ActionFailed,
+            match="Failed to fetch the identity OIDC credentials for identity-id",
+        ):
+            ctx.run(
+                ctx.on.action(
+                    name="list-oidc-accounts",
+                    params={"identity-id": "identity-id"},
+                ),
+                state_in,
+            )
+
+        mocked_get_oidc_identifiers.assert_called()
+
+    def test_when_oidc_credentials_not_exist(
+        self,
+        mocked_workload_service_running: MagicMock,
+        mocked_get_oidc_identifiers: MagicMock,
+    ) -> None:
+        mocked_get_oidc_identifiers.return_value = []
+
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(containers={container})
+
+        ctx.run(
+            ctx.on.action(
+                name="list-oidc-accounts",
+                params={"identity-id": "identity-id"},
+            ),
+            state_in,
+        )
+
+        assert "Identity OIDC credentials not found" in ctx.action_logs
+        mocked_get_oidc_identifiers.assert_called()
+
+    def test_when_action_succeeds(
+        self,
+        mocked_workload_service_running: MagicMock,
+        mocked_get_oidc_identifiers: MagicMock,
+    ) -> None:
+        mocked_get_oidc_identifiers.return_value = ["identifier_one", "identifier_two"]
+
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(containers={container})
+
+        ctx.run(
+            ctx.on.action(
+                name="list-oidc-accounts",
+                params={"identity-id": "identity-id"},
+            ),
+            state_in,
+        )
+
+        mocked_get_oidc_identifiers.assert_called()
+        assert "Successfully fetched the identity OIDC credentials" in ctx.action_logs
+        assert ctx.action_results == {"identifiers": "identifier_one\nidentifier_two"}
+
+
+class TestUnlinkOIDCAccountAction:
+    @pytest.fixture
+    def mocked_client(self, mocker: MockerFixture) -> MagicMock:
+        mocked = MagicMock()
+        mocked_http_client = mocker.patch("charm.HTTPClient", autospec=True)
+        mocked_http_client.return_value.__enter__.return_value = mocked
+        return mocked
+
+    def test_when_workload_service_not_running(
+        self,
+        mocked_workload_service_running: MagicMock,
+        mocked_client: MagicMock,
+    ) -> None:
+        mocked_workload_service_running.return_value = False
+
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(containers={container})
+
+        with pytest.raises(
+            testing.ActionFailed,
+            match="Service is not ready. Please re-run the action when the charm is active",
+        ):
+            ctx.run(
+                ctx.on.action(
+                    name="unlink-oidc-account",
+                    params={"identity-id": "identity-id", "credential-id": "credential-id"},
+                ),
+                state_in,
+            )
+
+        mocked_client.delete_mfa_credential.assert_not_called()
+
+    def test_when_credential_not_exist(
+        self,
+        mocked_workload_service_running: MagicMock,
+        mocked_client: MagicMock,
+    ) -> None:
+        mocked_client.delete_mfa_credential.side_effect = IdentityCredentialsNotExistError
+
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(containers={container})
+
+        ctx.run(
+            ctx.on.action(
+                name="unlink-oidc-account",
+                params={"identity-id": "identity-id", "credential-id": "credential-id"},
+            ),
+            state_in,
+        )
+
+        assert "Identity identity-id has no oidc credentials" in ctx.action_logs
+        mocked_client.delete_mfa_credential.assert_called()
+
+    def test_when_delete_credential_failed(
+        self,
+        mocked_workload_service_running: MagicMock,
+        mocked_client: MagicMock,
+    ) -> None:
+        mocked_client.delete_mfa_credential.side_effect = ClientRequestError
+
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(containers={container})
+
+        with pytest.raises(
+            testing.ActionFailed,
+            match="Failed to delete the oidc credentials",
+        ):
+            ctx.run(
+                ctx.on.action(
+                    name="unlink-oidc-account",
+                    params={"identity-id": "identity-id", "credential-id": "credential-id"},
+                ),
+                state_in,
+            )
+
+        mocked_client.delete_mfa_credential.assert_called()
+
+    def test_when_action_succeeds(
+        self,
+        mocked_workload_service_running: MagicMock,
+        mocked_client: MagicMock,
+    ) -> None:
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(containers={container})
+
+        ctx.run(
+            ctx.on.action(
+                name="unlink-oidc-account",
+                params={"identity-id": "identity-id", "credential-id": "credential-id"},
+            ),
+            state_in,
+        )
+
+        assert "Successfully unlink the oidc account for identity identity-id" in ctx.action_logs
+        mocked_client.delete_mfa_credential.assert_called()
+
+
+class TestResetIdentityMFAAction:
+    @pytest.fixture
+    def mocked_client(self, mocker: MockerFixture) -> MagicMock:
+        mocked = MagicMock()
+        mocked_http_client = mocker.patch("charm.HTTPClient", autospec=True)
+        mocked_http_client.return_value.__enter__.return_value = mocked
+        return mocked
+
+    def test_when_workload_service_not_running(
+        self,
+        mocked_workload_service_running: MagicMock,
+        mocked_client: MagicMock,
+    ) -> None:
+        mocked_workload_service_running.return_value = False
+
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(containers={container})
+
+        with pytest.raises(
+            testing.ActionFailed,
+            match="Service is not ready. Please re-run the action when the charm is active",
+        ):
+            ctx.run(
+                ctx.on.action(
+                    name="reset-identity-mfa",
+                    params={"identity-id": "identity-id", "mfa-type": "mfa-type"},
+                ),
+                state_in,
+            )
+
+        mocked_client.delete_mfa_credential.assert_not_called()
+
+    def test_when_credential_not_exist(
+        self,
+        mocked_workload_service_running: MagicMock,
+        mocked_client: MagicMock,
+    ) -> None:
+        mocked_client.delete_mfa_credential.side_effect = IdentityCredentialsNotExistError
+
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(containers={container})
+
+        ctx.run(
+            ctx.on.action(
+                name="reset-identity-mfa",
+                params={"identity-id": "identity-id", "mfa-type": "mfa-type"},
+            ),
+            state_in,
+        )
+
+        assert "Identity identity-id has no mfa-type credentials" in ctx.action_logs
+        mocked_client.delete_mfa_credential.assert_called()
+
+    def test_when_delete_credential_failed(
+        self,
+        mocked_workload_service_running: MagicMock,
+        mocked_client: MagicMock,
+    ) -> None:
+        mocked_client.delete_mfa_credential.side_effect = ClientRequestError
+
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(containers={container})
+
+        with pytest.raises(
+            testing.ActionFailed,
+            match="Failed to reset the mfa-type credentials",
+        ):
+            ctx.run(
+                ctx.on.action(
+                    name="reset-identity-mfa",
+                    params={"identity-id": "identity-id", "mfa-type": "mfa-type"},
+                ),
+                state_in,
+            )
+
+        mocked_client.delete_mfa_credential.assert_called()
+
+    def test_when_action_succeeds(
+        self,
+        mocked_workload_service_running: MagicMock,
+        mocked_client: MagicMock,
+    ) -> None:
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(containers={container})
+
+        ctx.run(
+            ctx.on.action(
+                name="reset-identity-mfa",
+                params={"identity-id": "identity-id", "mfa-type": "mfa-type"},
+            ),
+            state_in,
+        )
+
+        assert (
+            "Successfully reset the mfa-type credentials for identity identity-id"
+            in ctx.action_logs
+        )
+        mocked_client.delete_mfa_credential.assert_called()
 
 
 class TestRunMigrationAction:
