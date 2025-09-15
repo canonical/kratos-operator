@@ -68,7 +68,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 15
+LIBPATCH = 17
 
 PYDEPS = ["pydantic>=2"]
 
@@ -278,6 +278,7 @@ class SmtpRequires(ops.Object):
         self.charm = charm
         self.relation_name = relation_name
         self.framework.observe(charm.on[relation_name].relation_changed, self._on_relation_changed)
+        self.framework.observe(charm.on.secret_changed, self._on_secret_changed)
 
     def get_relation_data(self) -> Optional[SmtpRelationData]:
         """Retrieve the relation data.
@@ -286,9 +287,9 @@ class SmtpRequires(ops.Object):
             SmtpRelationData: the relation data.
         """
         relation = self.model.get_relation(self.relation_name)
-        return self._get_relation_data_from_relation(relation) if relation else None
+        return self.get_relation_data_from_relation(relation) if relation else None
 
-    def _get_relation_data_from_relation(
+    def get_relation_data_from_relation(
         self, relation: ops.Relation
     ) -> Optional[SmtpRelationData]:
         """Retrieve the relation data.
@@ -298,6 +299,9 @@ class SmtpRequires(ops.Object):
 
         Returns:
             SmtpRelationData: the relation data.
+
+        Raises:
+            SecretError: if the secret can't be read.
         """
         assert relation.app
         relation_data = relation.data[relation.app]
@@ -339,7 +343,7 @@ class SmtpRequires(ops.Object):
             true: if the relation data is valid.
         """
         try:
-            _ = self._get_relation_data_from_relation(relation)
+            _ = self.get_relation_data_from_relation(relation)
             return True
         except ValidationError as ex:
             error_fields = set(
@@ -350,7 +354,7 @@ class SmtpRequires(ops.Object):
             return False
 
     def _on_relation_changed(self, event: ops.RelationChangedEvent) -> None:
-        """Event emitted when the relation has changed.
+        """Handle the relation changed event.
 
         Args:
             event: event triggering this handler.
@@ -364,6 +368,10 @@ class SmtpRequires(ops.Object):
                 logger.warning('Insecure setting: transport_security has value "none"')
             if self._is_relation_data_valid(event.relation):
                 self.on.smtp_data_available.emit(event.relation, app=event.app, unit=event.unit)
+
+    def _on_secret_changed(self, _: ops.SecretChangedEvent) -> None:
+        """Handle the relation secret event."""
+        self.on.smtp_data_available.emit()
 
 
 class SmtpProvides(ops.Object):
