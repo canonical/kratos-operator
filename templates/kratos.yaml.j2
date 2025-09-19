@@ -21,9 +21,8 @@
     'pkce',
 ] %}
 
-log:
-    level: {{ log_level }}
-    format: json
+{%- set oidc_providers = (external_oidc_providers | d([])) + (configmap_oidc_providers | d([])) %}
+
 identity:
     default_schema_id: {{ default_identity_schema_id }}
     schemas:
@@ -31,18 +30,7 @@ identity:
         - id: {{ schema_id }}
           url: '{{ identity_schema }}'
         {%- endfor %}
-{%- if enable_oidc_webauthn_sequencing or (enable_local_idp and enforce_mfa) %}
-session:
-  whoami:
-    required_aal: highest_available
-{%- endif %}
 selfservice:
-    {%- if allowed_return_urls %}
-    allowed_return_urls:
-    {%- for return_url in allowed_return_urls %}
-        - {{ return_url }}
-    {%- endfor %}
-    {%- endif %}
     default_browser_return_url:
         {{ default_browser_return_url | d("http://example-default-return-url.com", true) }}
     {%- if error_ui_url or login_ui_url or oidc_providers or registration_webhook_config %}
@@ -86,20 +74,20 @@ selfservice:
                         {%- if registration_webhook_config %}
                         - hook: web_hook
                           config:
-                            url: {{ registration_webhook_config.url }}
-                            body: {{ registration_webhook_config.body }}
-                            method: {{ registration_webhook_config.method }}
-                            emit_analytics_event: {{ registration_webhook_config.emit_analytics_event }}
+                            url: {{ registration_webhook_config.get("url") }}
+                            body: {{ registration_webhook_config.get("body") }}
+                            method: {{ registration_webhook_config.get("method") }}
+                            emit_analytics_event: {{ registration_webhook_config.get("emit_analytics_event") }}
                             response:
-                                ignore: {{ registration_webhook_config.response_ignore }}
-                                parse: {{ registration_webhook_config.response_parse }}
-                            {%- if registration_webhook_config.auth_enabled %}
+                                ignore: {{ registration_webhook_config.get("response_ignore") }}
+                                parse: {{ registration_webhook_config.get("response_parse") }}
+                            {%- if registration_webhook_config.get("auth_enabled") %}
                             auth:
-                                type: {{ registration_webhook_config.auth_type }}
+                                type: {{ registration_webhook_config.get("auth_type") }}
                                 config:
-                                    name: {{ registration_webhook_config.auth_config_name }}
-                                    value: {{ registration_webhook_config.auth_config_value }}
-                                    in: {{ registration_webhook_config.auth_config_in }}
+                                    name: {{ registration_webhook_config.get("auth_config_name") }}
+                                    value: {{ registration_webhook_config.get("auth_config_value") }}
+                                    in: {{ registration_webhook_config.get("auth_config_in") }}
                             {%- endif %}
                         {%- endif %}
                         - hook: session
@@ -168,29 +156,3 @@ selfservice:
             enabled: True
         {%- endif %}
     {%- endif %}
-{%- if cookie_secrets %}
-secrets:
-    cookie:
-    {%- for secret in cookie_secrets %}
-        - {{ secret }}
-    {%- endfor %}
-{%- endif %}
-courier:
-    smtp:
-        connection_uri: {{ smtp_connection_uri }}
-    {%- if recovery_email_template %}
-    templates:
-        recovery_code:
-          valid:
-            email:
-              body:
-                html: {{ recovery_email_template }}
-    {%- endif %}
-serve:
-    public:
-        cors:
-            enabled: true
-{%- if oauth2_provider_url %}
-oauth2_provider:
-    url: {{ oauth2_provider_url }}
-{%- endif %}

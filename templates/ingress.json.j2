@@ -1,0 +1,80 @@
+{% set identifier = "{}-{}".format(model, app) %}
+{% set admin_svc = "http://{}.{}.svc.cluster.local:{}".format(app, model, admin_port) %}
+{% set public_svc = "http://{}.{}.svc.cluster.local:{}".format(app, model, public_port) %}
+
+{
+  "http": {
+    "middlewares": {
+      "juju-sidecar-noprefix-{{ identifier }}": {
+        "stripPrefix": {
+          "forceSlash": false,
+          "prefixes": ["/{{ identifier }}"]
+        }
+      }
+    },
+    "routers": {
+      "juju-{{ identifier }}-admin-api-router": {
+        "entryPoints": ["web"],
+        "rule": "PathPrefix(`/{{ identifier }}/admin`)",
+        "middlewares": ["juju-sidecar-noprefix-{{ identifier }}"],
+        "service": "juju-{{ identifier }}-admin-api-service"
+      },
+      "juju-{{ identifier }}-admin-api-router-tls": {
+        "entryPoints": ["websecure"],
+        "rule": "PathPrefix(`/{{ identifier }}/admin`)",
+        "middlewares": ["juju-sidecar-noprefix-{{ identifier }}"],
+        "service": "juju-{{ identifier }}-admin-api-service",
+        "tls": {
+          "domains": [
+            {
+              "main": "{{ external_host }}",
+              "sans": ["*.{{ external_host }}"]
+
+            }
+          ]
+        }
+      },
+      "juju-{{ identifier }}-public-api-router": {
+        "entryPoints": ["web"],
+        "rule": "PathPrefix(`/{{ identifier }}`)",
+        "middlewares": ["juju-sidecar-noprefix-{{ identifier }}"],
+        "service": "juju-{{ identifier }}-public-api-service"
+      },
+      "juju-{{ identifier }}-public-api-router-tls": {
+        "entryPoints": ["websecure"],
+        "rule": "PathPrefix(`/{{ identifier }}`)",
+        "middlewares": ["juju-sidecar-noprefix-{{ identifier }}"],
+        "service": "juju-{{ identifier }}-public-api-service",
+        "tls": {
+          "domains": [
+            {
+              "main": "{{ external_host }}",
+              "sans": ["*.{{ external_host }}"]
+
+            }
+          ]
+        }
+      }
+    },
+    "services": {
+      "juju-{{ identifier }}-admin-api-service": {
+        "loadBalancer": {
+          "servers": [
+            {
+              "url": "{{ admin_svc }}"
+            }
+          ]
+        }
+      },
+      "juju-{{ identifier }}-public-api-service": {
+        "loadBalancer": {
+          "servers": [
+            {
+              "url": "{{ public_svc }}"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
