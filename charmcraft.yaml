@@ -23,12 +23,6 @@ requires:
   pg-database:
     interface: postgresql_client
     optional: false
-  public-ingress:
-    interface: ingress
-    optional: true
-  admin-ingress:
-    interface: ingress
-    optional: true
   kratos-external-idp:
     interface: external_provider
     optional: true
@@ -62,6 +56,11 @@ requires:
     description: |
       Ingress used for cross-cluster communication where network topology is more complex
       than just one k8s cluster
+  public-route:
+    interface: traefik_route
+    optional: true
+    description: |
+      Recommended way to expose the charm to the public internet
   receive-ca-cert:
     interface: certificate_transfer
     optional: true
