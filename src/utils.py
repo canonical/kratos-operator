@@ -11,7 +11,7 @@ from constants import (
     KRATOS_EXTERNAL_IDP_INTEGRATOR_INTEGRATION_NAME,
     KRATOS_INFO_INTEGRATION_NAME,
     PEER_INTEGRATION_NAME,
-    PUBLIC_INGRESS_INTEGRATION_NAME,
+    PUBLIC_ROUTE_INTEGRATION_NAME,
     WORKLOAD_CONTAINER,
 )
 
@@ -64,7 +64,7 @@ kratos_info_integration_exists = integration_existence(KRATOS_INFO_INTEGRATION_N
 external_idp_integrator_integration_exists = integration_existence(
     KRATOS_EXTERNAL_IDP_INTEGRATOR_INTEGRATION_NAME
 )
-public_ingress_integration_exists = integration_existence(PUBLIC_INGRESS_INTEGRATION_NAME)
+public_route_integration_exists = integration_existence(PUBLIC_ROUTE_INTEGRATION_NAME)
 
 
 def container_connectivity(charm: CharmBase) -> bool:

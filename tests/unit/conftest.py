@@ -8,7 +8,7 @@ from ops import testing
 from ops.model import Container, Unit
 from pytest_mock import MockerFixture
 
-from constants import COOKIE_SECRET_CONTENT_KEY, COOKIE_SECRET_LABEL
+from constants import COOKIE_SECRET_CONTENT_KEY, COOKIE_SECRET_LABEL, PUBLIC_ROUTE_INTEGRATION_NAME
 
 
 @pytest.fixture(autouse=True)
@@ -129,22 +129,12 @@ def registration_webhook_integration() -> testing.Relation:
 
 
 @pytest.fixture
-def public_ingress_integration() -> testing.Relation:
+def public_route_integration() -> testing.Relation:
     return testing.Relation(
-        endpoint="public-ingress",
-        interface="ingress",
+        endpoint=PUBLIC_ROUTE_INTEGRATION_NAME,
+        interface="traefik-route",
         remote_app_name="traefik-public",
-        remote_app_data={"ingress": '{"url": "https://public.example.com"}'},
-    )
-
-
-@pytest.fixture
-def admin_ingress_integration() -> testing.Relation:
-    return testing.Relation(
-        endpoint="admin-ingress",
-        interface="ingress",
-        remote_app_name="traefik-admin",
-        remote_app_data={"ingress": '{"url": "https://admin.example.com"}'},
+        remote_app_data={"external_host": "public.example.com", "scheme": "https"},
     )
 
 
@@ -221,4 +211,14 @@ def tracing_integration() -> testing.Relation:
         endpoint="tracing",
         interface="tracing",
         remote_app_name="tempo-coordinator-k8s",
+    )
+
+
+@pytest.fixture
+def ingress_template() -> str:
+    return (
+        '{"model": "{{ model }}", '
+        '"app": "{{ app }}", '
+        '"public_port": {{ public_port }}, '
+        '"external_host": "{{ external_host }}"}'
     )

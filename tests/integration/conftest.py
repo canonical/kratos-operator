@@ -21,7 +21,7 @@ from constants import (
     KRATOS_INFO_INTEGRATION_NAME,
     LOGIN_UI_INTEGRATION_NAME,
     PEER_INTEGRATION_NAME,
-    PUBLIC_INGRESS_INTEGRATION_NAME,
+    PUBLIC_ROUTE_INTEGRATION_NAME,
 )
 
 METADATA = yaml.safe_load(Path("./charmcraft.yaml").read_text())
@@ -29,6 +29,7 @@ KRATOS_APP = METADATA["name"]
 KRATOS_IMAGE = METADATA["resources"]["oci-image"]["upstream-source"]
 TRAEFIK_CHARM = "traefik-k8s"
 DB_APP = "postgresql-k8s"
+CA_APP = "self-signed-certificates"
 LOGIN_UI_APP = "identity-platform-login-ui-operator"
 TRAEFIK_PUBLIC_APP = "traefik-public"
 TRAEFIK_ADMIN_APP = "traefik-admin"
@@ -62,7 +63,7 @@ async def integrate_dependencies(ops_test: OpsTest) -> None:
         f"{KRATOS_APP}:{INTERNAL_INGRESS_INTEGRATION_NAME}", TRAEFIK_ADMIN_APP
     )
     await ops_test.model.integrate(
-        f"{KRATOS_APP}:{PUBLIC_INGRESS_INTEGRATION_NAME}", TRAEFIK_PUBLIC_APP
+        f"{KRATOS_APP}:{PUBLIC_ROUTE_INTEGRATION_NAME}", TRAEFIK_PUBLIC_APP
     )
     await ops_test.model.integrate(
         f"{KRATOS_APP}:{KRATOS_INFO_INTEGRATION_NAME}",
@@ -119,8 +120,8 @@ async def leader_login_ui_endpoint_integration_data(
 
 
 @pytest_asyncio.fixture
-async def leader_public_ingress_integration_data(app_integration_data: Callable) -> Optional[dict]:
-    return await app_integration_data(KRATOS_APP, PUBLIC_INGRESS_INTEGRATION_NAME)
+async def leader_public_route_integration_data(app_integration_data: Callable) -> Optional[dict]:
+    return await app_integration_data(KRATOS_APP, PUBLIC_ROUTE_INTEGRATION_NAME)
 
 
 @pytest_asyncio.fixture
@@ -164,7 +165,7 @@ async def get_webauthn_js(
     http_client: AsyncClient,
 ) -> Response:
     address = await public_address(ops_test)
-    url = f"http://{address}/{ops_test.model_name}-{KRATOS_APP}/.well-known/ory/webauthn.js"
+    url = f"https://{address}/.well-known/webauthn.js"
     return await http_client.get(url)
 
 
@@ -177,7 +178,7 @@ async def get_identity_schemas(
     address = await public_address(ops_test)
 
     async def wrapper() -> Response:
-        url = f"http://{address}/{ops_test.model_name}-{KRATOS_APP}/schemas"
+        url = f"https://{address}/schemas"
         return await http_client.get(url)
 
     return wrapper

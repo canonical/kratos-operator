@@ -12,6 +12,7 @@ import pytest
 from conftest import (
     ADMIN_EMAIL,
     ADMIN_INGRESS_DOMAIN,
+    CA_APP,
     DB_APP,
     IDENTITY_SCHEMA,
     KRATOS_APP,
@@ -52,16 +53,22 @@ async def test_build_and_deploy(ops_test: OpsTest, local_charm: str | Path) -> N
     )
 
     await ops_test.model.deploy(
+        CA_APP,
+        channel="1/stable",
+        trust=True,
+    )
+
+    await ops_test.model.deploy(
         TRAEFIK_CHARM,
         application_name=TRAEFIK_PUBLIC_APP,
-        channel="latest/stable",
+        channel="latest/edge",
         config={"external_hostname": PUBLIC_INGRESS_DOMAIN},
         trust=True,
     )
     await ops_test.model.deploy(
         TRAEFIK_CHARM,
         application_name=TRAEFIK_ADMIN_APP,
-        channel="latest/stable",
+        channel="latest/edge",
         config={"external_hostname": ADMIN_INGRESS_DOMAIN},
         trust=True,
     )
@@ -71,6 +78,7 @@ async def test_build_and_deploy(ops_test: OpsTest, local_charm: str | Path) -> N
         trust=True,
     )
     await ops_test.model.integrate(TRAEFIK_PUBLIC_APP, f"{LOGIN_UI_APP}:ingress")
+    await ops_test.model.integrate(f"{TRAEFIK_PUBLIC_APP}:certificates", f"{CA_APP}:certificates")
 
     # Integrate with dependencies
     await integrate_dependencies(ops_test)
@@ -107,16 +115,14 @@ async def test_kratos_info_integration(
     assert all(leader_kratos_info_integration_data.values())
 
 
-async def test_public_ingress_integration(
+async def test_public_route_integration(
     ops_test: OpsTest,
-    leader_public_ingress_integration_data: Optional[dict],
+    leader_public_route_integration_data: Optional[dict],
     get_webauthn_js: Response,
 ) -> None:
-    assert leader_public_ingress_integration_data
-    assert leader_public_ingress_integration_data["ingress"]
-
-    data = json.loads(leader_public_ingress_integration_data["ingress"])
-    assert data["url"] == f"http://{PUBLIC_INGRESS_DOMAIN}/{ops_test.model_name}-{KRATOS_APP}"
+    assert leader_public_route_integration_data
+    assert leader_public_route_integration_data["external_host"] == PUBLIC_INGRESS_DOMAIN
+    assert leader_public_route_integration_data["scheme"] == "https"
 
     assert get_webauthn_js.status_code == http.HTTPStatus.OK
 

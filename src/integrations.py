@@ -21,7 +21,6 @@ from charms.kratos_external_idp_integrator.v1.kratos_external_provider import Ex
 from charms.smtp_integrator.v0.smtp import SmtpRequires
 from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer
 from charms.traefik_k8s.v0.traefik_route import TraefikRouteRequirer
-from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from jinja2 import Template
 from ops import Model
 from typing_extensions import Self
@@ -33,6 +32,7 @@ from constants import (
     KRATOS_PUBLIC_PORT,
     PEER_INTEGRATION_NAME,
     POSTGRESQL_DSN_TEMPLATE,
+    PUBLIC_ROUTE_INTEGRATION_NAME,
 )
 from env_vars import EnvVars
 
@@ -264,10 +264,61 @@ class SmtpData:
 
 
 @dataclass(frozen=True, slots=True)
-class PublicIngressData:
-    """The data source from the public-ingress integration."""
+class PublicRouteData:
+    """The data source from the public-route integration."""
 
     url: URL = URL()
+    config: dict = field(default_factory=dict)
+
+    @classmethod
+    def _external_host(cls, requirer: TraefikRouteRequirer) -> str:
+        if not (relation := requirer._charm.model.get_relation(PUBLIC_ROUTE_INTEGRATION_NAME)):
+            return
+        if not relation.app:
+            return
+        return relation.data[relation.app].get("external_host", "")
+
+    @classmethod
+    def _scheme(cls, requirer: TraefikRouteRequirer) -> str:
+        if not (relation := requirer._charm.model.get_relation(PUBLIC_ROUTE_INTEGRATION_NAME)):
+            return
+        if not relation.app:
+            return
+        return relation.data[relation.app].get("scheme", "")
+
+    @classmethod
+    def load(cls, requirer: TraefikRouteRequirer) -> "PublicRouteData":
+        model, app = requirer._charm.model.name, requirer._charm.app.name
+        external_host = cls._external_host(requirer)
+        scheme = cls._scheme(requirer)
+
+        external_endpoint = f"{scheme}://{external_host}"
+
+        # template could have use PathPrefixRegexp but going for a simple one right now
+        with open("templates/public-route.j2", "r") as file:
+            template = Template(file.read())
+
+        ingress_config = json.loads(
+            template.render(
+                model=model,
+                app=app,
+                public_port=KRATOS_PUBLIC_PORT,
+                external_host=external_host,
+            )
+        )
+
+        if not external_host:
+            logger.error("External hostname is not set on the ingress provider")
+            return cls()
+
+        return cls(
+            url=URL(external_endpoint),
+            config=ingress_config,
+        )
+
+    @property
+    def secured(self) -> bool:
+        return self.url.scheme == "https"
 
     def to_service_configs(self) -> ServiceConfigs:
         return (
@@ -294,10 +345,6 @@ class PublicIngressData:
             if self.url
             else {}
         )
-
-    @classmethod
-    def load(cls, requirer: IngressPerAppRequirer) -> "PublicIngressData":
-        return cls(url=URL(requirer.url)) if requirer.is_ready() else cls()  # type: ignore[arg-type]
 
 
 @dataclass(frozen=True, slots=True)
