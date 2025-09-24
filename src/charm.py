@@ -66,7 +66,6 @@ from ops.charm import (
     PebbleReadyEvent,
     RelationBrokenEvent,
     RelationEvent,
-    RelationJoinedEvent,
     RemoveEvent,
     UpgradeCharmEvent,
 )
@@ -105,7 +104,7 @@ from constants import (
     EMAIL_TEMPLATE_FILE_PATH,
     GRAFANA_DASHBOARD_INTEGRATION_NAME,
     HYDRA_ENDPOINT_INTEGRATION_NAME,
-    INTERNAL_INGRESS_INTEGRATION_NAME,
+    INTERNAL_ROUTE_INTEGRATION_NAME,
     KRATOS_ADMIN_PORT,
     KRATOS_EXTERNAL_IDP_INTEGRATOR_INTEGRATION_NAME,
     LOGGING_INTEGRATION_NAME,
@@ -130,7 +129,7 @@ from integrations import (
     DatabaseConfig,
     ExternalIdpIntegratorData,
     HydraEndpointData,
-    InternalIngressData,
+    InternalRouteData,
     LoginUIEndpointData,
     PeerData,
     PublicRouteData,
@@ -181,10 +180,10 @@ class KratosCharm(CharmBase):
         self.smtp_requirer = SmtpRequires(self)
 
         # ingress via raw traefik routing configuration
-        self.internal_ingress = TraefikRouteRequirer(
+        self.internal_route = TraefikRouteRequirer(
             self,
-            self.model.get_relation(INTERNAL_INGRESS_INTEGRATION_NAME),
-            INTERNAL_INGRESS_INTEGRATION_NAME,
+            self.model.get_relation(INTERNAL_ROUTE_INTEGRATION_NAME),
+            INTERNAL_ROUTE_INTEGRATION_NAME,
             raw=True,
         )
 
@@ -325,18 +324,18 @@ class KratosCharm(CharmBase):
             self._on_public_route_broken,
         )
 
-        # internal-ingress
+        # internal route
         self.framework.observe(
-            self.on[INTERNAL_INGRESS_INTEGRATION_NAME].relation_joined,
-            self._on_internal_ingress_joined,
+            self.on[INTERNAL_ROUTE_INTEGRATION_NAME].relation_joined,
+            self._on_internal_route_changed,
         )
         self.framework.observe(
-            self.on[INTERNAL_INGRESS_INTEGRATION_NAME].relation_changed,
-            self._on_internal_ingress_changed,
+            self.on[INTERNAL_ROUTE_INTEGRATION_NAME].relation_changed,
+            self._on_internal_route_changed,
         )
         self.framework.observe(
-            self.on[INTERNAL_INGRESS_INTEGRATION_NAME].relation_broken,
-            self._on_internal_ingress_changed,
+            self.on[INTERNAL_ROUTE_INTEGRATION_NAME].relation_broken,
+            self._on_internal_route_broken,
         )
 
         # kratos-external-idp
@@ -453,7 +452,7 @@ class KratosCharm(CharmBase):
         ) and not public_route_integration_exists(self):
             self.unit.status = BlockedStatus(
                 "Cannot send integration data without an external hostname. Please "
-                "provide an ingress relation."
+                "provide a traefik-route relation."
             )
             return
 
@@ -584,7 +583,7 @@ class KratosCharm(CharmBase):
         self.unit.status = BlockedStatus(event.message)
 
     def _on_kratos_info_provider_ready(self, event: RelationEvent) -> None:
-        internal_endpoints = InternalIngressData.load(self.internal_ingress)
+        internal_endpoints = InternalRouteData.load(self.internal_route)
         providers_configmap_name = self.providers_configmap.name
         schemas_configmap_name = self.schemas_configmap.name
         configmaps_namespace = self.model.name
@@ -682,18 +681,27 @@ class KratosCharm(CharmBase):
         self._holistic_handler(event)
         self._on_kratos_info_provider_ready(event)
 
-    @leader_unit
-    def _on_internal_ingress_joined(self, event: RelationJoinedEvent) -> None:
+    def _on_internal_route_changed(self, event: RelationEvent) -> None:
         self.unit.status = MaintenanceStatus("Configuring resources")
-        self.internal_ingress._relation = event.relation
-        self._on_internal_ingress_changed(event)
 
-    @leader_unit
-    def _on_internal_ingress_changed(self, event: RelationEvent) -> None:
+        # needed due to how traefik_route lib is handling the event
+        self.internal_route._relation = event.relation
+
+        if not self.internal_route.is_ready():
+            return
+
+        if self.unit.is_leader():
+            internal_route_config = InternalRouteData.load(self.internal_route).config
+            self.internal_route.submit_to_traefik(internal_route_config)
+
+    def _on_internal_route_broken(self, event: RelationBrokenEvent) -> None:
         self.unit.status = MaintenanceStatus("Configuring resources")
-        if self.internal_ingress.is_ready():
-            internal_ingress_config = InternalIngressData.load(self.internal_ingress).config
-            self.internal_ingress.submit_to_traefik(internal_ingress_config)
+
+        if self.unit.is_leader():
+            logger.info("This app no longer has internal-route")
+
+        # needed due to how traefik_route lib is handling the event
+        self.internal_route._relation = event.relation
 
     def _update_kratos_external_idp_configurations(self) -> None:
         if not (public_url := PublicRouteData.load(self.public_route).url):

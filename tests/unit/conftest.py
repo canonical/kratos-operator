@@ -8,7 +8,12 @@ from ops import testing
 from ops.model import Container, Unit
 from pytest_mock import MockerFixture
 
-from constants import COOKIE_SECRET_CONTENT_KEY, COOKIE_SECRET_LABEL, PUBLIC_ROUTE_INTEGRATION_NAME
+from constants import (
+    COOKIE_SECRET_CONTENT_KEY,
+    COOKIE_SECRET_LABEL,
+    INTERNAL_ROUTE_INTEGRATION_NAME,
+    PUBLIC_ROUTE_INTEGRATION_NAME,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -141,7 +146,7 @@ def public_route_integration() -> testing.Relation:
 @pytest.fixture
 def internal_ingress_integration() -> testing.Relation:
     return testing.Relation(
-        endpoint="internal-ingress",
+        endpoint=INTERNAL_ROUTE_INTEGRATION_NAME,
         interface="traefik-route",
         remote_app_name="traefik-internal",
         remote_app_data={"external_host": "example.com", "scheme": "https"},

@@ -28,6 +28,7 @@ from yarl import URL
 
 from configs import ServiceConfigs
 from constants import (
+    INTERNAL_ROUTE_INTEGRATION_NAME,
     KRATOS_ADMIN_PORT,
     KRATOS_PUBLIC_PORT,
     PEER_INTEGRATION_NAME,
@@ -348,7 +349,7 @@ class PublicRouteData:
 
 
 @dataclass(frozen=True, slots=True)
-class InternalIngressData:
+class InternalRouteData:
     """The data source from the internal-ingress integration."""
 
     public_endpoint: URL
@@ -356,12 +357,30 @@ class InternalIngressData:
     config: dict = field(default_factory=dict)
 
     @classmethod
-    def load(cls, requirer: TraefikRouteRequirer) -> "InternalIngressData":
-        model, app = requirer._charm.model.name, requirer._charm.app.name
-        external_host = requirer.external_host
-        external_endpoint = f"{requirer.scheme}://{external_host}/{model}-{app}"
+    def _external_host(cls, requirer: TraefikRouteRequirer) -> str:
+        if not (relation := requirer._charm.model.get_relation(INTERNAL_ROUTE_INTEGRATION_NAME)):
+            return
+        if not relation.app:
+            return
+        return relation.data[relation.app].get("external_host", "")
 
-        with open("templates/ingress.json.j2", "r") as file:
+    @classmethod
+    def _scheme(cls, requirer: TraefikRouteRequirer) -> str:
+        if not (relation := requirer._charm.model.get_relation(INTERNAL_ROUTE_INTEGRATION_NAME)):
+            return
+        if not relation.app:
+            return
+        return relation.data[relation.app].get("scheme", "")
+
+    @classmethod
+    def load(cls, requirer: TraefikRouteRequirer) -> "InternalRouteData":
+        model, app = requirer._charm.model.name, requirer._charm.app.name
+        external_host = cls._external_host(requirer)
+        scheme = cls._scheme(requirer) or "http"
+
+        external_endpoint = f"{scheme}://{external_host}"
+
+        with open("templates/internal-route.j2", "r") as file:
             template = Template(file.read())
 
         ingress_config = json.loads(
@@ -377,12 +396,12 @@ class InternalIngressData:
         public_endpoint = URL(
             external_endpoint
             if external_host
-            else f"http://{app}.{model}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
+            else f"{scheme}://{app}.{model}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
         )
         admin_endpoint = URL(
             external_endpoint
             if external_host
-            else f"http://{app}.{model}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
+            else f"{scheme}://{app}.{model}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
         )
 
         return cls(

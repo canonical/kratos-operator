@@ -17,7 +17,7 @@ from juju.unit import Unit
 from pytest_operator.plugin import OpsTest
 
 from constants import (
-    INTERNAL_INGRESS_INTEGRATION_NAME,
+    INTERNAL_ROUTE_INTEGRATION_NAME,
     KRATOS_INFO_INTEGRATION_NAME,
     LOGIN_UI_INTEGRATION_NAME,
     PEER_INTEGRATION_NAME,
@@ -60,7 +60,7 @@ async def integrate_dependencies(ops_test: OpsTest) -> None:
         f"{KRATOS_APP}:{LOGIN_UI_INTEGRATION_NAME}", f"{LOGIN_UI_APP}:{LOGIN_UI_INTEGRATION_NAME}"
     )
     await ops_test.model.integrate(
-        f"{KRATOS_APP}:{INTERNAL_INGRESS_INTEGRATION_NAME}", TRAEFIK_ADMIN_APP
+        f"{KRATOS_APP}:{INTERNAL_ROUTE_INTEGRATION_NAME}", TRAEFIK_ADMIN_APP
     )
     await ops_test.model.integrate(
         f"{KRATOS_APP}:{PUBLIC_ROUTE_INTEGRATION_NAME}", TRAEFIK_PUBLIC_APP
@@ -128,7 +128,7 @@ async def leader_public_route_integration_data(app_integration_data: Callable) -
 async def leader_internal_ingress_integration_data(
     app_integration_data: Callable,
 ) -> Optional[dict]:
-    return await app_integration_data(KRATOS_APP, INTERNAL_INGRESS_INTEGRATION_NAME)
+    return await app_integration_data(KRATOS_APP, INTERNAL_ROUTE_INTEGRATION_NAME)
 
 
 @pytest_asyncio.fixture
@@ -189,7 +189,7 @@ async def get_identities(
     ops_test: OpsTest, admin_address: Callable, http_client: AsyncClient
 ) -> Response:
     address = await admin_address(ops_test)
-    url = f"http://{address}/{ops_test.model_name}-{KRATOS_APP}/admin/identities"
+    url = f"http://{address}/admin/identities"
     return await http_client.get(url)
 
 
@@ -198,7 +198,7 @@ async def get_whoami(
     ops_test: OpsTest, admin_address: Callable, http_client: AsyncClient
 ) -> Response:
     address = await admin_address(ops_test)
-    url = f"http://{address}/{ops_test.model_name}-{KRATOS_APP}/sessions/whoami"
+    url = f"http://{address}/sessions/whoami"
     return await http_client.get(url)
 
 

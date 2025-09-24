@@ -59,7 +59,7 @@ You should be able to see the identity created earlier.
 This charm requires an integration
 with [postgresql-k8s-operator](https://github.com/canonical/postgresql-k8s-operator).
 
-### Ingress
+### Ingress (via traefik-route)
 
 The Kratos Operator offers integration with
 the [traefik-k8s-operator](https://github.com/canonical/traefik-k8s-operator)
@@ -70,13 +70,13 @@ If you have a traefik deployed and configured in your kratos model, to provide
 ingress to the admin API run:
 
 ```shell
-juju integrate traefik-admin kratos:admin-ingress
+juju integrate traefik-admin kratos:internal-route
 ```
 
 To provide ingress to the public API run:
 
 ```shell
-juju integrate traefik-public kratos:public-ingress
+juju integrate traefik-public kratos:public-route
 ```
 
 ### SMTP Server Integration
