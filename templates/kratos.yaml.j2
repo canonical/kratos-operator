@@ -47,8 +47,10 @@ selfservice:
         settings:
             ui_url: {{ settings_ui_url }}
             required_aal: highest_available
-            {%- if enable_passwordless_login_method or enable_oidc_webauthn_sequencing %}
             after:
+                oidc:
+                    default_browser_return_url: {{ account_linking_settings_url }}
+            {%- if enable_passwordless_login_method or enable_oidc_webauthn_sequencing %}
                 webauthn:
                     default_browser_return_url:  {{ webauthn_settings_url }}
             {%- endif %}
