@@ -54,7 +54,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 3
+LIBPATCH = 4
 
 RELATION_NAME = "ui-endpoint-info"
 INTERFACE_NAME = "login_ui_endpoints"
@@ -72,6 +72,7 @@ class LoginUIProviderData(BaseModel):
     registration_url: Optional[str] = None
     settings_url: Optional[str] = None
     webauthn_settings_url: Optional[str] = None
+    account_linking_settings_url: Optional[str] = None
 
 
 class LoginUIEndpointsRelationReadyEvent(EventBase):
