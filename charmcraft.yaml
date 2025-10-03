@@ -1,4 +1,4 @@
-# Copyright 2022 Canonical Ltd.
+# Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 name: kratos
@@ -204,7 +204,7 @@ actions:
         description: The user's email
         type: string
   delete-identity:
-    description: Delete a user using either the identity ID or the user email.
+    description: Delete a user using the identity ID or the user email.
     params:
       identity-id:
         description: The Identity ID
@@ -231,14 +231,15 @@ actions:
       name:
         description: The admin's name
         type: string
-      phone_number:
+      phone-number:
         description: The admin's phone number
         type: string
-    required: ["username", "email"]
+    required:
+      - username
+      - email
   reset-password:
     description: |
-      Reset password of an identity using either the identity ID or user email.
-      Required: one of `identity-id` or `email`
+      Reset password of an identity using the identity ID or the user email.
     params:
       identity-id:
         description: The Identity ID
@@ -253,7 +254,7 @@ actions:
         type: string
   invalidate-identity-sessions:
     description: |
-      Invalidate all user sessions using either the identity ID or user email.
+      Invalidate all user sessions using the identity ID or the user email.
     params:
       identity-id:
         description: The Identity ID
@@ -263,7 +264,7 @@ actions:
         type: string
   reset-identity-mfa:
     description: |
-      Reset identity's second authentication factor using either the identity ID or user email.
+      Reset identity's second authentication factor using the identity ID or the user email.
     params:
       identity-id:
         description: The Identity ID
@@ -274,9 +275,25 @@ actions:
       mfa-type:
         description: The type of credentials to be removed, one of `totp`, `lookup_secret` or `webauthn`.
         type: string
+        enum:
+          - totp
+          - lookup_secret
+          - webauthn
+    required:
+      - mfa-type
+  list-oidc-accounts:
+    description: |
+      Retrieve the list of OIDC accounts identifiers linked to an identity using the identity ID or the user email.
+    params:
+      identity-id:
+        description: The Identity ID
+        type: string
+      email:
+        description: The user's email
+        type: string
   unlink-oidc-account:
     description: |
-      Unlink a user's external identity provider account from their identity using the identity ID or user email.
+      Unlink a user's external identity provider account from their identity using the identity ID or the user email.
     params:
       identity-id:
         description: The Identity ID
@@ -287,16 +304,8 @@ actions:
       credential-id:
         description: The OIDC credential ID to unlink. Run `list-identity-linked-oidc-accounts` to list available credentials.
         type: string
-  list-oidc-accounts:
-    description: |
-      Retrieve the list of OIDC accounts identifiers linked to an identity using the identity ID or user email.
-    params:
-      identity-id:
-        description: The Identity ID
-        type: string
-      email:
-        description: The user's email
-        type: string
+    required:
+      - credential-id
   run-migration:
     description: |
       Run a migration, this is needed after upgrades. This is a non-reversible operation.
