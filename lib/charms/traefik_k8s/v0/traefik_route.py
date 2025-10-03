@@ -86,7 +86,7 @@ class TraefikRouteCharm(CharmBase):
     traefik_route = TraefikRouteRequirer(
         self, self.model.relations.get("traefik-route"),
         "traefik-route",
-        raw=True  # Traefik will not modify TLS settings on non HTTP routes
+        raw=True  # Traefik will not modify TLS settings on all routes
     )
     if self.traefik_route.is_ready():
         self.traefik_route.submit_to_traefik(
@@ -120,7 +120,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 2
+LIBPATCH = 4
 
 log = logging.getLogger(__name__)
 
@@ -254,10 +254,10 @@ class TraefikRouteProvider(Object):
         if self.is_ready(event.relation):
             # todo check data is valid here?
             self.update_traefik_address()
-            self.on.ready.emit(event.relation)
+            self.on.ready.emit(relation=event.relation, app=event.relation.app)
 
     def _on_relation_broken(self, event: RelationEvent):
-        self.on.data_removed.emit(event.relation)
+        self.on.data_removed.emit(relation=event.relation, app=event.relation.app)
 
     def update_traefik_address(
         self, *, external_host: Optional[str] = None, scheme: Optional[str] = None
@@ -325,7 +325,7 @@ class TraefikRouteRequirer(Object):
     {
         "config": "<Traefik dynamic config YAML>",
         "static": "<Traefik static config YAML>",  # Optional, requires Traefik restart
-        "raw": "<bool>"  # Determines if Traefik should append TLS config for non HTTP routes
+        "raw": "<bool>"  # Determines if Traefik should append TLS config for ALL routes
     }
     ```
 
@@ -350,7 +350,7 @@ class TraefikRouteRequirer(Object):
 
         if self._raw:
             log.warning(
-                "Raw mode enabled: TLS routes for non-HTTP protocols will not be auto-generated. "
+                "Raw mode enabled: TLS routes for ALL protocols will not be auto-generated. "
                 "Enable this only if you fully understand and intend to bypass the additional TLS configuration."
             )
 
@@ -402,13 +402,13 @@ class TraefikRouteRequirer(Object):
         """Update StoredState with external_host and other information from Traefik."""
         self._update_stored()
         if self._charm.unit.is_leader():
-            self.on.ready.emit(event.relation)
+            self.on.ready.emit(relation=event.relation, app=event.relation.app)
 
     def _on_relation_broken(self, event: RelationEvent) -> None:
         """On RelationBroken, clear the stored data if set and emit an event."""
         self._stored.external_host = ""
         if self._charm.unit.is_leader():
-            self.on.ready.emit(event.relation)
+            self.on.ready.emit(relation=event.relation, app=event.relation.app)
 
     def is_ready(self) -> bool:
         """Is the TraefikRouteRequirer ready to submit data to Traefik?"""

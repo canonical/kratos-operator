@@ -2,7 +2,7 @@
 # See LICENSE file for licensing details.
 
 import json
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock, PropertyMock, mock_open, patch
 
 import pytest
 from ops import testing
@@ -64,12 +64,14 @@ class TestLeaderElectedEvent:
 class TestConfigChangeEvent:
     def test_when_event_emitted(
         self,
+        ingress_template: str,
         mocked_charm_holistic_handler: MagicMock,
     ) -> None:
         ctx = testing.Context(KratosCharm)
         state_in = testing.State()
 
-        ctx.run(ctx.on.config_changed(), state_in)
+        with patch("builtins.open", mock_open(read_data=ingress_template)):
+            ctx.run(ctx.on.config_changed(), state_in)
 
         mocked_charm_holistic_handler.assert_called_once()
 
@@ -319,76 +321,139 @@ class TestRegistrationWebhookUnavailableEvent:
         mocked_charm_holistic_handler.assert_called_once()
 
 
-class TestPublicIngressReadyEvent:
-    def test_when_event_emitted(
+class TestPublicRouteRelationJoinedEvent:
+    @patch("charm.TraefikRouteRequirer.submit_to_traefik")
+    def test_when_not_leader_unit(
         self,
-        public_ingress_integration: testing.Relation,
-        mocked_charm_holistic_handler: MagicMock,
+        mocked_submit_to_traefik: MagicMock,
+        public_route_integration: testing.Relation,
+        ingress_template: str,
     ) -> None:
         ctx = testing.Context(KratosCharm)
         container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
         state_in = testing.State(
             containers={container},
-            relations=[public_ingress_integration],
+            relations=[public_route_integration],
+            leader=False,
         )
 
-        ctx.run(ctx.on.relation_joined(public_ingress_integration), state_in)
+        with patch("builtins.open", mock_open(read_data=ingress_template)):
+            ctx.run(ctx.on.relation_joined(public_route_integration), state_in)
 
-        mocked_charm_holistic_handler.assert_called_once()
+        mocked_submit_to_traefik.assert_not_called()
 
-
-class TestPublicIngressRevokedEvent:
+    @patch("charm.TraefikRouteRequirer.submit_to_traefik")
     def test_when_event_emitted(
         self,
-        public_ingress_integration: testing.Relation,
-        mocked_charm_holistic_handler: MagicMock,
+        mocked_submit_to_traefik: MagicMock,
+        public_route_integration: testing.Relation,
+        ingress_template: str,
     ) -> None:
         ctx = testing.Context(KratosCharm)
         container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
         state_in = testing.State(
             containers={container},
-            relations=[public_ingress_integration],
+            relations=[public_route_integration],
+            leader=True,
         )
 
-        ctx.run(ctx.on.relation_broken(public_ingress_integration), state_in)
+        with patch("builtins.open", mock_open(read_data=ingress_template)):
+            ctx.run(ctx.on.relation_joined(public_route_integration), state_in)
 
-        mocked_charm_holistic_handler.assert_called_once()
+        mocked_submit_to_traefik.assert_called_once()
 
 
-class TestAdminIngressReadyEvent:
-    def test_when_event_emitted(
+class TestPublicRouteRelationChangedEvent:
+    @pytest.fixture
+    def ingress_template(self) -> str:
+        return (
+            '{"model": "{{ model }}", '
+            '"app": "{{ app }}", '
+            '"public_port": {{ public_port }}, '
+            '"external_host": "{{ external_host }}"}'
+        )
+
+    @patch("charm.TraefikRouteRequirer.submit_to_traefik")
+    def test_when_not_leader_unit(
         self,
-        admin_ingress_integration: testing.Relation,
-        mocked_charm_holistic_handler: MagicMock,
+        mocked_submit_to_traefik: MagicMock,
+        public_route_integration: testing.Relation,
+        ingress_template: str,
     ) -> None:
         ctx = testing.Context(KratosCharm)
         container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
         state_in = testing.State(
             containers={container},
-            relations=[admin_ingress_integration],
+            relations=[public_route_integration],
+            leader=False,
         )
 
-        ctx.run(ctx.on.relation_joined(admin_ingress_integration), state_in)
+        with patch("builtins.open", mock_open(read_data=ingress_template)):
+            ctx.run(ctx.on.relation_changed(public_route_integration), state_in)
 
-        mocked_charm_holistic_handler.assert_called_once()
+        mocked_submit_to_traefik.assert_not_called()
 
-
-class TestAdminIngressRevokedEvent:
+    @patch("charm.TraefikRouteRequirer.submit_to_traefik")
     def test_when_event_emitted(
         self,
-        admin_ingress_integration: testing.Relation,
-        mocked_charm_holistic_handler: MagicMock,
+        mocked_submit_to_traefik: MagicMock,
+        public_route_integration: testing.Relation,
+        ingress_template: str,
     ) -> None:
         ctx = testing.Context(KratosCharm)
         container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
         state_in = testing.State(
             containers={container},
-            relations=[admin_ingress_integration],
+            relations=[public_route_integration],
+            leader=True,
         )
 
-        ctx.run(ctx.on.relation_broken(admin_ingress_integration), state_in)
+        with patch("builtins.open", mock_open(read_data=ingress_template)):
+            ctx.run(ctx.on.relation_changed(public_route_integration), state_in)
 
-        mocked_charm_holistic_handler.assert_called_once()
+        mocked_submit_to_traefik.assert_called_once()
+
+
+class TestPublicRouteRelationBrokenEvent:
+    @patch("charm.TraefikRouteRequirer.submit_to_traefik")
+    def test_when_not_leader_unit(
+        self,
+        mocked_submit_to_traefik: MagicMock,
+        public_route_integration: testing.Relation,
+        ingress_template: str,
+    ) -> None:
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(
+            containers={container},
+            relations=[public_route_integration],
+            leader=False,
+        )
+
+        with patch("builtins.open", mock_open(read_data=ingress_template)):
+            ctx.run(ctx.on.relation_broken(public_route_integration), state_in)
+
+        mocked_submit_to_traefik.assert_not_called()
+
+    @patch("charm.TraefikRouteRequirer.submit_to_traefik")
+    def test_when_event_emitted(
+        self,
+        mocked_submit_to_traefik: MagicMock,
+        public_route_integration: testing.Relation,
+        ingress_template: str,
+    ) -> None:
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(
+            containers={container},
+            relations=[public_route_integration],
+            leader=True,
+        )
+
+        with patch("builtins.open", mock_open(read_data=ingress_template)):
+            ctx.run(ctx.on.relation_broken(public_route_integration), state_in)
+
+        mocked_submit_to_traefik.assert_not_called()
 
 
 class TestInternalIngressRelationJoinedEvent:
@@ -604,16 +669,18 @@ class TestKratosInfoReadyEvent:
         self,
         mocked_send_info_relation_data: MagicMock,
         kratos_info_integration: testing.Relation,
-        public_ingress_integration: testing.Relation,
+        public_route_integration: testing.Relation,
+        ingress_template: str,
     ) -> None:
         ctx = testing.Context(KratosCharm)
         container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
         state_in = testing.State(
             containers={container},
-            relations=[kratos_info_integration, public_ingress_integration],
+            relations=[kratos_info_integration, public_route_integration],
         )
 
-        ctx.run(ctx.on.relation_created(kratos_info_integration), state_in)
+        with patch("builtins.open", mock_open(read_data=ingress_template)):
+            ctx.run(ctx.on.relation_created(kratos_info_integration), state_in)
 
         mocked_send_info_relation_data.assert_called_once()
 
@@ -621,6 +688,7 @@ class TestKratosInfoReadyEvent:
 class TestHydraEndpointInfoRelationChangedEvent:
     def test_when_event_emitted(
         self,
+        ingress_template: str,
         hydra_endpoint_info_integration: testing.Relation,
         mocked_charm_holistic_handler: MagicMock,
     ) -> None:
@@ -631,7 +699,8 @@ class TestHydraEndpointInfoRelationChangedEvent:
             relations=[hydra_endpoint_info_integration],
         )
 
-        ctx.run(ctx.on.relation_changed(hydra_endpoint_info_integration), state_in)
+        with patch("builtins.open", mock_open(read_data=ingress_template)):
+            ctx.run(ctx.on.relation_changed(hydra_endpoint_info_integration), state_in)
 
         mocked_charm_holistic_handler.assert_called_once()
 
@@ -639,8 +708,8 @@ class TestHydraEndpointInfoRelationChangedEvent:
 class TestTracingEndpointChangedEvent:
     def test_when_event_emitted(
         self,
+        ingress_template: str,
         tracing_integration: testing.Relation,
-        public_ingress_integration: testing.Relation,
         mocked_charm_holistic_handler: MagicMock,
     ) -> None:
         ctx = testing.Context(KratosCharm)
@@ -650,7 +719,8 @@ class TestTracingEndpointChangedEvent:
             relations=[tracing_integration],
         )
 
-        ctx.run(ctx.on.relation_changed(tracing_integration), state_in)
+        with patch("builtins.open", mock_open(read_data=ingress_template)):
+            ctx.run(ctx.on.relation_changed(tracing_integration), state_in)
 
         mocked_charm_holistic_handler.assert_called_once()
 
@@ -658,6 +728,7 @@ class TestTracingEndpointChangedEvent:
 class TestTracingEndpointRemovedEvent:
     def test_when_event_emitted(
         self,
+        ingress_template: str,
         tracing_integration: testing.Relation,
         mocked_charm_holistic_handler: MagicMock,
     ) -> None:
@@ -668,6 +739,7 @@ class TestTracingEndpointRemovedEvent:
             relations=[tracing_integration],
         )
 
-        ctx.run(ctx.on.relation_broken(tracing_integration), state_in)
+        with patch("builtins.open", mock_open(read_data=ingress_template)):
+            ctx.run(ctx.on.relation_broken(tracing_integration), state_in)
 
         mocked_charm_holistic_handler.assert_called_once()

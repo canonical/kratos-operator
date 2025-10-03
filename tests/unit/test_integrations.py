@@ -30,7 +30,6 @@ from charms.smtp_integrator.v0.smtp import (
 )
 from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer
 from charms.traefik_k8s.v0.traefik_route import TraefikRouteRequirer
-from charms.traefik_k8s.v2.ingress import IngressPerAppRequirer
 from yarl import URL
 
 from constants import KRATOS_ADMIN_PORT, KRATOS_PUBLIC_PORT, POSTGRESQL_DSN_TEMPLATE
@@ -38,10 +37,10 @@ from integrations import (
     DatabaseConfig,
     ExternalIdpIntegratorData,
     HydraEndpointData,
-    InternalIngressData,
+    InternalRouteData,
     LoginUIEndpointData,
     PeerData,
-    PublicIngressData,
+    PublicRouteData,
     RegistrationWebhookData,
     SmtpData,
     TLSCertificates,
@@ -380,34 +379,7 @@ class TestSmtpData:
         )
 
 
-class TestPublicIngressData:
-    @pytest.fixture
-    def mocked_requirer(self) -> MagicMock:
-        return create_autospec(IngressPerAppRequirer)
-
-    def test_to_service_configs(self) -> None:
-        data = PublicIngressData(url=URL("https://example.com/some/path?foo=bar#frag"))
-        actual = data.to_service_configs()
-
-        assert actual == {"domain": "example.com", "origin": "https://example.com"}
-
-    def test_to_env_vars(self) -> None:
-        data = PublicIngressData(url=URL("https://example.com/some/path?foo=bar#frag"))
-        env_vars = data.to_env_vars()
-
-        assert env_vars["SERVE_PUBLIC_BASE_URL"] == "https://example.com/some/path?foo=bar#frag"
-        allowed_urls = json.loads(env_vars["SELFSERVICE_ALLOWED_RETURN_URLS"])
-        assert allowed_urls == ["https://example.com/"]
-
-    def test_load(self, mocked_requirer: MagicMock) -> None:
-        mocked_requirer.is_ready.return_value = True
-        mocked_requirer.url = "https://example.com"
-
-        data = PublicIngressData.load(mocked_requirer)
-        assert str(data.url) == "https://example.com"
-
-
-class TestInternalIngressData:
+class TestPublicRouteData:
     @pytest.fixture
     def mocked_requirer(self) -> MagicMock:
         mocked = create_autospec(TraefikRouteRequirer)
@@ -415,6 +387,89 @@ class TestInternalIngressData:
         mocked._charm.model.name = "model"
         mocked._charm.app.name = "app"
         mocked.scheme = "http"
+
+        relation = MagicMock()
+        relation.app = "app"
+        relation.data = {"app": {"external_host": "public.example.com", "scheme": "http"}}
+        mocked._charm.model.get_relation = MagicMock(return_value=relation)
+
+        return mocked
+
+    @pytest.fixture
+    def ingress_template(self) -> str:
+        return (
+            '{"model": "{{ model }}", '
+            '"app": "{{ app }}", '
+            '"public_port": {{ public_port }}, '
+            '"external_host": "{{ external_host }}"}'
+        )
+
+    def test_load_with_external_host(
+        self,
+        mocked_requirer: MagicMock,
+        ingress_template: str,
+        public_route_integration: None,
+    ) -> None:
+        with patch("builtins.open", mock_open(read_data=ingress_template)):
+            actual = PublicRouteData.load(mocked_requirer)
+
+        expected_ingress_config = {
+            "model": "model",
+            "app": "app",
+            "public_port": KRATOS_PUBLIC_PORT,
+            "external_host": "public.example.com",
+        }
+        assert actual == PublicRouteData(
+            url=URL("http://public.example.com"),
+            config=expected_ingress_config,
+        )
+
+    def test_load_without_external_host(
+        self, mocked_requirer: MagicMock, ingress_template: str
+    ) -> None:
+        relation = MagicMock()
+        relation.app = "app"
+        relation.data = {"app": {"scheme": "http", "external_host": ""}}
+
+        with (
+            patch("builtins.open", mock_open(read_data=ingress_template)),
+            patch.object(
+                mocked_requirer._charm.model, "get_relation", MagicMock(return_value=relation)
+            ),
+        ):
+            actual = PublicRouteData.load(mocked_requirer)
+
+        assert actual == PublicRouteData()
+
+    def test_to_env_vars(self) -> None:
+        data = PublicRouteData(url=URL("https://example.com/some/path?foo=bar#frag"))
+        env_vars = data.to_env_vars()
+
+        assert env_vars["SERVE_PUBLIC_BASE_URL"] == "https://example.com/some/path?foo=bar#frag"
+        allowed_urls = json.loads(env_vars["SELFSERVICE_ALLOWED_RETURN_URLS"])
+        assert allowed_urls == ["https://example.com/"]
+
+    def test_to_service_configs(self) -> None:
+        data = PublicRouteData(url=URL("https://example.com/some/path?foo=bar#frag"))
+        actual = data.to_service_configs()
+
+        assert actual == {"domain": "example.com", "origin": "https://example.com"}
+
+
+class TestInternalRouteData:
+    @pytest.fixture
+    def mocked_requirer(self) -> MagicMock:
+        mocked = create_autospec(TraefikRouteRequirer)
+        mocked._charm = MagicMock()
+        mocked._charm.model.name = "model"
+        mocked._charm.app.name = "app"
+        mocked.scheme = "http"
+
+        relation = MagicMock()
+        relation.app = "app"
+        relation.data = {"app": {"external_host": "internal.example.com", "scheme": "http"}}
+        mocked._charm.model.get_relation = MagicMock(return_value=relation)
+
         return mocked
 
     @pytest.fixture
@@ -430,31 +485,38 @@ class TestInternalIngressData:
     def test_load_with_external_host(
         self, mocked_requirer: MagicMock, ingress_template: str
     ) -> None:
-        mocked_requirer.external_host = "external.kratos.com"
+        mocked_requirer.external_host = "internal.example.com"
 
         with patch("builtins.open", mock_open(read_data=ingress_template)):
-            actual = InternalIngressData.load(mocked_requirer)
+            actual = InternalRouteData.load(mocked_requirer)
 
         expected_ingress_config = {
             "model": "model",
             "app": "app",
             "public_port": KRATOS_PUBLIC_PORT,
             "admin_port": KRATOS_ADMIN_PORT,
-            "external_host": "external.kratos.com",
+            "external_host": "internal.example.com",
         }
-        assert actual == InternalIngressData(
-            public_endpoint=URL("http://external.kratos.com/model-app"),
-            admin_endpoint=URL("http://external.kratos.com/model-app"),
+        assert actual == InternalRouteData(
+            public_endpoint=URL("http://internal.example.com"),
+            admin_endpoint=URL("http://internal.example.com"),
             config=expected_ingress_config,
         )
 
     def test_load_without_external_host(
         self, mocked_requirer: MagicMock, ingress_template: str
     ) -> None:
-        mocked_requirer.external_host = ""
+        relation = MagicMock()
+        relation.app = "app"
+        relation.data = {"app": {"scheme": "http", "external_host": ""}}
 
-        with patch("builtins.open", mock_open(read_data=ingress_template)):
-            actual = InternalIngressData.load(mocked_requirer)
+        with (
+            patch("builtins.open", mock_open(read_data=ingress_template)),
+            patch.object(
+                mocked_requirer._charm.model, "get_relation", MagicMock(return_value=relation)
+            ),
+        ):
+            actual = InternalRouteData.load(mocked_requirer)
 
         expected_ingress_config = {
             "model": "model",
@@ -463,7 +525,7 @@ class TestInternalIngressData:
             "admin_port": KRATOS_ADMIN_PORT,
             "external_host": "",
         }
-        assert actual == InternalIngressData(
+        assert actual == InternalRouteData(
             public_endpoint=URL(f"http://app.model.svc.cluster.local:{KRATOS_PUBLIC_PORT}"),
             admin_endpoint=URL(f"http://app.model.svc.cluster.local:{KRATOS_ADMIN_PORT}"),
             config=expected_ingress_config,
