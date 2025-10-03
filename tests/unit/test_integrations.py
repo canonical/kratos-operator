@@ -241,6 +241,7 @@ class TestLoginUIEndpointData:
             settings_url="settings_url",
             recovery_url="recovery_url",
             webauthn_settings_url="webauthn_settings_url",
+            account_linking_settings_url="account_linking_settings_url",
             registration_url="registration_url",
             consent_url="consent_url",
         )
@@ -257,6 +258,7 @@ class TestLoginUIEndpointData:
             "settings_ui_url": "settings_url",
             "recovery_ui_url": "recovery_url",
             "webauthn_settings_url": "webauthn_settings_url",
+            "account_linking_settings_url": "account_linking_settings_url",
             "registration_ui_url": "registration_url",
         }
         actual = endpoint_data.to_service_configs()
@@ -273,6 +275,7 @@ class TestLoginUIEndpointData:
             "recovery_url": "recovery_url",
             "settings_url": "settings_url",
             "webauthn_settings_url": "webauthn_settings_url",
+            "account_linking_settings_url": "account_linking_settings_url",
             "registration_url": "registration_url",
         }
 

@@ -154,6 +154,7 @@ class LoginUIEndpointData:
     settings_url: str = ""
     recovery_url: str = ""
     webauthn_settings_url: str = ""
+    account_linking_settings_url: str = ""
     registration_url: str = ""
     consent_url: str = ""
 
@@ -168,6 +169,7 @@ class LoginUIEndpointData:
             "settings_ui_url": self.settings_url,
             "recovery_ui_url": self.recovery_url,
             "webauthn_settings_url": self.webauthn_settings_url,
+            "account_linking_settings_url": self.account_linking_settings_url,
             "registration_ui_url": self.registration_url,
         }
 
