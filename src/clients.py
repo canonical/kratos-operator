@@ -11,6 +11,7 @@ from typing_extensions import Self, Type
 
 from exceptions import (
     ClientRequestError,
+    IdentityAlreadyExistsError,
     IdentityCredentialsNotExistError,
     IdentityNotExistsError,
     IdentitySessionsNotExistError,
@@ -87,6 +88,11 @@ class HTTPClient:
                 json=identity,
             )
             resp.raise_for_status()
+        except requests.exceptions.HTTPError as err:
+            if err.response.status_code == 409:
+                raise IdentityAlreadyExistsError
+
+            raise ClientRequestError
         except requests.exceptions.RequestException as err:
             raise ClientRequestError from err
 

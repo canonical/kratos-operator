@@ -12,6 +12,7 @@ from charm import KratosCharm
 from constants import WORKLOAD_CONTAINER
 from exceptions import (
     ClientRequestError,
+    IdentityAlreadyExistsError,
     IdentityCredentialsNotExistError,
     IdentityNotExistsError,
     IdentitySessionsNotExistError,
@@ -508,6 +509,34 @@ class TestCreateAdminAccountAction:
             )
 
         mocked_client.create_identity.assert_not_called()
+        mocked_client.create_recovery_code.assert_not_called()
+
+    def test_when_account_exists(
+        self,
+        mocked_workload_service_running: MagicMock,
+        mocked_client: MagicMock,
+    ) -> None:
+        mocked_client.create_identity.side_effect = IdentityAlreadyExistsError
+
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(containers={container})
+
+        with pytest.raises(testing.ActionFailed, match="The account already exists"):
+            ctx.run(
+                ctx.on.action(
+                    name="create-admin-account",
+                    params={
+                        "username": "username",
+                        "email": "email",
+                        "name": "name",
+                        "phone-number": "phone_number",
+                    },
+                ),
+                state_in,
+            )
+
+        mocked_client.create_identity.assert_called()
         mocked_client.create_recovery_code.assert_not_called()
 
     def test_when_client_request_failed(
