@@ -118,6 +118,7 @@ from constants import (
 )
 from exceptions import (
     ClientRequestError,
+    IdentityAlreadyExistsError,
     IdentityCredentialsNotExistError,
     IdentityNotExistsError,
     IdentitySessionsNotExistError,
@@ -995,6 +996,9 @@ class KratosCharm(CharmBase):
         with HTTPClient(base_url=f"http://127.0.0.1:{KRATOS_ADMIN_PORT}") as client:
             try:
                 identity = client.create_identity(traits, schema_id="admin_v0", password=password)
+            except IdentityAlreadyExistsError:
+                event.fail("The account already exists")
+                return
             except ClientRequestError:
                 event.fail("Failed to create the admin account")
                 return

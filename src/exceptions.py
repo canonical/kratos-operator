@@ -26,6 +26,10 @@ class TooManyIdentitiesError(ActionError):
     """Error for when an email maps to more than one identity."""
 
 
+class IdentityAlreadyExistsError(ActionError):
+    """Error for when an identity already exists."""
+
+
 class IdentityNotExistsError(ActionError):
     """Error for when an identity does not exist."""
 
