@@ -206,17 +206,11 @@ class IdentitySchemaConfigMap(BaseConfigMap):
 
     name = "identity-schemas"
 
-    def __init__(self, k8s_client: Client, namespace: str, app_name: str):
-        super().__init__(k8s_client, namespace, app_name)
-
 
 class OIDCProviderConfigMap(BaseConfigMap):
     """The ConfigMap contains the OIDC provider configurations."""
 
     name = "oidc-providers"
-
-    def __init__(self, k8s_client: Client, namespace: str, app_name: str):
-        super().__init__(k8s_client, namespace, app_name)
 
     def to_service_configs(self) -> ServiceConfigs:
         if not (providers := self.get()):
