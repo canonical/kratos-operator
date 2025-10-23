@@ -1,8 +1,8 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-variable "model_name" {
-  description = "The Juju model name"
+variable "model" {
+  description = "The Juju model uuid"
   type        = string
 }
 
