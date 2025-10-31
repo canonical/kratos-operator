@@ -1,5 +1,37 @@
 # Changelog
 
+## [2.0.0](https://github.com/canonical/kratos-operator/compare/v1.2.0...v2.0.0) (2025-10-31)
+
+
+### ⚠ BREAKING CHANGES
+
+* refactor the charm
+* refactor the juju actions
+* use kratos external provider library v1
+
+### Features
+
+* add actions to list identifiers and unlink account ([57e2c3c](https://github.com/canonical/kratos-operator/commit/57e2c3cd70d4f98d2e868b79076dd01f5ca1111f))
+* add default return url for oidc settings ([6986ae7](https://github.com/canonical/kratos-operator/commit/6986ae763ad9e342dd7db30c0081c5f618fda8f8))
+* drop ingresses in favour of traefik route ([c868490](https://github.com/canonical/kratos-operator/commit/c8684908fec871de0d8650ee9173b8224c002937))
+* implement PublicRoute integration ([b4e91cd](https://github.com/canonical/kratos-operator/commit/b4e91cd2d99ed1a547cc6c52212d0bccd792077e))
+
+
+### Bug Fixes
+
+* downgrade charm lib version ([0c392f3](https://github.com/canonical/kratos-operator/commit/0c392f38a2e3e6810793eda99a1e332bda9bb4bd))
+* improve the error hint for create-admin-account juju action ([50166f8](https://github.com/canonical/kratos-operator/commit/50166f88f08a96850837c894b4c343445277117c))
+* improve the error hint for create-admin-account juju action ([0d764cb](https://github.com/canonical/kratos-operator/commit/0d764cb2d7636b24b8fb395ad78f10c3d7639630))
+* patch up internal-ingress and rename it internal-route ([79e02bf](https://github.com/canonical/kratos-operator/commit/79e02bf379f1b252abe5ef77870eabee4ecdaed2))
+* update to use traefik route 0.4 ([39de118](https://github.com/canonical/kratos-operator/commit/39de118e699ee0458e31716efdede92afa3cb388))
+
+
+### Code Refactoring
+
+* refactor the charm ([ab286bf](https://github.com/canonical/kratos-operator/commit/ab286bf1491912571ec5e78d76d92e82999c807d))
+* refactor the juju actions ([b92f779](https://github.com/canonical/kratos-operator/commit/b92f7792046d15e8925b5f5a9888fc547ead3224))
+* use kratos external provider library v1 ([e3e9bc8](https://github.com/canonical/kratos-operator/commit/e3e9bc8a6974d5a30ca0ea915d75d22c11a9bf36))
+
 ## [1.2.0](https://github.com/canonical/kratos-operator/compare/v1.1.11...v1.2.0) (2025-08-11)
 
 
