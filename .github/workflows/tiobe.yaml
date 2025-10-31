@@ -29,7 +29,7 @@ jobs:
         run: echo "PROJECT_NAME=$(basename "${{ github.repository }}")" >> $GITHUB_ENV
 
       - name: Run TICS quality analysis
-        uses: tiobe/tics-github-action@009979693978bfefad2ad15c1020066694968dc7 # v3
+        uses: tiobe/tics-github-action@ea1d6e614bda3f5cf0d0d7d3ed01ee872a170d8d # v3
         with:
           mode: qserver
           viewerUrl: https://canonical.tiobe.com/tiobeweb/TICS/api/cfg?name=default
