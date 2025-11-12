@@ -675,6 +675,10 @@ class KratosCharm(CharmBase):
     def _on_database_relation_broken(self, event: RelationBrokenEvent) -> None:
         self.unit.status = MaintenanceStatus("Configuring resources")
         self._holistic_handler(event)
+        try:
+            self._pebble_service.stop()
+        except PebbleServiceError as e:
+            logger.error(f"Failed to stop the service, please check the container logs: {e}")
 
     def _on_public_route_changed(self, event: RelationEvent) -> None:
         self.unit.status = MaintenanceStatus("Configuring resources")

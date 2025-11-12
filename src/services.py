@@ -92,7 +92,7 @@ class WorkloadService:
         if not service.is_running():
             return False
 
-        c = self._container.get_checks().get("ready")
+        c = self._container.get_checks().get(PEBBLE_READY_CHECK_NAME)
         return c.status == CheckStatus.UP
 
     def is_failing(self) -> bool:
@@ -100,7 +100,7 @@ class WorkloadService:
         if not self.get_service():
             return False
 
-        if not (c := self._container.get_checks().get("ready")):
+        if not (c := self._container.get_checks().get(PEBBLE_READY_CHECK_NAME)):
             return False
 
         return c.failures > 0
@@ -133,6 +133,12 @@ class PebbleService:
                 self._container.replan()
         except Exception as e:
             raise PebbleServiceError(f"Pebble failed to restart the workload service. Error: {e}")
+
+    def stop(self) -> None:
+        try:
+            self._container.stop(WORKLOAD_SERVICE)
+        except Exception as e:
+            raise PebbleServiceError(f"Pebble failed to stop the workload service. Error: {e}")
 
     def render_pebble_layer(self, *env_var_sources: EnvVarConvertible) -> Layer:
         updated_env_vars = ChainMap(*(source.to_env_vars() for source in env_var_sources))  # type: ignore
