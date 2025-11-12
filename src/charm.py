@@ -688,6 +688,13 @@ class KratosCharm(CharmBase):
 
         if not self.public_route.is_ready():
             return
+        if event.relation.app is None:
+            # We need to defer the event as this is not handled in the holistic handler
+            # TODO(nsklikas): move this to the holistic handler and remove defer
+            # TODO2(nsklikas): Fix this in traefik_route lib, this is a bug and the lib should handle
+            # this in the `is_ready` method, like it does for the Provider side.
+            event.defer()
+            return
 
         if self.unit.is_leader():
             public_route_config = PublicRouteData.load(self.public_route).config
@@ -715,6 +722,13 @@ class KratosCharm(CharmBase):
         self.internal_route._relation = event.relation
 
         if not self.internal_route.is_ready():
+            return
+        if event.relation.app is None:
+            # We need to defer the event as this is not handled in the holistic handler
+            # TODO(nsklikas): move this to the holistic handler and remove defer
+            # TODO2(nsklikas): Fix this in traefik_route lib, this is a bug and the lib should handle
+            # this in the `is_ready` method, like it does for the Provider side.
+            event.defer()
             return
 
         if self.unit.is_leader():
