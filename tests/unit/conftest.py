@@ -76,9 +76,7 @@ def mocked_workload_service_version(mocker: MockerFixture) -> MagicMock:
 
 @pytest.fixture
 def mocked_workload_service_running(mocker: MockerFixture) -> MagicMock:
-    return mocker.patch(
-        "charm.WorkloadService.is_running", new_callable=PropertyMock, return_value=True
-    )
+    return mocker.patch("charm.WorkloadService.is_running", return_value=True)
 
 
 @pytest.fixture

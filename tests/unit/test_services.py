@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from ops import ModelError
 from pytest_mock import MockerFixture
+from scenario import CheckInfo
 
 from configs import ConfigFile
 from constants import (
@@ -64,11 +65,13 @@ class TestWorkloadService:
         self, mocked_container: MagicMock, workload_service: WorkloadService
     ) -> None:
         mocked_service_info = MagicMock(is_running=MagicMock(return_value=True))
+        check = CheckInfo(name="ready")
+        mocked_container.get_checks.return_value = {"ready": check}
 
         with patch.object(
             mocked_container, "get_service", return_value=mocked_service_info
         ) as get_service:
-            is_running = workload_service.is_running
+            is_running = workload_service.is_running()
 
         assert is_running is True
         get_service.assert_called_once_with(WORKLOAD_SERVICE)
@@ -77,7 +80,7 @@ class TestWorkloadService:
         self, mocked_container: MagicMock, workload_service: WorkloadService
     ) -> None:
         with patch.object(mocked_container, "get_service", side_effect=ModelError):
-            is_running = workload_service.is_running
+            is_running = workload_service.is_running()
 
         assert is_running is False
 
