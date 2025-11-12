@@ -8,6 +8,7 @@ from string import Template
 POSTGRESQL_DSN_TEMPLATE = Template("postgres://$username:$password@$endpoint/$database")
 WORKLOAD_SERVICE = "kratos"
 WORKLOAD_CONTAINER = "kratos"
+PEBBLE_READY_CHECK_NAME = "ready"
 EMAIL_TEMPLATE_FILE_PATH = Path("/etc/config/templates") / "recovery-body.html.gotmpl"
 MAPPERS_LOCAL_DIR_PATH = Path("claim_mappers")
 

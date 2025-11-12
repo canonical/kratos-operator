@@ -56,7 +56,7 @@ from charms.smtp_integrator.v0.smtp import SmtpDataAvailableEvent, SmtpRequires
 from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer
 from charms.traefik_k8s.v0.traefik_route import TraefikRouteRequirer
 from lightkube import Client
-from ops import EventBase, UpdateStatusEvent, main
+from ops import EventBase, PebbleCheckFailedEvent, PebbleCheckRecoveredEvent, UpdateStatusEvent, main
 from ops.charm import (
     ActionEvent,
     CharmBase,
@@ -109,6 +109,7 @@ from constants import (
     KRATOS_EXTERNAL_IDP_INTEGRATOR_INTEGRATION_NAME,
     LOGGING_INTEGRATION_NAME,
     LOGIN_UI_INTEGRATION_NAME,
+    PEBBLE_READY_CHECK_NAME,
     PEER_INTEGRATION_NAME,
     PROMETHEUS_SCRAPE_INTEGRATION_NAME,
     PUBLIC_ROUTE_INTEGRATION_NAME,
@@ -264,6 +265,10 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.on.leader_elected, self._on_leader_elected)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.kratos_pebble_ready, self._on_kratos_pebble_ready)
+        self.framework.observe(self.on.kratos_pebble_check_failed, self._on_pebble_check_failed)
+        self.framework.observe(
+            self.on.kratos_pebble_check_recovered, self._on_pebble_check_recovered
+        )
         self.framework.observe(self.on.remove, self._on_remove)
         self.framework.observe(self.on.upgrade_charm, self._on_upgrade_charm)
         self.framework.observe(self.on.update_status, self._on_update_status)
@@ -738,6 +743,14 @@ class KratosCharm(CharmBase):
         event: CertificatesAvailableEvent | CertificatesRemovedEvent,
     ) -> None:
         self._holistic_handler(event)
+
+    def _on_pebble_check_failed(self, event: PebbleCheckFailedEvent) -> None:
+        if event.info.name == PEBBLE_READY_CHECK_NAME:
+            logger.warning("The service is not running")
+
+    def _on_pebble_check_recovered(self, event: PebbleCheckRecoveredEvent) -> None:
+        if event.info.name == PEBBLE_READY_CHECK_NAME:
+            logger.info("The service is online again")
 
     def _on_get_identity_action(self, event: ActionEvent) -> None:
         if not self._workload_service.is_running:

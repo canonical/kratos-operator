@@ -14,6 +14,7 @@ from constants import (
     CONFIG_FILE_PATH,
     KRATOS_ADMIN_PORT,
     KRATOS_PUBLIC_PORT,
+    PEBBLE_READY_CHECK_NAME,
     WORKLOAD_CONTAINER,
     WORKLOAD_SERVICE,
 )
@@ -34,7 +35,7 @@ PEBBLE_LAYER_DICT = {
         }
     },
     "checks": {
-        "ready": {
+        PEBBLE_READY_CHECK_NAME: {
             "override": "replace",
             "level": "ready",
             "http": {"url": f"http://localhost:{KRATOS_ADMIN_PORT}/admin/health/ready"},
