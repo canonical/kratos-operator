@@ -19,7 +19,7 @@ visit <https://www.ory.sh/docs/kratos/ory-kratos-intro>.
 The Kratos Operator may be deployed using the Juju command line as follows:
 
 ```shell
-juju deploy postgresql-k8s --channel 14/stable --trust --config plugin_pg_trgm_enable=True plugin_btree_gin_enable=True
+juju deploy postgresql-k8s --channel 14/stable --trust --config 'plugin_pg_trgm_enable=True' --config 'plugin_btree_gin_enable=True'
 juju deploy kratos
 juju integrate kratos postgresql-k8s
 ```
