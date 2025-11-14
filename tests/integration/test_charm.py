@@ -77,7 +77,7 @@ async def test_build_and_deploy(ops_test: OpsTest, local_charm: str | Path) -> N
         channel="latest/edge",
         trust=True,
     )
-    await ops_test.model.integrate(TRAEFIK_PUBLIC_APP, f"{LOGIN_UI_APP}:ingress")
+    await ops_test.model.integrate(TRAEFIK_PUBLIC_APP, f"{LOGIN_UI_APP}:public-route")
     await ops_test.model.integrate(f"{TRAEFIK_PUBLIC_APP}:certificates", f"{CA_APP}:certificates")
 
     # Integrate with dependencies
