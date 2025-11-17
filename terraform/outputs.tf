@@ -10,9 +10,8 @@ output "requires" {
   description = "The Juju integrations that the charm requires"
   value = {
     pg-database         = "pg-database"
-    public-ingress      = "public-ingress"
-    admin-ingress       = "admin-ingress"
-    internal-ingress    = "internal-ingress"
+    public-route        = "public-route"
+    internal-route      = "internal-route"
     kratos-external-idp = "kratos-external-idp"
     hydra-endpoint-info = "hydra-endpoint-info"
     ui-endpoint-info    = "ui-endpoint-info"
