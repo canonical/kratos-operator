@@ -27,12 +27,13 @@ enhancements to this operator.
 
 ## Developing
 
-You can use the environments created by `tox` for development. It helps
-install `pre-commit`, `mypy` type checker, linting tools, and formatting tools.
+You can use the environments created by `tox` for development. It helps install
+`pre-commit`, `mypy` type checker, linting and formatting tools, as well as unit
+and integration test dependencies.
 
 ```shell
-tox -e dev
-source .tox/dev/bin/activate
+tox devenv
+source venv/bin/activate
 ```
 
 ## Testing
