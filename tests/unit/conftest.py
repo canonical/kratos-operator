@@ -16,12 +16,19 @@ from constants import (
 )
 
 
-@pytest.fixture(autouse=True)
-def mocked_k8s_resource_patch(mocker: MockerFixture) -> None:
-    mocker.patch(
+@pytest.fixture()
+def mocked_resource_patch(mocker: MockerFixture) -> MagicMock:
+    mocked = mocker.patch(
         "charms.observability_libs.v0.kubernetes_compute_resources_patch.ResourcePatcher",
         autospec=True,
     )
+    mocked.return_value.is_failed.return_value = (False, "")
+    mocked.return_value.is_in_progress.return_value = False
+    return mocked
+
+
+@pytest.fixture(autouse=True)
+def mocked_k8s_resource_patch(mocker: MockerFixture, mocked_resource_patch: MagicMock) -> None:
     mocker.patch.multiple(
         "charm.KubernetesComputeResourcesPatch",
         _namespace="kratos-model",
