@@ -31,7 +31,7 @@ jobs:
     with:
       destination_channel: ${{ inputs.destination_channel}}
       source_branch: ${{ inputs.source_branch}}
-      use-charmcraftcache: true
+      use-charmcraftcache: false
     secrets:
       CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS}}
 
