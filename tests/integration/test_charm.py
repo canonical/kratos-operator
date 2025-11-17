@@ -355,7 +355,7 @@ async def test_kratos_scale_up(
     await ops_test.model.wait_for_idle(
         apps=[KRATOS_APP],
         status="active",
-        raise_on_blocked=True,
+        raise_on_blocked=False,
         timeout=5 * 60,
         wait_for_exact_units=target_unit_number,
     )

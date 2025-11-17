@@ -20,7 +20,8 @@ from constants import (
 class TestStartEvent:
     def test_when_event_emitted(self, mocked_create_configmaps: MagicMock) -> None:
         ctx = testing.Context(KratosCharm)
-        state_in = testing.State()
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=False)
+        state_in = testing.State(containers={container})
 
         ctx.run(ctx.on.install(), state_in)
 
@@ -40,7 +41,8 @@ class TestLeaderElectedEvent:
         mocked_secret_cls.return_value = mocked_secret
 
         ctx = testing.Context(KratosCharm)
-        state_in = testing.State(leader=True)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=False)
+        state_in = testing.State(leader=True, containers={container})
 
         ctx.run(ctx.on.leader_elected(), state_in)
 
@@ -54,7 +56,8 @@ class TestLeaderElectedEvent:
         mocked_secret_cls.return_value = mocked_secret
 
         ctx = testing.Context(KratosCharm)
-        state_in = testing.State(leader=True)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=False)
+        state_in = testing.State(leader=True, containers={container})
 
         ctx.run(ctx.on.leader_elected(), state_in)
 
@@ -68,7 +71,8 @@ class TestConfigChangeEvent:
         mocked_charm_holistic_handler: MagicMock,
     ) -> None:
         ctx = testing.Context(KratosCharm)
-        state_in = testing.State()
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=False)
+        state_in = testing.State(containers={container})
 
         with patch("builtins.open", mock_open(read_data=ingress_template)):
             ctx.run(ctx.on.config_changed(), state_in)
@@ -79,12 +83,17 @@ class TestConfigChangeEvent:
 class TestPebbleReadyEvent:
     def test_when_container_not_connected(
         self,
+        database_integration: testing.Relation,
+        peer_integration: testing.PeerRelation,
         mocked_workload_service: MagicMock,
         mocked_charm_holistic_handler: MagicMock,
     ) -> None:
         ctx = testing.Context(KratosCharm)
         container = testing.Container(WORKLOAD_CONTAINER, can_connect=False)
-        state_in = testing.State(containers={container})
+        state_in = testing.State(
+            containers={container},
+            relations=[database_integration, peer_integration],
+        )
 
         state_out = ctx.run(ctx.on.pebble_ready(container), state_in)
 
@@ -119,7 +128,8 @@ class TestPebbleReadyEvent:
 class TestRemoveEvent:
     def test_when_not_leader_unit(self, mocked_remove_configmaps: MagicMock) -> None:
         ctx = testing.Context(KratosCharm)
-        state_in = testing.State(leader=False)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=False)
+        state_in = testing.State(leader=False, containers={container})
 
         ctx.run(ctx.on.remove(), state_in)
 
@@ -127,7 +137,8 @@ class TestRemoveEvent:
 
     def test_when_event_emitted(self, mocked_remove_configmaps: MagicMock) -> None:
         ctx = testing.Context(KratosCharm)
-        state_in = testing.State(leader=True)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=False)
+        state_in = testing.State(leader=True, containers={container})
 
         ctx.run(ctx.on.remove(), state_in)
 
@@ -137,8 +148,10 @@ class TestRemoveEvent:
 class TestUpgradeCharmEvent:
     def test_when_event_emitted(self, mocked_create_configmaps: MagicMock) -> None:
         ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=False)
+        state_in = testing.State(leader=True, containers={container})
 
-        ctx.run(ctx.on.upgrade_charm(), testing.State())
+        ctx.run(ctx.on.upgrade_charm(), state_in)
 
         mocked_create_configmaps.assert_called_once()
 
@@ -146,8 +159,10 @@ class TestUpgradeCharmEvent:
 class TestUpdateStatusEvent:
     def test_when_event_emitted(self, mocked_charm_holistic_handler: MagicMock) -> None:
         ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=False)
+        state_in = testing.State(leader=True, containers={container})
 
-        ctx.run(ctx.on.update_status(), testing.State())
+        ctx.run(ctx.on.update_status(), state_in)
 
         mocked_charm_holistic_handler.assert_called_once()
 

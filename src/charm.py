@@ -56,10 +56,17 @@ from charms.smtp_integrator.v0.smtp import SmtpDataAvailableEvent, SmtpRequires
 from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer
 from charms.traefik_k8s.v0.traefik_route import TraefikRouteRequirer
 from lightkube import Client
-from ops import EventBase, UpdateStatusEvent, main
+from ops import (
+    EventBase,
+    PebbleCheckFailedEvent,
+    PebbleCheckRecoveredEvent,
+    UpdateStatusEvent,
+    main,
+)
 from ops.charm import (
     ActionEvent,
     CharmBase,
+    CollectStatusEvent,
     ConfigChangedEvent,
     InstallEvent,
     LeaderElectedEvent,
@@ -109,6 +116,7 @@ from constants import (
     KRATOS_EXTERNAL_IDP_INTEGRATOR_INTEGRATION_NAME,
     LOGGING_INTEGRATION_NAME,
     LOGIN_UI_INTEGRATION_NAME,
+    PEBBLE_READY_CHECK_NAME,
     PEER_INTEGRATION_NAME,
     PROMETHEUS_SCRAPE_INTEGRATION_NAME,
     PUBLIC_ROUTE_INTEGRATION_NAME,
@@ -142,14 +150,19 @@ from integrations import (
 from secret import Secrets
 from services import PebbleService, WorkloadService
 from utils import (
+    EVENT_DEFER_CONDITIONS,
+    NOOP_CONDITIONS,
     container_connectivity,
     database_integration_exists,
+    database_resource_is_created,
     dict_to_action_output,
-    external_idp_integrator_integration_exists,
-    kratos_info_integration_exists,
+    external_hostname_is_ready,
     leader_unit,
+    migration_is_ready,
+    passwordless_config_is_valid,
     peer_integration_exists,
-    public_route_integration_exists,
+    public_route_is_ready,
+    secrets_is_ready,
 )
 
 logger = logging.getLogger(__name__)
@@ -264,9 +277,14 @@ class KratosCharm(CharmBase):
         self.framework.observe(self.on.leader_elected, self._on_leader_elected)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.kratos_pebble_ready, self._on_kratos_pebble_ready)
+        self.framework.observe(self.on.kratos_pebble_check_failed, self._on_pebble_check_failed)
+        self.framework.observe(
+            self.on.kratos_pebble_check_recovered, self._on_pebble_check_recovered
+        )
         self.framework.observe(self.on.remove, self._on_remove)
         self.framework.observe(self.on.upgrade_charm, self._on_upgrade_charm)
         self.framework.observe(self.on.update_status, self._on_update_status)
+        self.framework.observe(self.on.collect_unit_status, self._on_collect_status)
 
         # peers
         self.framework.observe(
@@ -423,56 +441,14 @@ class KratosCharm(CharmBase):
         return adjust_resource_requirements(limits, requests, adhere_to_requests=True)
 
     def _holistic_handler(self, event: EventBase) -> None:
-        if not container_connectivity(self):
-            self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
+        if not secrets_is_ready(self):
+            self._initialize_secrets()
+
+        if not all(condition(self) for condition in NOOP_CONDITIONS):
             return
 
-        if not peer_integration_exists(self):
-            self.unit.status = WaitingStatus("Waiting for peer relation")
-            return
-
-        if not database_integration_exists(self):
-            self.unit.status = BlockedStatus("Missing required relation with postgresql")
-            return
-
-        if not self.database_requirer.is_resource_created():
-            self.unit.status = WaitingStatus("Waiting for database creation")
-            return
-
-        if not self.secrets.is_ready:
-            self.unit.status = WaitingStatus("Waiting for secret creation")
-            return
-
-        if self.migration_needed:
-            self.unit.status = WaitingStatus("Waiting for database migration")
-            return
-
-        if (
-            kratos_info_integration_exists(self)
-            or external_idp_integrator_integration_exists(self)
-        ) and not public_route_integration_exists(self):
-            self.unit.status = BlockedStatus(
-                "Cannot send integration data without an external hostname. Please "
-                "provide a traefik-route relation."
-            )
-            return
-
-        if (
-            kratos_info_integration_exists(self)
-            or external_idp_integrator_integration_exists(self)
-        ) and not PublicRouteData.load(self.public_route).url:
-            self.unit.status = WaitingStatus("Waiting for public ingress")
+        if not all(condition(self) for condition in EVENT_DEFER_CONDITIONS):
             event.defer()
-            return
-
-        if (
-            self.charm_config["enable_oidc_webauthn_sequencing"]
-            and self.charm_config["enable_passwordless_login_method"]
-        ):
-            self.unit.status = BlockedStatus(
-                "OIDC-WebAuthn sequencing mode requires `enable_passwordless_login_method=False`. "
-                "Please change the config."
-            )
             return
 
         self._update_kratos_external_idp_configurations()
@@ -510,12 +486,58 @@ class KratosCharm(CharmBase):
             self._pebble_service.plan(self._pebble_layer, config_file)
         except PebbleServiceError as e:
             logger.error("Failed to start the service, please check the container logs: %s", e)
-            self.unit.status = BlockedStatus(
-                f"Failed to restart the service, please check the {WORKLOAD_CONTAINER} logs"
-            )
-            return
 
-        self.unit.status = ActiveStatus()
+    def _on_collect_status(self, event: CollectStatusEvent) -> None:
+        if not (can_connect := container_connectivity(self)):
+            event.add_status(WaitingStatus("Container is not connected yet"))
+
+        if not peer_integration_exists(self):
+            event.add_status(WaitingStatus(f"Missing integration {PEER_INTEGRATION_NAME}"))
+
+        if not database_integration_exists(self):
+            event.add_status(BlockedStatus(f"Missing integration {DATABASE_INTEGRATION_NAME}"))
+
+        if not database_resource_is_created(self):
+            event.add_status(WaitingStatus("Waiting for database creation"))
+
+        if not secrets_is_ready(self):
+            event.add_status(WaitingStatus("Waiting for secret creation"))
+
+        if self.unit.is_leader() and not migration_is_ready(self):
+            event.add_status(WaitingStatus("Waiting for database migration"))
+
+        if not self.unit.is_leader() and not migration_is_ready(self):
+            event.add_status(WaitingStatus("Waiting for leader unit to run the migration"))
+
+        if not external_hostname_is_ready(self):
+            event.add_status(
+                BlockedStatus(
+                    "Cannot send integration data without an external hostname. Please "
+                    "provide a traefik-route relation."
+                )
+            )
+
+        if not public_route_is_ready(self):
+            event.add_status(WaitingStatus("Waiting for public ingress"))
+
+        if not passwordless_config_is_valid(self):
+            event.add_status(
+                BlockedStatus(
+                    "OIDC-WebAuthn sequencing mode requires `enable_passwordless_login_method=False`. "
+                    "Please change the config."
+                )
+            )
+
+        event.add_status(self.resources_patch.get_status())
+
+        if can_connect and self._workload_service.is_failing():
+            event.add_status(
+                BlockedStatus(
+                    f"Failed to start the service, please check the {WORKLOAD_CONTAINER} container logs"
+                )
+            )
+
+        event.add_status(ActiveStatus())
 
     def _on_install(self, event: InstallEvent) -> None:
         create_configmaps(
@@ -524,7 +546,10 @@ class KratosCharm(CharmBase):
             app_name=self.app.name,
         )
 
-    def _on_leader_elected(self, event: LeaderElectedEvent) -> None:
+    def _initialize_secrets(self) -> None:
+        if not self.unit.is_leader():
+            return
+
         if not self.secrets.is_ready:
             self.secrets[COOKIE_SECRET_LABEL] = {COOKIE_SECRET_CONTENT_KEY: token_hex(16)}
 
@@ -533,12 +558,15 @@ class KratosCharm(CharmBase):
         self._holistic_handler(event)
         self._on_kratos_info_provider_ready(event)
 
+    def _on_leader_elected(self, event: LeaderElectedEvent) -> None:
+        self.unit.status = MaintenanceStatus("Configuring resources")
+        self._holistic_handler(event)
+
     def _on_kratos_pebble_ready(self, event: PebbleReadyEvent) -> None:
         self.unit.status = MaintenanceStatus("Configuring resources")
 
         if not container_connectivity(self):
             event.defer()
-            self.unit.status = WaitingStatus("Waiting to connect to Kratos container")
             return
 
         self._workload_service.open_ports()
@@ -581,7 +609,6 @@ class KratosCharm(CharmBase):
 
     def _on_resource_patch_failed(self, event: K8sResourcePatchFailedEvent) -> None:
         logger.error("Failed to patch resource constraints: %s", event.message)
-        self.unit.status = BlockedStatus(event.message)
 
     def _on_kratos_info_provider_ready(self, event: RelationEvent) -> None:
         internal_endpoints = InternalRouteData.load(self.internal_route)
@@ -610,16 +637,13 @@ class KratosCharm(CharmBase):
 
         if not container_connectivity(self):
             event.defer()
-            self.unit.status = WaitingStatus("Container is not connected yet")
             return
 
         if not peer_integration_exists(self):
-            self.unit.status = WaitingStatus(f"Missing integration {PEER_INTEGRATION_NAME}")
             event.defer()
             return
 
         if not self.secrets.is_ready:
-            self.unit.status = WaitingStatus("Waiting for secret creation")
             event.defer()
             return
 
@@ -631,14 +655,12 @@ class KratosCharm(CharmBase):
             logger.info(
                 "Unit does not have leadership. Wait for leader unit to run the migration."
             )
-            self.unit.status = WaitingStatus("Waiting for leader unit to run the migration")
             event.defer()
             return
 
         try:
             self._cli.migrate(DatabaseConfig.load(self.database_requirer).dsn)
         except MigrationError:
-            self.unit.status = BlockedStatus("Database migration failed")
             logger.error("Auto migration job failed. Please use the run-migration action")
             return
 
@@ -653,6 +675,10 @@ class KratosCharm(CharmBase):
     def _on_database_relation_broken(self, event: RelationBrokenEvent) -> None:
         self.unit.status = MaintenanceStatus("Configuring resources")
         self._holistic_handler(event)
+        try:
+            self._pebble_service.stop()
+        except PebbleServiceError as e:
+            logger.error(f"Failed to stop the service, please check the container logs: {e}")
 
     def _on_public_route_changed(self, event: RelationEvent) -> None:
         self.unit.status = MaintenanceStatus("Configuring resources")
@@ -661,6 +687,13 @@ class KratosCharm(CharmBase):
         self.public_route._relation = event.relation
 
         if not self.public_route.is_ready():
+            return
+        if event.relation.app is None:
+            # We need to defer the event as this is not handled in the holistic handler
+            # TODO(nsklikas): move this to the holistic handler and remove defer
+            # TODO2(nsklikas): Fix this in traefik_route lib, this is a bug and the lib should handle
+            # this in the `is_ready` method, like it does for the Provider side.
+            event.defer()
             return
 
         if self.unit.is_leader():
@@ -689,6 +722,13 @@ class KratosCharm(CharmBase):
         self.internal_route._relation = event.relation
 
         if not self.internal_route.is_ready():
+            return
+        if event.relation.app is None:
+            # We need to defer the event as this is not handled in the holistic handler
+            # TODO(nsklikas): move this to the holistic handler and remove defer
+            # TODO2(nsklikas): Fix this in traefik_route lib, this is a bug and the lib should handle
+            # this in the `is_ready` method, like it does for the Provider side.
+            event.defer()
             return
 
         if self.unit.is_leader():
@@ -726,7 +766,7 @@ class KratosCharm(CharmBase):
         self._holistic_handler(event)
 
     def _on_external_idp_client_config_removed(self, event: ClientConfigRemovedEvent) -> None:
-        self.unit.status = MaintenanceStatus("Removing external provider")
+        self.unit.status = MaintenanceStatus("Configuring resources")
         self._holistic_handler(event)
         self.external_idp_requirer.remove_registered_provider(int(event.relation_id))
 
@@ -739,8 +779,16 @@ class KratosCharm(CharmBase):
     ) -> None:
         self._holistic_handler(event)
 
+    def _on_pebble_check_failed(self, event: PebbleCheckFailedEvent) -> None:
+        if event.info.name == PEBBLE_READY_CHECK_NAME:
+            logger.warning("The service is not running")
+
+    def _on_pebble_check_recovered(self, event: PebbleCheckRecoveredEvent) -> None:
+        if event.info.name == PEBBLE_READY_CHECK_NAME:
+            logger.info("The service is online again")
+
     def _on_get_identity_action(self, event: ActionEvent) -> None:
-        if not self._workload_service.is_running:
+        if not self._workload_service.is_running():
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
@@ -773,7 +821,7 @@ class KratosCharm(CharmBase):
         event.set_results(dict_to_action_output(identity))
 
     def _on_delete_identity_action(self, event: ActionEvent) -> None:
-        if not self._workload_service.is_running:
+        if not self._workload_service.is_running():
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
@@ -800,7 +848,7 @@ class KratosCharm(CharmBase):
         event.set_results({"id": identity_id})
 
     def _on_reset_password_action(self, event: ActionEvent) -> None:
-        if not self._workload_service.is_running:
+        if not self._workload_service.is_running():
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
@@ -849,7 +897,7 @@ class KratosCharm(CharmBase):
         event.set_results(dict_to_action_output(res))
 
     def _on_list_oidc_accounts_action(self, event: ActionEvent) -> None:
-        if not self._workload_service.is_running:
+        if not self._workload_service.is_running():
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
@@ -880,7 +928,7 @@ class KratosCharm(CharmBase):
         event.set_results({"identifiers": "\n".join(oidc_identifiers)})
 
     def _on_unlink_oidc_account_action(self, event: ActionEvent) -> None:
-        if not self._workload_service.is_running:
+        if not self._workload_service.is_running():
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
@@ -909,7 +957,7 @@ class KratosCharm(CharmBase):
         event.log(f"Successfully unlink the oidc account for identity {identity_id}")
 
     def _on_invalidate_identity_sessions_action(self, event: ActionEvent) -> None:
-        if not self._workload_service.is_running:
+        if not self._workload_service.is_running():
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
@@ -935,7 +983,7 @@ class KratosCharm(CharmBase):
         event.log("Successfully invalidated and deleted the sessions")
 
     def _on_reset_identity_mfa_action(self, event: ActionEvent) -> None:
-        if not self._workload_service.is_running:
+        if not self._workload_service.is_running():
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
@@ -968,7 +1016,7 @@ class KratosCharm(CharmBase):
         event.log(f"Successfully reset the {mfa_type} credentials for identity {identity_id}")
 
     def _on_create_admin_account_action(self, event: ActionEvent) -> None:
-        if not self._workload_service.is_running:
+        if not self._workload_service.is_running():
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
@@ -1018,7 +1066,7 @@ class KratosCharm(CharmBase):
         event.set_results(dict_to_action_output(res))
 
     def _on_run_migration_action(self, event: ActionEvent) -> None:
-        if not self._workload_service.is_running:
+        if not self._workload_service.is_running():
             event.fail("Service is not ready. Please re-run the action when the charm is active")
             return
 
