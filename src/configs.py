@@ -10,6 +10,7 @@ from collections import ChainMap
 from json import JSONDecodeError
 from typing import Any, Mapping, Optional, Protocol, TypeAlias
 
+import yaml
 from charms.kratos_external_idp_integrator.v1.kratos_external_provider import Provider
 from jinja2 import Template
 from lightkube import ApiError, Client
@@ -47,6 +48,8 @@ class ConfigFile:
 
     def __init__(self, content: str) -> None:
         self.content = content
+        if content and content.strip() != "":
+            self.yaml_content = yaml.safe_load(self.content)
 
     @classmethod
     def from_sources(cls, *service_config_sources: ServiceConfigSource) -> Self:
@@ -65,6 +68,12 @@ class ConfigFile:
                 return cls(config_file.read())
         except PathError:
             return cls("")
+
+    def __getitem__(self, item):
+        if not self.yaml_content:
+            return None
+
+        return self.yaml_content.get(item, None)
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, ConfigFile):
