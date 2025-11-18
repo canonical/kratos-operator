@@ -1,0 +1,20 @@
+name: TODO Scan After PR Merge
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  todo-to-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: TODOs to Issues
+        uses: alstr/todo-to-issue-action@v5
+        with:
+          IGNORE: "lib/charms/(?!kratos/).*"
