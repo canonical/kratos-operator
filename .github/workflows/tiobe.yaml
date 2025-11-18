@@ -12,7 +12,7 @@ jobs:
   TICS:
     runs-on: [ self-hosted, amd64, tiobe, noble ]
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Install project dependencies
         run: |
@@ -29,7 +29,7 @@ jobs:
         run: echo "PROJECT_NAME=$(basename "${{ github.repository }}")" >> $GITHUB_ENV
 
       - name: Run TICS quality analysis
-        uses: tiobe/tics-github-action@ea1d6e614bda3f5cf0d0d7d3ed01ee872a170d8d # v3
+        uses: tiobe/tics-github-action@768de18bedf164ee461bc9ef5e2f2fa1a20b122a # v3
         with:
           mode: qserver
           viewerUrl: https://canonical.tiobe.com/tiobeweb/TICS/api/cfg?name=default
