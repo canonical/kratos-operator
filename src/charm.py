@@ -7,6 +7,7 @@
 """A Juju charm for Ory Kratos."""
 
 import logging
+from functools import cached_property
 from os.path import join
 from secrets import token_hex
 from typing import Any, Optional
@@ -152,6 +153,7 @@ from services import PebbleService, WorkloadService
 from utils import (
     EVENT_DEFER_CONDITIONS,
     NOOP_CONDITIONS,
+    FeatureFlags,
     container_connectivity,
     database_integration_exists,
     database_resource_is_created,
@@ -460,9 +462,17 @@ class KratosCharm(CharmBase):
         if template := self.charm_config["recovery_email_template"]:
             self._container.push(EMAIL_TEMPLATE_FILE_PATH, template, make_dirs=True)
 
+        try:
+            self._pebble_service.plan(self._pebble_layer, self.config_file)
+        except PebbleServiceError as e:
+            logger.error("Failed to start the service, please check the container logs: %s", e)
+
+    @cached_property
+    def config_file(self) -> ConfigFile:
         identity_schema_cm = IdentitySchemaConfigMap(
             self._k8s_client, self.model.name, self.app.name
         )
+
         identity_schema = IdentitySchema(
             [
                 CharmConfigIdentitySchemaProvider(self.charm_config),
@@ -471,7 +481,7 @@ class KratosCharm(CharmBase):
             ],
         )
 
-        config_file = ConfigFile.from_sources(
+        return ConfigFile.from_sources(
             self.charm_config,
             ClaimMapper(),
             LoginUIEndpointData.load(self.login_ui_requirer),
@@ -481,11 +491,6 @@ class KratosCharm(CharmBase):
             identity_schema,
             OIDCProviderConfigMap(self._k8s_client, self.model.name, self.app.name),
         )
-
-        try:
-            self._pebble_service.plan(self._pebble_layer, config_file)
-        except PebbleServiceError as e:
-            logger.error("Failed to start the service, please check the container logs: %s", e)
 
     def _on_collect_status(self, event: CollectStatusEvent) -> None:
         if not (can_connect := container_connectivity(self)):
@@ -617,6 +622,7 @@ class KratosCharm(CharmBase):
         configmaps_namespace = self.model.name
         mfa_enabled = self.config.get("enforce_mfa")
         oidc_webauthn_sequencing_enabled = self.config.get("enable_oidc_webauthn_sequencing")
+        active_flags = self._get_active_flags()
 
         if not (public_url := PublicRouteData.load(self.public_route).url):
             return
@@ -630,6 +636,7 @@ class KratosCharm(CharmBase):
             configmaps_namespace,
             mfa_enabled,
             oidc_webauthn_sequencing_enabled,
+            active_flags,
         )
 
     def _on_database_created(self, event: DatabaseCreatedEvent) -> None:
@@ -1091,6 +1098,30 @@ class KratosCharm(CharmBase):
         migration_version = DatabaseConfig.load(self.database_requirer).migration_version
         self.peer_data[migration_version] = self._workload_service.version
         event.log("Successfully updated migration version")
+
+    def _get_active_flags(self) -> FeatureFlags:
+        feature_flags = []
+        if not (selfservice := self.config_file.get("selfservice")) or not selfservice.get("methods"):
+            return feature_flags
+
+        methods = selfservice.get("methods")
+
+        if (password := methods.get("password")) and password.get("enabled"):
+            feature_flags.append("password")
+
+        if (webauthn := methods.get("webauthn")) and webauthn.get("enabled"):
+            feature_flags.append("webauthn")
+
+        if (totp := methods.get("totp")) and totp.get("enabled"):
+            feature_flags.append("totp")
+
+        if (lookup_secret := methods.get("lookup_secret")) and lookup_secret.get("enabled"):
+            feature_flags.append("backup_codes")
+
+        if self.external_idp_requirer.get_providers():
+            feature_flags.append("account_linking")
+
+        return feature_flags
 
 
 if __name__ == "__main__":

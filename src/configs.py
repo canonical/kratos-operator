@@ -48,8 +48,12 @@ class ConfigFile:
 
     def __init__(self, content: str) -> None:
         self.content = content
-        if content and content.strip() != "":
-            self.yaml_content = yaml.safe_load(self.content)
+        self.yaml_content = {}
+        if content and content.strip():
+            try:
+                self.yaml_content = yaml.safe_load(self.content)
+            except yaml.YAMLError as e:
+                logger.error(f"Failed to parse the configuration file content as YAML: {e}")
 
     @classmethod
     def from_sources(cls, *service_config_sources: ServiceConfigSource) -> Self:
@@ -69,11 +73,11 @@ class ConfigFile:
         except PathError:
             return cls("")
 
-    def __getitem__(self, item):
+    def get(self, item, default=None) -> Any:
         if not self.yaml_content:
             return None
 
-        return self.yaml_content.get(item, None)
+        return self.yaml_content.get(item, default)
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, ConfigFile):
