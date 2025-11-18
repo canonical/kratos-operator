@@ -48,6 +48,7 @@ class ConfigFile:
 
     def __init__(self, content: str) -> None:
         self.content = content
+        self.yaml_content = None
         if content and content.strip() != "":
             self.yaml_content = yaml.safe_load(self.content)
 
@@ -69,7 +70,7 @@ class ConfigFile:
         except PathError:
             return cls("")
 
-    def __getitem__(self, item):
+    def __getitem__(self, item) -> Any:
         if not self.yaml_content:
             return None
 
