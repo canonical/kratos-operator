@@ -20,7 +20,8 @@ CONFIG_DIR_PATH = PurePath("/etc/config/kratos")
 CONFIG_FILE_PATH = CONFIG_DIR_PATH / "kratos.yaml"
 IDENTITY_SCHEMAS_LOCAL_DIR_PATH = Path("identity_schemas")
 PROVIDERS_CONFIGMAP_FILE_NAME = "idps.json"
-CA_BUNDLE_PATH = "/etc/ssl/certs/ca-certificates.crt"
+CA_BUNDLE_PATH = Path("/etc/ssl/certs/ca-certificates.crt")
+INTEGRATION_CA_BUNDLE_PATH = Path("/usr/local/share/ca-certificates/ca-certificates.crt")
 
 # Integration constants
 PEER_INTEGRATION_NAME = "kratos-peers"
