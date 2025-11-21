@@ -3,6 +3,7 @@
 
 import json
 import logging
+import subprocess
 from dataclasses import asdict, dataclass, field
 from typing import Any, KeysView, Optional, Type, TypeAlias, Union
 from urllib.parse import urlparse
@@ -28,6 +29,8 @@ from yarl import URL
 
 from configs import ServiceConfigs
 from constants import (
+    CA_BUNDLE_PATH,
+    INTEGRATION_CA_BUNDLE_PATH,
     INTERNAL_ROUTE_INTEGRATION_NAME,
     KRATOS_ADMIN_PORT,
     KRATOS_PUBLIC_PORT,
@@ -477,5 +480,21 @@ class TLSCertificates:
         Compose the trusted CA certificates in /etc/ssl/certs/ca-certificates.crt.
         """
         ca_certs = requirer.get_all_certificates()
-        ca_bundle = "\n".join(ca_certs)
-        return cls(ca_bundle=ca_bundle)
+        ca_bundle = "\n".join(sorted(ca_certs))
+
+        if ca_bundle:
+            current_ca_cert = (
+                INTEGRATION_CA_BUNDLE_PATH.read_text()
+                if INTEGRATION_CA_BUNDLE_PATH.exists()
+                else ""
+            )
+            if current_ca_cert != ca_bundle:
+                INTEGRATION_CA_BUNDLE_PATH.parent.mkdir(parents=True, exist_ok=True)
+                INTEGRATION_CA_BUNDLE_PATH.write_text(ca_bundle)
+                subprocess.run(["update-ca-certificates", "--fresh"], check=True)
+        else:
+            if INTEGRATION_CA_BUNDLE_PATH.exists():
+                INTEGRATION_CA_BUNDLE_PATH.unlink(missing_ok=True)
+                subprocess.run(["update-ca-certificates", "--fresh"], check=True)
+
+        return cls(ca_bundle=CA_BUNDLE_PATH.read_text())

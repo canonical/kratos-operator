@@ -30,6 +30,7 @@ from charms.smtp_integrator.v0.smtp import (
 )
 from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer
 from charms.traefik_k8s.v0.traefik_route import TraefikRouteRequirer
+from pytest_mock import MockerFixture
 from yarl import URL
 
 from constants import KRATOS_ADMIN_PORT, KRATOS_PUBLIC_PORT, POSTGRESQL_DSN_TEMPLATE
@@ -604,9 +605,70 @@ class TestTLSCertificates:
     def mocked_requirer(self) -> MagicMock:
         return create_autospec(CertificateTransferRequires)
 
-    def test_load(self, mocked_requirer: MagicMock) -> None:
-        mocked_requirer.get_all_certificates.return_value = {"ca_cert1", "ca_cert2"}
+    @pytest.fixture
+    def mocked_local_bundle_file(self, mocker: MockerFixture) -> MagicMock:
+        return mocker.patch("integrations.INTEGRATION_CA_BUNDLE_PATH", autospec=True)
+
+    @pytest.fixture
+    def mocked_local_ca_bundle_file(self, mocker: MockerFixture) -> MagicMock:
+        return mocker.patch("integrations.CA_BUNDLE_PATH", autospec=True)
+
+    @pytest.fixture(autouse=True)
+    def mocked_subprocess_run(self, mocker: MockerFixture) -> MagicMock:
+        return mocker.patch("integrations.subprocess.run", autospec=True)
+
+    def test_load_when_not_changed(
+        self,
+        mocked_requirer: MagicMock,
+        mocked_local_bundle_file: MagicMock,
+        mocked_local_ca_bundle_file: MagicMock,
+        mocked_subprocess_run: MagicMock,
+    ) -> None:
+        """Test that when the certificates have not changed, subprocess.run is not called."""
+        relation_certs = "ca_cert1\nca_cert2"
+        all_certs = relation_certs + "\nca_cert3"
+        mocked_local_bundle_file.read_text.return_value = relation_certs
+        mocked_local_ca_bundle_file.read_text.return_value = all_certs
+        mocked_requirer.get_all_certificates.return_value = set(relation_certs.splitlines())
 
         certificates = TLSCertificates.load(mocked_requirer)
 
-        assert set(certificates.ca_bundle.splitlines()) == {"ca_cert1", "ca_cert2"}
+        mocked_subprocess_run.assert_not_called()
+        assert certificates.ca_bundle == all_certs
+
+    def test_load_when_changed(
+        self,
+        mocked_requirer: MagicMock,
+        mocked_local_bundle_file: MagicMock,
+        mocked_local_ca_bundle_file: MagicMock,
+        mocked_subprocess_run: MagicMock,
+    ) -> None:
+        """Test that when the certificates have changed, subprocess.run is called."""
+        relation_certs = "ca_cert1\nca_cert2"
+        all_certs = relation_certs + "\nca_cert3"
+        mocked_local_bundle_file.read_text.return_value = "ca_cert1"
+        mocked_local_ca_bundle_file.read_text.return_value = all_certs
+        mocked_requirer.get_all_certificates.return_value = set(relation_certs.splitlines())
+
+        certificates = TLSCertificates.load(mocked_requirer)
+
+        mocked_subprocess_run.assert_called_once()
+        assert certificates.ca_bundle == all_certs
+
+    def test_load_when_removed(
+        self,
+        mocked_requirer: MagicMock,
+        mocked_local_bundle_file: MagicMock,
+        mocked_local_ca_bundle_file: MagicMock,
+        mocked_subprocess_run: MagicMock,
+    ) -> None:
+        """Test that when the local bundle file does not exist, subprocess.run is not called."""
+        all_certs = "ca_cert3"
+        mocked_local_bundle_file.exists.return_value = False
+        mocked_local_ca_bundle_file.read_text.return_value = all_certs
+        mocked_requirer.get_all_certificates.return_value = {}
+
+        certificates = TLSCertificates.load(mocked_requirer)
+
+        mocked_subprocess_run.assert_not_called()
+        assert certificates.ca_bundle == all_certs
