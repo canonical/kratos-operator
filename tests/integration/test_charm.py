@@ -83,13 +83,16 @@ async def test_build_and_deploy(ops_test: OpsTest, local_charm: str | Path) -> N
     # Integrate with dependencies
     await integrate_dependencies(ops_test)
 
-    await ops_test.model.wait_for_idle(
-        apps=[KRATOS_APP, DB_APP, TRAEFIK_PUBLIC_APP, TRAEFIK_ADMIN_APP, LOGIN_UI_APP],
-        status="active",
-        raise_on_blocked=False,
-        raise_on_error=False,
-        timeout=5 * 60,
-    )
+    # Fast forward during deploy, as some reconciler charms may resolve
+    # deployment issues on update status
+    async with ops_test.fast_forward():
+        await ops_test.model.wait_for_idle(
+            apps=[KRATOS_APP, DB_APP, TRAEFIK_PUBLIC_APP, TRAEFIK_ADMIN_APP, LOGIN_UI_APP],
+            status="active",
+            raise_on_blocked=False,
+            raise_on_error=False,
+            timeout=5 * 60,
+        )
 
 
 async def test_peer_integration(
