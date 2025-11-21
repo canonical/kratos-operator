@@ -22,6 +22,5 @@ jobs:
     uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@2a4ae518f9c792dcdf14d05f8d86e3d72e160d96 # v1.9.0
     with:
       container-name: "kratos"
-      # TODO: Switch to true once kratos is re-added to charmcraftcache-hub
-      use-charmcraftcache: false
+      use-charmcraftcache: true
       node-size: large
