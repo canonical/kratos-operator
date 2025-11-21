@@ -96,7 +96,7 @@ class TestWorkloadService:
     ) -> None:
         workload_service.push_ca_certs("ca_certs")
 
-        mocked_container.push.assert_called_with(CA_BUNDLE_PATH, "ca_certs", make_dirs=True)
+        mocked_container.push.assert_called_with(str(CA_BUNDLE_PATH), "ca_certs", make_dirs=True)
 
 
 class TestPebbleService:

@@ -110,7 +110,7 @@ class WorkloadService:
         self._unit.open_port(protocol="tcp", port=KRATOS_ADMIN_PORT)
 
     def push_ca_certs(self, ca_certs: str) -> None:
-        self._container.push(CA_BUNDLE_PATH, ca_certs, make_dirs=True)
+        self._container.push(str(CA_BUNDLE_PATH), ca_certs, make_dirs=True)
 
 
 class PebbleService:
