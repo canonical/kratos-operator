@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/canonical/kratos-operator/compare/v2.0.0...v2.0.1) (2025-11-21)
+
+
+### Bug Fixes
+
+* fix ca bundle generation ([339bd7d](https://github.com/canonical/kratos-operator/commit/339bd7d6df0f64599cdb2bff8666a221f507562a))
+
 ## [2.0.0](https://github.com/canonical/kratos-operator/compare/v1.2.0...v2.0.0) (2025-11-17)
 
 
