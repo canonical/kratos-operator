@@ -2,7 +2,7 @@
 # See LICENSE file for licensing details.
 
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, TypeVar
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, TypeVar
 
 from ops import CharmBase
 
@@ -138,3 +138,7 @@ NOOP_CONDITIONS: tuple[Condition, ...] = (
 
 # Condition failure causes early return with corresponding event deferred
 EVENT_DEFER_CONDITIONS: tuple[Condition, ...] = (container_connectivity,)
+
+
+FeatureFlag = Literal["password", "webauthn", "backup_codes", "totp", "account_linking"]
+FeatureFlags = List[FeatureFlag]
