@@ -1073,8 +1073,8 @@ class KratosCharm(CharmBase):
         event.set_results(dict_to_action_output(res))
 
     def _on_run_migration_action(self, event: ActionEvent) -> None:
-        if not self._workload_service.is_running():
-            event.fail("Service is not ready. Please re-run the action when the charm is active")
+        if not container_connectivity(self):
+            event.fail("Container is not connected yet")
             return
 
         if not peer_integration_exists(self):
@@ -1101,7 +1101,9 @@ class KratosCharm(CharmBase):
 
     def _get_active_flags(self) -> FeatureFlags:
         feature_flags = []
-        if not (selfservice := self.config_file.get("selfservice")) or not selfservice.get("methods"):
+        if not (selfservice := self.config_file.get("selfservice")) or not selfservice.get(
+            "methods"
+        ):
             return feature_flags
 
         methods = selfservice.get("methods")
