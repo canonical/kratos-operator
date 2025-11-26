@@ -130,7 +130,7 @@ NOOP_CONDITIONS: tuple[Condition, ...] = (
     database_integration_exists,
     database_resource_is_created,
     secrets_is_ready,
-    migration_is_ready,
+    # migration_is_ready,
     external_hostname_is_ready,
     public_route_is_ready,
     passwordless_config_is_valid,

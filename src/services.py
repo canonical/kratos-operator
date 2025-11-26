@@ -84,6 +84,17 @@ class WorkloadService:
         except (ModelError, ConnectionError) as e:
             logger.error("Failed to get pebble service: %s", e)
 
+    def is_alive(self) -> bool:
+        """Checks whether the service is alive."""
+        if not (service := self.get_service()):
+            return False
+
+        if not service.is_running():
+            return False
+
+        c = self._container.get_checks().get("alive")
+        return c.status == CheckStatus.UP
+
     def is_running(self) -> bool:
         """Checks whether the service is running."""
         if not (service := self.get_service()):
