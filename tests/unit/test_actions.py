@@ -1013,21 +1013,18 @@ class TestRunMigrationAction:
     def mocked_cli(self, mocker: MockerFixture) -> MagicMock:
         return mocker.patch("charm.CommandLine.migrate")
 
-    def test_when_workload_service_not_running(
+    def test_when_container_not_connected(
         self,
         mocked_cli: MagicMock,
-        mocked_workload_service_running: MagicMock,
         peer_integration: testing.Relation,
     ) -> None:
-        mocked_workload_service_running.return_value = False
-
         ctx = testing.Context(KratosCharm)
-        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=False)
         state_in = testing.State(leader=True, containers={container}, relations={peer_integration})
 
         with pytest.raises(
             testing.ActionFailed,
-            match="Service is not ready. Please re-run the action when the charm is active",
+            match="Container is not connected yet",
         ):
             ctx.run(ctx.on.action(name="run-migration"), state_in)
 
