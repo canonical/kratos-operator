@@ -1013,6 +1013,25 @@ class TestRunMigrationAction:
     def mocked_cli(self, mocker: MockerFixture) -> MagicMock:
         return mocker.patch("charm.CommandLine.migrate")
 
+    def test_when_not_leader_unit(
+        self,
+        mocked_cli: MagicMock,
+        peer_integration: testing.Relation,
+    ) -> None:
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(
+            leader=False, containers={container}, relations={peer_integration}
+        )
+
+        with pytest.raises(
+            testing.ActionFailed,
+            match="Only the leader unit can run the database migration",
+        ):
+            ctx.run(ctx.on.action(name="run-migration"), state_in)
+
+        mocked_cli.assert_not_called()
+
     def test_when_container_not_connected(
         self,
         mocked_cli: MagicMock,
