@@ -1073,6 +1073,10 @@ class KratosCharm(CharmBase):
         event.set_results(dict_to_action_output(res))
 
     def _on_run_migration_action(self, event: ActionEvent) -> None:
+        if not self.unit.is_leader():
+            event.fail("Only the leader unit can run the database migration")
+            return
+
         if not container_connectivity(self):
             event.fail("Container is not connected yet")
             return

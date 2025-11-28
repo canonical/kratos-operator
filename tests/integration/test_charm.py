@@ -22,6 +22,7 @@ from conftest import (
     TRAEFIK_ADMIN_APP,
     TRAEFIK_CHARM,
     TRAEFIK_PUBLIC_APP,
+    integrate_dependencies,
 )
 from httpx import Response
 from juju.application import Application
@@ -29,7 +30,6 @@ from juju.unit import Unit
 from pytest_operator.plugin import OpsTest
 
 from constants import PEER_INTEGRATION_NAME
-from tests.integration.conftest import integrate_dependencies
 
 logger = logging.getLogger(__name__)
 
