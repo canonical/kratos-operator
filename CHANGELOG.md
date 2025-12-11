@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.1.0](https://github.com/canonical/kratos-operator/compare/v2.0.1...v2.1.0) (2025-12-11)
+
+
+### Features
+
+* add feature flags hanlding in charm ([6f27e3e](https://github.com/canonical/kratos-operator/commit/6f27e3e4c75120448381df1896947a0d7f96c0b9))
+
+
+### Bug Fixes
+
+* fix the run-migration action to check container connectivity ([1877a12](https://github.com/canonical/kratos-operator/commit/1877a12198c96a20cb1468944a916bac621b8738))
+* fix the run-migration action to check container connectivity ([#568](https://github.com/canonical/kratos-operator/issues/568)) ([2e893a0](https://github.com/canonical/kratos-operator/commit/2e893a0ced879355bf4244bc8031bfaf6fe2a131))
+* only leader unit can run the db migration action ([eff923f](https://github.com/canonical/kratos-operator/commit/eff923faae141f23976617589fb48fe0048ec020))
+* only leader unit can run the db migration action ([#572](https://github.com/canonical/kratos-operator/issues/572)) ([2179556](https://github.com/canonical/kratos-operator/commit/21795566e5e3fdc7006ab4b20a5eda3bd7283f84))
+
 ## [2.0.1](https://github.com/canonical/kratos-operator/compare/v2.0.0...v2.0.1) (2025-11-21)
 
 
