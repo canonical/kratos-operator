@@ -314,7 +314,6 @@ actions:
         description: Timeout after which the migration will be canceled
         type: number
         default: 120
-
 ########################### build ###########################
 platforms:
   ubuntu@22.04:amd64:
