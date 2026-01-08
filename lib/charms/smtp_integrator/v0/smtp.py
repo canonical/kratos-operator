@@ -68,7 +68,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 15
+LIBPATCH = 19
 
 PYDEPS = ["pydantic>=2"]
 
@@ -170,6 +170,9 @@ class SmtpRelationData(BaseModel):
         if self.password:
             result["password"] = self.password
         if self.password_id:
+            if "password" in result:
+                logger.warning("password field exists along with password_id field, removing.")
+                del result["password"]
             result["password_id"] = self.password_id
         return result
 
@@ -278,6 +281,7 @@ class SmtpRequires(ops.Object):
         self.charm = charm
         self.relation_name = relation_name
         self.framework.observe(charm.on[relation_name].relation_changed, self._on_relation_changed)
+        self.framework.observe(charm.on.secret_changed, self._on_secret_changed)
 
     def get_relation_data(self) -> Optional[SmtpRelationData]:
         """Retrieve the relation data.
@@ -286,9 +290,9 @@ class SmtpRequires(ops.Object):
             SmtpRelationData: the relation data.
         """
         relation = self.model.get_relation(self.relation_name)
-        return self._get_relation_data_from_relation(relation) if relation else None
+        return self.get_relation_data_from_relation(relation) if relation else None
 
-    def _get_relation_data_from_relation(
+    def get_relation_data_from_relation(
         self, relation: ops.Relation
     ) -> Optional[SmtpRelationData]:
         """Retrieve the relation data.
@@ -298,6 +302,9 @@ class SmtpRequires(ops.Object):
 
         Returns:
             SmtpRelationData: the relation data.
+
+        Raises:
+            SecretError: if the secret can't be read.
         """
         assert relation.app
         relation_data = relation.data[relation.app]
@@ -309,7 +316,7 @@ class SmtpRequires(ops.Object):
             try:
                 password = (
                     self.model.get_secret(id=relation_data.get("password_id"))
-                    .get_content()
+                    .get_content(refresh=True)
                     .get("password")
                 )
             except ops.model.ModelError as exc:
@@ -317,17 +324,7 @@ class SmtpRequires(ops.Object):
                     f"Could not consume secret {relation_data.get('password_id')}"
                 ) from exc
 
-        return SmtpRelationData(
-            host=typing.cast(str, relation_data.get("host")),
-            port=typing.cast(int, relation_data.get("port")),
-            user=relation_data.get("user"),
-            password=password,
-            password_id=relation_data.get("password_id"),
-            auth_type=AuthType(relation_data.get("auth_type")),
-            transport_security=TransportSecurity(relation_data.get("transport_security")),
-            domain=relation_data.get("domain"),
-            skip_ssl_verify=typing.cast(bool, relation_data.get("skip_ssl_verify")),
-        )
+        return SmtpRelationData(**{**relation_data, "password": password})  # type: ignore
 
     def _is_relation_data_valid(self, relation: ops.Relation) -> bool:
         """Validate the relation data.
@@ -339,7 +336,7 @@ class SmtpRequires(ops.Object):
             true: if the relation data is valid.
         """
         try:
-            _ = self._get_relation_data_from_relation(relation)
+            _ = self.get_relation_data_from_relation(relation)
             return True
         except ValidationError as ex:
             error_fields = set(
@@ -350,7 +347,7 @@ class SmtpRequires(ops.Object):
             return False
 
     def _on_relation_changed(self, event: ops.RelationChangedEvent) -> None:
-        """Event emitted when the relation has changed.
+        """Handle the relation changed event.
 
         Args:
             event: event triggering this handler.
@@ -364,6 +361,43 @@ class SmtpRequires(ops.Object):
                 logger.warning('Insecure setting: transport_security has value "none"')
             if self._is_relation_data_valid(event.relation):
                 self.on.smtp_data_available.emit(event.relation, app=event.app, unit=event.unit)
+
+    @staticmethod
+    def _secret_uri_equal(left: str, right: str) -> bool:
+        """Check if two juju secret URIs are equal."""
+        left_without_protocol = left.removeprefix("secret://")
+        left_without_protocol = left_without_protocol.removeprefix("secret:")
+        right_without_protocol = right.removeprefix("secret://")
+        right_without_protocol = right_without_protocol.removeprefix("secret:")
+        # If they are both fully qualified secret URLs, compare them directly
+        if "/" in left_without_protocol and "/" in right_without_protocol:
+            return left_without_protocol == right_without_protocol
+        # Otherwise, compare only the secret ID part and ignore the potential model UUID
+        left_id = left_without_protocol.split("/")[-1]
+        right_id = right_without_protocol.split("/")[-1]
+        return left_id == right_id
+
+    def _on_secret_changed(self, event: ops.SecretChangedEvent) -> None:
+        """Handle the relation secret event."""
+        changed_secret_uri = event.secret.id
+        if changed_secret_uri is None:
+            return
+        for relation in self.charm.model.relations[self.relation_name]:
+            if relation.app is None:
+                continue
+            relation_data = relation.data[relation.app]
+            password_id = relation_data.get("password_id")
+            if not password_id:
+                continue
+            try:
+                secret = self.model.get_secret(id=password_id)
+            except ops.ModelError:
+                continue
+            secret_uri = secret.id
+            if secret_uri is None:
+                continue
+            if self._secret_uri_equal(changed_secret_uri, secret_uri):
+                self.on.smtp_data_available.emit(relation, app=relation.app, unit=None)
 
 
 class SmtpProvides(ops.Object):
@@ -387,9 +421,13 @@ class SmtpProvides(ops.Object):
             relation: the relation for which to update the data.
             smtp_data: a SmtpRelationData instance wrapping the data to be updated.
         """
-        relation_data = smtp_data.to_relation_data()
-        if relation_data["auth_type"] == AuthType.NONE.value:
+        new_data = smtp_data.to_relation_data()
+        if new_data["auth_type"] == AuthType.NONE.value:
             logger.warning('Insecure setting: auth_type has a value "none"')
-        if relation_data["transport_security"] == TransportSecurity.NONE.value:
+        if new_data["transport_security"] == TransportSecurity.NONE.value:
             logger.warning('Insecure setting: transport_security has value "none"')
-        relation.data[self.charm.model.app].update(relation_data)
+        relation_data = relation.data[self.charm.model.app]
+        if dict(relation_data) != dict(new_data):
+            logger.info("update data in relation id:%s", relation.id)
+            relation_data.clear()
+            relation_data.update(new_data)
