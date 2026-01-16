@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.1](https://github.com/canonical/kratos-operator/compare/v2.1.0...v2.1.1) (2026-01-16)
+
+
+### Bug Fixes
+
+* update OCI-image resource ([#538](https://github.com/canonical/kratos-operator/issues/538)) ([8c4a465](https://github.com/canonical/kratos-operator/commit/8c4a465318594894e1740b1b2e218e3274948724))
+* update oci-image to ghcr.io/canonical/kratos:25.4.0 ([a32a4ca](https://github.com/canonical/kratos-operator/commit/a32a4ca5f65a8006539aa13d77549cca115f3339))
+
 ## [2.1.0](https://github.com/canonical/kratos-operator/compare/v2.0.1...v2.1.0) (2025-12-11)
 
 
