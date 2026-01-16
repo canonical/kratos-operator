@@ -84,6 +84,7 @@ jobs:
       CLIENT_ID: ${{ secrets.JIMM_DEV_CLIENT_ID }}
       CLIENT_SECRET: ${{ secrets.JIMM_DEV_CLIENT_SECRET }}
       JIMM_URL: ${{ secrets.JIMM_URL }}
+      MODEL_UUID: ${{ secrets.DEV_MODEL_UUID }}
 
   stg-deploy:
     concurrency:
@@ -104,3 +105,4 @@ jobs:
         CLIENT_ID: ${{ secrets.JIMM_STG_CLIENT_ID }}
         CLIENT_SECRET: ${{ secrets.JIMM_STG_CLIENT_SECRET }}
         JIMM_URL: ${{ secrets.JIMM_URL }}
+        MODEL_UUID: ${{ secrets.STG_MODEL_UUID }}
