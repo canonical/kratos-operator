@@ -18,7 +18,7 @@ resources:
   oci-image:
     type: oci-image
     description: Kratos oci-image
-    upstream-source: ghcr.io/canonical/kratos:1.3.1
+    upstream-source: ghcr.io/canonical/kratos:25.4.0
 requires:
   pg-database:
     interface: postgresql_client
@@ -314,7 +314,6 @@ actions:
         description: Timeout after which the migration will be canceled
         type: number
         default: 120
-
 ########################### build ###########################
 platforms:
   ubuntu@22.04:amd64:
