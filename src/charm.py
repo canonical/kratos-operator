@@ -99,6 +99,7 @@ from configs import (
     IdentitySchema,
     IdentitySchemaConfigMap,
     OIDCProviderConfigMap,
+    VerificationEmailTemplateResource,
     create_configmaps,
 )
 from constants import (
@@ -458,6 +459,9 @@ class KratosCharm(CharmBase):
         if template := self.charm_config["recovery_email_template"]:
             self._container.push(EMAIL_TEMPLATE_FILE_PATH, template, make_dirs=True)
 
+        if self.config.get("enable_verification"):
+            self._push_verification_email_template()
+
         try:
             self._pebble_service.plan(self._pebble_layer, self.config_file)
         except PebbleServiceError as e:
@@ -583,6 +587,8 @@ class KratosCharm(CharmBase):
             namespace=self.model.name,
             app_name=self.app.name,
         )
+
+        self._holistic_handler(event)
 
     def _on_update_status(self, event: UpdateStatusEvent) -> None:
         self._holistic_handler(event)
@@ -1116,6 +1122,14 @@ class KratosCharm(CharmBase):
             feature_flags.append("account_linking")
 
         return feature_flags
+
+    def _push_verification_email_template(self) -> None:
+        """Fetches and pushes the verification email template to the workload."""
+        template_resource = VerificationEmailTemplateResource(self.model.resources)
+        content = template_resource.get_content()
+
+        if content:
+            self._workload_service.push_verification_email_template(content)
 
 
 if __name__ == "__main__":

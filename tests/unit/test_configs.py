@@ -41,6 +41,8 @@ class TestCharmConfig:
             "enforce_mfa": False,
             "enable_passwordless_login_method": True,
             "enable_oidc_webauthn_sequencing": False,
+            "sender_email": "identity@canonical.com",
+            "sender_name": "Identity",
         }
 
     def test_get(self, mocked_config: dict) -> None:
@@ -58,6 +60,8 @@ class TestCharmConfig:
         assert env_vars["HTTP_PROXY"] == "http://proxy"
         assert env_vars["HTTPS_PROXY"] == "https://proxy"
         assert env_vars["NO_PROXY"] == "localhost,127.0.0.1"
+        assert env_vars["COURIER_SMTP_FROM_ADDRESS"] == "identity@canonical.com"
+        assert env_vars["COURIER_SMTP_FROM_NAME"] == "Identity"
         assert "COURIER_TEMPLATES_RECOVERY_CODE_VALID_EMAIL_BODY_HTML" not in env_vars
         assert "SESSION_WHOAMI_REQUIRED_AAL" not in env_vars
 
