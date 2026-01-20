@@ -157,6 +157,7 @@ class LoginUIEndpointData:
     error_url: str = ""
     settings_url: str = ""
     recovery_url: str = ""
+    verification_url: str = ""
     webauthn_settings_url: str = ""
     account_linking_settings_url: str = ""
     registration_url: str = ""
@@ -172,6 +173,7 @@ class LoginUIEndpointData:
             "error_ui_url": self.error_url,
             "settings_ui_url": self.settings_url,
             "recovery_ui_url": self.recovery_url,
+            "verification_ui_url": self.verification_url,
             "webauthn_settings_url": self.webauthn_settings_url,
             "account_linking_settings_url": self.account_linking_settings_url,
             "registration_ui_url": self.registration_url,
@@ -250,6 +252,8 @@ class SmtpData:
 
         return {
             "COURIER_SMTP_CONNECTION_URI": f"{scheme}://{self.username}:{self.password}@{self.server}:{self.port}/{option}",
+            "COURIER_SMTP_FROM_ADDRESS": "identity@canonical.com",
+            "COURIER_SMTP_FROM_NAME": "Canonical Identity Platform",
         }
 
     @classmethod
@@ -338,7 +342,8 @@ class PublicRouteData:
                 "SELFSERVICE_ALLOWED_RETURN_URLS": json.dumps(
                     [
                         str(
-                            self.url.with_path("")
+                            self.url
+                            .with_path("")
                             .without_query_params()
                             .with_fragment(None)
                             .with_path("/")
