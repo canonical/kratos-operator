@@ -133,6 +133,13 @@ config:
         Disabling this option will allow users to log in with password or webauthn without completing 2fa.
       type: boolean
       default: True
+    enable_verification:
+      description: |
+        Enable and enforce users to verify their accounts.
+        Enabling this option will make users verify their accounts after registration or on the next login.
+        This option requires an SMTP server integration.
+      type: boolean
+      default: False
     sender_email:
       description: |
         The email address used as the sender for automated verification and recovery emails.

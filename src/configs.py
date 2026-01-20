@@ -131,6 +131,7 @@ class CharmConfig:
             "enforce_mfa": self._config["enforce_mfa"],
             "enable_passwordless_login_method": self._config["enable_passwordless_login_method"],
             "enable_oidc_webauthn_sequencing": self._config["enable_oidc_webauthn_sequencing"],
+            "enable_verification": self._config["enable_verification"],
         }
 
 

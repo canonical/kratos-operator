@@ -38,6 +38,7 @@ class TestCharmConfig:
             "no_proxy": "localhost,127.0.0.1",
             "recovery_email_template": None,
             "enable_local_idp": False,
+            "enable_verification": False,
             "enforce_mfa": False,
             "enable_passwordless_login_method": True,
             "enable_oidc_webauthn_sequencing": False,
@@ -98,6 +99,7 @@ class TestCharmConfig:
             "enforce_mfa": False,
             "enable_passwordless_login_method": True,
             "enable_oidc_webauthn_sequencing": False,
+            "enable_verification": False,
         }
 
 
