@@ -65,12 +65,30 @@ selfservice:
                 hooks:
                     - hook: revoke_active_sessions
         {%- endif %}
-        {%- if registration_webhook_config or oidc_providers %}
+        {%- if enable_verification and enable_local_idp %}
+        verification:
+            enabled: True
+            ui_url: {{ verification_ui_url }}
+            lifespan: 1h
+            use: code
+            notify_unknown_recipients: False
+        {%- endif %}
+        {%- if registration_webhook_config or oidc_providers or enable_local_idp %}
         registration:
             {%- if registration_ui_url %}
+            enabled: True
             ui_url: {{ registration_ui_url }}
             {%- endif %}
             after:
+                {%- if enable_local_idp %}
+                password:
+                  hooks:
+                    {%- if enable_verification %}
+                    - hook: show_verification_ui
+                    {%- endif %}
+                    - hook: session
+                {%- endif %}
+                {%- if registration_webhook_config or oidc_providers %}
                 oidc:
                     hooks:
                         {%- if registration_webhook_config %}
@@ -93,17 +111,24 @@ selfservice:
                             {%- endif %}
                         {%- endif %}
                         - hook: session
+                {%- endif %}
         {%- endif %}
     {%- endif %}
     {%- if oidc_providers or recovery_ui_url or enable_local_idp and login_ui_url %}
     methods:
+        {%- if enable_local_idp %}
+        profile:
+            enabled: True
+        {%- endif %}
+        {%- if not enable_local_idp %}
         profile:
             enabled: False
+        {%- endif %}
         link:
             enabled: False
         passkey:
             enabled: False
-        {%- if recovery_ui_url and enable_local_idp %}
+        {%- if (recovery_ui_url or enable_verification) and enable_local_idp %}
         code:
             enabled: True
         {%- endif %}
