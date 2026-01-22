@@ -1,0 +1,43 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Target Juju model
+        required: true
+        type: choice
+        options:
+          - blue-iam  # dev
+          - green-iam  # stg
+      revision:
+        description: Charm revision to deploy
+        required: true
+        type: string
+      dry-run:
+        description: Run Terraform in plan mode (dry-run) instead of apply
+        required: true
+        type: boolean
+        default: true
+      channel:
+        description: Charm channel to deploy from
+        required: false
+        type: string
+        default: latest/edge
+
+jobs:
+  deploy:
+    name: Deploy Charm to ${{ inputs.model }}
+    uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@6b27807be4ec7c25045d52ef09ac780d684f65a2 # v1.10.0
+    with:
+      model: ${{ inputs.model }}
+      revision: ${{ inputs.revision }}
+      channel: ${{ inputs.channel }}
+      application: kratos
+      tf-application-resource: module.application.juju_application.application
+      plan-only: ${{ inputs.dry-run }}
+    secrets:
+      CLIENT_ID: ${{ inputs.model == 'blue-iam' && secrets.JIMM_DEV_CLIENT_ID || secrets.JIMM_STG_CLIENT_ID }}
+      CLIENT_SECRET: ${{ inputs.model == 'blue-iam' && secrets.JIMM_DEV_CLIENT_SECRET || secrets.JIMM_STG_CLIENT_SECRET }}
+      JIMM_URL: ${{ secrets.JIMM_URL }}
+      MODEL_UUID: ${{ inputs.model == 'blue-iam' && secrets.DEV_MODEL_UUID || secrets.STG_MODEL_UUID }}
