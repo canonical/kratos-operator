@@ -20,7 +20,7 @@ on:
 jobs:
   promote-charm:
       name: Promote charm
-      uses: canonical/identity-team/.github/workflows/charm-promotion.yaml@7ec3565943646a4abe70497e354edac4357349a8 # v1.9.3
+      uses: canonical/identity-team/.github/workflows/charm-promotion.yaml@6b27807be4ec7c25045d52ef09ac780d684f65a2 # v1.10.0
       with:
         origin-channel: ${{ github.event.inputs.origin-channel }}
         destination-channel: ${{ github.event.inputs.destination-channel }}
@@ -65,7 +65,7 @@ jobs:
       - promote-charm
       - revision
     if: ${{ (github.event.inputs.destination-channel == 'latest/edge') }}
-    uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@7ec3565943646a4abe70497e354edac4357349a8 # v1.9.3
+    uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@6b27807be4ec7c25045d52ef09ac780d684f65a2 # v1.10.0
     secrets:
       CLIENT_ID: ${{ secrets.JIMM_DEV_CLIENT_ID }}
       CLIENT_SECRET: ${{ secrets.JIMM_DEV_CLIENT_SECRET }}
@@ -85,7 +85,7 @@ jobs:
       - promote-charm
       - revision
     if: ${{ (github.event.inputs.destination-channel == 'latest/stable') }}
-    uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@7ec3565943646a4abe70497e354edac4357349a8 # v1.9.3
+    uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@6b27807be4ec7c25045d52ef09ac780d684f65a2 # v1.10.0
     secrets:
       CLIENT_ID: ${{ secrets.JIMM_STG_CLIENT_ID }}
       CLIENT_SECRET: ${{ secrets.JIMM_STG_CLIENT_SECRET }}
