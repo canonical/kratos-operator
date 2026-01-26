@@ -75,7 +75,7 @@ jobs:
     if: ${{ (needs.publish.outputs.channel == 'latest/edge') }}
     uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@6b27807be4ec7c25045d52ef09ac780d684f65a2 # v1.10.0
     with:
-        model: dev-iam
+        model: blue-iam
         revision: ${{ needs.revision.outputs.revision }}
         channel: ${{ needs.publish.outputs.channel}}
         application: kratos
@@ -96,7 +96,7 @@ jobs:
     if: ${{ (needs.publish.outputs.channel == 'latest/stable') }}
     uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@6b27807be4ec7c25045d52ef09ac780d684f65a2 # v1.10.0
     with:
-      model: stg-iam
+      model: green-iam
       revision: ${{ needs.revision.outputs.revision }}
       channel: ${{ needs.publish.outputs.channel}}
       application: kratos
