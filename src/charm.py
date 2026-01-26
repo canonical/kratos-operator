@@ -12,6 +12,7 @@ from os.path import join
 from secrets import token_hex
 from typing import Any, Optional
 
+import ops
 from charms.certificate_transfer_interface.v1.certificate_transfer import (
     CertificatesAvailableEvent,
     CertificatesRemovedEvent,
@@ -123,6 +124,8 @@ from constants import (
     PUBLIC_ROUTE_INTEGRATION_NAME,
     REGISTRATION_WEBHOOK_INTEGRATION_NAME,
     TRACING_INTEGRATION_NAME,
+    VERIFICATION_EMAIL_TEMPLATE_RESOURCE_NAME,
+    VERIFICATION_EMAIL_TEMPLATE_TARGET_PATH,
     WORKLOAD_CONTAINER,
 )
 from exceptions import (
@@ -461,6 +464,28 @@ class KratosCharm(CharmBase):
 
         if template := self.charm_config["recovery_email_template"]:
             self._container.push(EMAIL_TEMPLATE_FILE_PATH, template, make_dirs=True)
+
+        verification_template_fp = self._get_verification_email_template_resource()
+        if verification_template_fp is not None:
+            try:
+                content = verification_template_fp.read()
+                if isinstance(content, bytes):
+                    content = content.decode("utf-8")
+
+                if content:
+                    self._container.push(
+                        str(VERIFICATION_EMAIL_TEMPLATE_TARGET_PATH), content, make_dirs=True
+                    )
+
+            except Exception as e:
+                logger.debug(
+                    "error reading verification-email-template resource, falling back to the default one: %s",
+                    e,
+                )
+        else:
+            logger.debug(
+                "no custom verification email template has been provided, using the default one"
+            )
 
         try:
             self._pebble_service.plan(self._pebble_layer, self.config_file)
@@ -1128,6 +1153,16 @@ class KratosCharm(CharmBase):
             feature_flags.append("account_linking")
 
         return feature_flags
+
+    def _get_verification_email_template_resource(self) -> Optional[Any]:
+        try:
+            return self.model.resources.fetch(VERIFICATION_EMAIL_TEMPLATE_RESOURCE_NAME)
+        except ops.ModelError as e:
+            logger.error("error reading verification-email-template resource: %s", e)
+        except NameError as e:
+            logger.error(f"Resource '{VERIFICATION_EMAIL_TEMPLATE_RESOURCE_NAME}' not found", e)
+
+        return None
 
 
 if __name__ == "__main__":
