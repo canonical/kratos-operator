@@ -8,13 +8,14 @@ import logging
 from abc import ABC, abstractmethod
 from collections import ChainMap
 from json import JSONDecodeError
-from typing import Any, Mapping, Optional, Protocol, TypeAlias
+from typing import Any, Mapping, Optional, Protocol, TypeAlias, Union
 
 import yaml
 from charms.kratos_external_idp_integrator.v1.kratos_external_provider import Provider
 from jinja2 import Template
 from lightkube import ApiError, Client
-from lightkube.models.meta_v1 import ObjectMeta
+from lightkube.models.meta_v1 import ObjectMeta, OwnerReference
+from lightkube.resources.apps_v1 import StatefulSet
 from lightkube.resources.core_v1 import ConfigMap
 from ops import ConfigData, Container
 from ops.pebble import PathError
@@ -166,6 +167,25 @@ class BaseConfigMap:
         self.namespace = namespace
         self.app_name = app_name
 
+    def _get_statefulset_owner_refs(self) -> list[OwnerReference]:
+        """Returns a list of app StatefulSet as OwnerReferences."""
+        try:
+            sts = self._client.get(StatefulSet, name=self.app_name, namespace=self.namespace)
+            return [
+                OwnerReference(
+                    apiVersion=sts.apiVersion,
+                    kind=sts.kind,
+                    name=sts.metadata.name,
+                    uid=sts.metadata.uid,
+                    # Remove ConfigMap after the StatefulSet
+                    blockOwnerDeletion=True,
+                    controller=True,
+                )
+            ]
+        except ApiError as e:
+            logger.debug("Could not get StatefulSet to set owner reference: %s", e)
+            return []
+
     def get(self) -> Optional[dict]:
         try:
             cm = self._client.get(ConfigMap, name=self.name, namespace=self.namespace)
@@ -185,7 +205,12 @@ class BaseConfigMap:
         return data
 
     def create(self) -> None:
+        owner_refs = self._get_statefulset_owner_refs()
         if self.get() is not None:
+            patch_obj = ConfigMap(
+                metadata=ObjectMeta(ownerReferences=owner_refs)
+            )
+            self.patch(patch_obj)
             return
 
         cm = ConfigMap(
@@ -198,6 +223,7 @@ class BaseConfigMap:
                     "juju-app-name": self.app_name,
                     "app.kubernetes.io/managed-by": "juju",
                 },
+                ownerReferences=owner_refs,
             ),
         )
 
@@ -206,6 +232,21 @@ class BaseConfigMap:
         except ApiError:
             logger.error("Failed to create the ConfigMap %s", self.name)
             raise ConfigMapError(f"Failed to create the ConfigMap {self.name}")
+
+    def patch(self, patch: Union[dict, list, ConfigMap]) -> None:
+        try:
+            self._client.patch(
+                ConfigMap,
+                name=self.name,
+                namespace=self.namespace,
+                obj=patch,
+            )
+            logger.info("Patched ConfigMap %s", self.name)
+        except ApiError as e:
+            if e.status.code == 404:
+                logger.debug("Skipping patch for %s: ConfigMap not found", self.name)
+            else:
+                logger.error("Failed to patch %s: %s", self.name, e)
 
     def delete(self) -> None:
         try:

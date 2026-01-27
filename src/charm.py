@@ -74,7 +74,6 @@ from ops.charm import (
     PebbleReadyEvent,
     RelationBrokenEvent,
     RelationEvent,
-    RemoveEvent,
     UpgradeCharmEvent,
 )
 from ops.model import (
@@ -101,7 +100,6 @@ from configs import (
     IdentitySchemaConfigMap,
     OIDCProviderConfigMap,
     create_configmaps,
-    remove_configmaps,
 )
 from constants import (
     ALLOWED_MFA_CREDENTIAL_TYPES,
@@ -159,7 +157,6 @@ from utils import (
     database_resource_is_created,
     dict_to_action_output,
     external_hostname_is_ready,
-    leader_unit,
     migration_is_ready,
     passwordless_config_is_valid,
     peer_integration_exists,
@@ -283,7 +280,6 @@ class KratosCharm(CharmBase):
         self.framework.observe(
             self.on.kratos_pebble_check_recovered, self._on_pebble_check_recovered
         )
-        self.framework.observe(self.on.remove, self._on_remove)
         self.framework.observe(self.on.upgrade_charm, self._on_upgrade_charm)
         self.framework.observe(self.on.update_status, self._on_update_status)
         self.framework.observe(self.on.collect_unit_status, self._on_collect_status)
@@ -583,14 +579,6 @@ class KratosCharm(CharmBase):
 
     def _on_upgrade_charm(self, event: UpgradeCharmEvent) -> None:
         create_configmaps(
-            k8s_client=self._k8s_client,
-            namespace=self.model.name,
-            app_name=self.app.name,
-        )
-
-    @leader_unit
-    def _on_remove(self, event: RemoveEvent) -> None:
-        remove_configmaps(
             k8s_client=self._k8s_client,
             namespace=self.model.name,
             app_name=self.app.name,
