@@ -9,6 +9,7 @@ import pytest
 from charms.kratos_external_idp_integrator.v1.kratos_external_provider import BaseProvider
 from httpx import Response
 from lightkube import ApiError, Client
+from lightkube.models.meta_v1 import ObjectMeta, OwnerReference
 from lightkube.resources.core_v1 import ConfigMap
 
 from configs import (
@@ -168,6 +169,43 @@ class TestBaseConfigMap:
         assert actual["valid"] == {"x": 1}
         assert actual["invalid"] == "{invalid json}"
 
+    def test_create_patch_owner_refs_when_configmap_exists(self, mocked_client: MagicMock) -> None:
+        class TestConfigMap(BaseConfigMap):
+            name = "test"
+
+        mock_sts = MagicMock()
+        mock_sts.metadata.uid = "sts-uid"
+        mock_sts.metadata.name = "sts-name"
+        mock_sts.apiVersion = "apps/v1"
+        mock_sts.kind = "StatefulSet"
+
+        mocked_client.get.return_value = mock_sts
+
+        cm = TestConfigMap(mocked_client, "namespace", "app")
+        cm.get = MagicMock(return_value={"already": "exists"})
+
+        cm.create()
+
+        mocked_client.create.assert_not_called()
+
+        expected_patch = ConfigMap(
+            metadata=ObjectMeta(
+                ownerReferences=[
+                    OwnerReference(
+                        apiVersion="apps/v1",
+                        kind="StatefulSet",
+                        name="sts-name",
+                        uid="sts-uid",
+                        blockOwnerDeletion=True,
+                        controller=True,
+                    )
+                ]
+            )
+        )
+        mocked_client.patch.assert_called_once_with(
+            ConfigMap, name="test", namespace="namespace", obj=expected_patch
+        )
+
     def test_create_when_configmap_exists(self, mocked_client: MagicMock) -> None:
         class TestConfigMap(BaseConfigMap):
             name = "test"
@@ -194,6 +232,36 @@ class TestBaseConfigMap:
 
         with pytest.raises(ConfigMapError):
             cm.create()
+
+    def test_patch_cm(self, mocked_client: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
+        class TestConfigMap(BaseConfigMap):
+            name = "test"
+
+        cm = TestConfigMap(mocked_client, "namespace", "app")
+        patch_data = {"metadata": {"labels": {"new": "label"}}}
+
+        cm.patch(patch_data)
+
+        mocked_client.patch.assert_called_once_with(
+            ConfigMap, name="test", namespace="namespace", obj=patch_data
+        )
+        assert "Patched ConfigMap test" in caplog.text
+
+    def test_patch_when_api_failure(self, mocked_client: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
+        mocked_client.patch.side_effect = ApiError(
+            response=Response(
+                status_code=httpx.codes.BAD_REQUEST, content=json.dumps({"message": "bad request"})
+            ),
+        )
+
+        class TestConfigMap(BaseConfigMap):
+            name = "test"
+
+        cm = TestConfigMap(mocked_client, "namespace", "app")
+
+        cm.patch({"some": "patch"})
+
+        assert "Failed to patch test" in caplog.text
 
     def test_delete_when_failed(
         self, mocked_client: MagicMock, caplog: pytest.LogCaptureFixture
