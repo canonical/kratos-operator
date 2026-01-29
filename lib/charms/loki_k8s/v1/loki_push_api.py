@@ -79,7 +79,6 @@ and three optional arguments.
               external_url = urlparse(self._external_url)
               self.loki_provider = LokiPushApiProvider(
                   self,
-                  address=external_url.hostname or self.hostname,
                   port=external_url.port or 80,
                   scheme=external_url.scheme,
                   path=f"{external_url.path}/loki/api/v1/push",
@@ -96,6 +95,7 @@ The `LokiPushApiProvider` object has several responsibilities:
 
 1. Set the URL of the Loki Push API in the relation application data bag; the URL
    must be unique to all instances (e.g. using a load balancer).
+   The default URL is the FQDN, but this can be overridden by calling `update_endpoint()`.
 
 2. Set the Promtail binary URL (`promtail_binary_zip_url`) so clients that use
    `LogProxyConsumer` object could download and configure it.
@@ -190,10 +190,7 @@ The `LokiPushApiConsumer` constructor requires two things:
   with its clients. If provided, this relation name must match a required
   relation in metadata.yaml with the `loki_push_api` interface.
 
-  This argument is not required if your metadata.yaml has precisely one
-  required relation in metadata.yaml with the `loki_push_api` interface, as the
-  lib will automatically resolve the relation name inspecting the using the
-  meta information of the charm
+  If not provided, the relation name defaults to `logging`.
 
 Any time the relation between a Loki provider charm and a Loki consumer charm is
 established, a `LokiPushApiEndpointJoined` event is fired. In the consumer side
@@ -501,6 +498,7 @@ class MyCharm(...):
 Do this, and all charm logs will be forwarded to Loki as soon as a relation is formed.
 """
 
+import copy
 import json
 import logging
 import os
@@ -510,6 +508,7 @@ import socket
 import subprocess
 import tempfile
 import typing
+import warnings
 from copy import deepcopy
 from gzip import GzipFile
 from hashlib import sha256
@@ -546,7 +545,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 17
+LIBPATCH = 22
 
 PYDEPS = ["cosl"]
 
@@ -1152,7 +1151,7 @@ class LokiPushApiProvider(Object):
         *,
         port: Union[str, int] = 3100,
         scheme: str = "http",
-        address: str = "localhost",
+        address: str = "",
         path: str = "loki/api/v1/push",
     ):
         """A Loki service provider.
@@ -1167,7 +1166,9 @@ class LokiPushApiProvider(Object):
                 other charms that consume metrics endpoints.
             port: an optional port of the Loki service (default is "3100").
             scheme: an optional scheme of the Loki API URL (default is "http").
-            address: an optional address of the Loki service (default is "localhost").
+            address: DEPRECATED. This argument is ignored and will be removed in v2.
+                It is kept for backward compatibility.
+                Use `update_endpoint()` instead.
             path: an optional path of the Loki API URL (default is "loki/api/v1/push")
 
         Raises:
@@ -1183,14 +1184,23 @@ class LokiPushApiProvider(Object):
         _validate_relation_by_interface_and_direction(
             charm, relation_name, RELATION_INTERFACE_NAME, RelationRole.provides
         )
+
+        if address != "":
+            warnings.warn(
+                "The 'address' parameter is deprecated and will be removed in v2. "
+                "Use 'update_endpoint()' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
         self._tool = CosTool(self)
         self.port = int(port)
         self.scheme = scheme
-        self.address = address
         self.path = path
+        self._custom_url = None
 
         events = self._charm.on[relation_name]
         self.framework.observe(self._charm.on.upgrade_charm, self._on_lifecycle_event)
@@ -1328,6 +1338,11 @@ class LokiPushApiProvider(Object):
         host address change because the charmed operator becomes connected to an
         Ingress after the `logging` relation is established.
 
+        To make this library reconciler-friendly, the endpoint URL was made sticky i.e., once the
+        endpoint is updated with a custom URL, using the public method, it cannot be unset. Users
+        of this method should set the "url" arg to an internal URL if the charms ingress is no
+        longer available.
+
         Args:
             url: An optional url value to update relation data.
             relation: An optional instance of `class:ops.model.Relation` to update.
@@ -1341,7 +1356,10 @@ class LokiPushApiProvider(Object):
         else:
             relations_list = [relation]
 
-        endpoint = self._endpoint(url or self._url)
+        if url:
+            self._custom_url = url
+
+        endpoint = self._endpoint(self._custom_url or self._url)
 
         for relation in relations_list:
             relation.data[self._charm.unit].update({"endpoint": json.dumps(endpoint)})
@@ -1545,11 +1563,13 @@ class ConsumerBase(Object):
         skip_alert_topology_labeling: bool = False,
         *,
         forward_alert_rules: bool = True,
+        extra_alert_labels: Dict = {},
     ):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
         self._forward_alert_rules = forward_alert_rules
+        self._extra_alert_labels = extra_alert_labels
         self.topology = JujuTopology.from_charm(charm)
 
         try:
@@ -1565,6 +1585,15 @@ class ConsumerBase(Object):
 
         self._recursive = recursive
 
+    @staticmethod
+    def _inject_extra_labels_to_alert_rules(rules: Dict, extra_alert_labels: Dict) -> Dict:
+        """Return a copy of the rules dict with extra labels injected."""
+        result = copy.deepcopy(rules)
+        for group in result.get("groups", []):
+            for rule in group.get("rules", []):
+                rule.setdefault("labels", {}).update(extra_alert_labels)
+        return result
+
     def _handle_alert_rules(self, relation):
         if not self._charm.unit.is_leader():
             return
@@ -1575,6 +1604,11 @@ class ConsumerBase(Object):
         if self._forward_alert_rules:
             alert_rules.add_path(self._alert_rules_path, recursive=self._recursive)
         alert_rules_as_dict = alert_rules.as_dict()
+
+        if self._extra_alert_labels:
+            alert_rules_as_dict = ConsumerBase._inject_extra_labels_to_alert_rules(
+                alert_rules_as_dict, self._extra_alert_labels
+            )
 
         relation.data[self._charm.app]["metadata"] = json.dumps(self.topology.as_dict())
         relation.data[self._charm.app]["alert_rules"] = json.dumps(
@@ -1587,26 +1621,44 @@ class ConsumerBase(Object):
         """Fetch Loki Push API endpoints sent from LokiPushApiProvider through relation data.
 
         Returns:
-            A list of dictionaries with Loki Push API endpoints, for instance:
+            A list of unique dictionaries with Loki Push API endpoints, for instance:
             [
                 {"url": "http://loki1:3100/loki/api/v1/push"},
                 {"url": "http://loki2:3100/loki/api/v1/push"},
             ]
         """
-        endpoints = []  # type: list
+        endpoints = []
+        seen_urls = set()
 
         for relation in self._charm.model.relations[self._relation_name]:
             for unit in relation.units:
                 if unit.app == self._charm.app:
-                    # This is a peer unit
                     continue
 
-                endpoint = relation.data[unit].get("endpoint")
-                if endpoint:
-                    deserialized_endpoint = json.loads(endpoint)
-                    endpoints.append(deserialized_endpoint)
+                if not (endpoint := relation.data[unit].get("endpoint")):
+                    continue
+
+                deserialized_endpoint = json.loads(endpoint)
+                url = deserialized_endpoint.get("url")
+
+                # Deduplicate by URL.
+                # With loki-k8s we have ingress-per-unit, so in that case
+                # we do want to collect the URLs of all the units.
+                # With loki-coordinator-k8s, even when the coordinator
+                # is scaled, we want to advertise only one URL.
+                # Without deduplication, we'd end up with the same
+                # tls config section in the promtail config file, in which
+                # case promtail immediately exits with the following error:
+                # [promtail] level=error ts=<timestamp> msg="error creating promtail" error="failed to create client manager: duplicate client configs are not allowed, found duplicate for name: "
+
+                if not url or url in seen_urls:
+                    continue
+
+                seen_urls.add(url)
+                endpoints.append(deserialized_endpoint)
 
         return endpoints
+
 
 
 class LokiPushApiConsumer(ConsumerBase):
@@ -1624,6 +1676,7 @@ class LokiPushApiConsumer(ConsumerBase):
         *,
         refresh_event: Optional[Union[BoundEvent, List[BoundEvent]]] = None,
         forward_alert_rules: bool = True,
+        extra_alert_labels: Dict = {},
     ):
         """Construct a Loki charm client.
 
@@ -1650,6 +1703,7 @@ class LokiPushApiConsumer(ConsumerBase):
             recursive: Whether to scan for rule files recursively.
             skip_alert_topology_labeling: whether to skip the alert topology labeling.
             forward_alert_rules: a boolean flag to toggle forwarding of charmed alert rules.
+            extra_alert_labels: Dict of extra labels to inject alert rules with.
             refresh_event: an optional bound event or list of bound events which
                 will be observed to re-set scrape job data (IP address and others)
 
@@ -1683,6 +1737,7 @@ class LokiPushApiConsumer(ConsumerBase):
             recursive,
             skip_alert_topology_labeling,
             forward_alert_rules=forward_alert_rules,
+            extra_alert_labels=extra_alert_labels,
         )
         events = self._charm.on[relation_name]
         self.framework.observe(self._charm.on.upgrade_charm, self._on_lifecycle_event)
