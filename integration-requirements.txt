@@ -1,4 +1,5 @@
-pytest
-juju
-pytest-operator==0.43.2
 -r requirements.txt
+jubilant
+pytest
+requests
+tenacity

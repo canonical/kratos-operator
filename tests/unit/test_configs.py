@@ -247,7 +247,9 @@ class TestBaseConfigMap:
         )
         assert "Patched ConfigMap test" in caplog.text
 
-    def test_patch_when_api_failure(self, mocked_client: MagicMock, caplog: pytest.LogCaptureFixture) -> None:
+    def test_patch_when_api_failure(
+        self, mocked_client: MagicMock, caplog: pytest.LogCaptureFixture
+    ) -> None:
         mocked_client.patch.side_effect = ApiError(
             response=Response(
                 status_code=httpx.codes.BAD_REQUEST, content=json.dumps({"message": "bad request"})

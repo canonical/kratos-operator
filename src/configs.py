@@ -207,9 +207,7 @@ class BaseConfigMap:
     def create(self) -> None:
         owner_refs = self._get_statefulset_owner_refs()
         if self.get() is not None:
-            patch_obj = ConfigMap(
-                metadata=ObjectMeta(ownerReferences=owner_refs)
-            )
+            patch_obj = ConfigMap(metadata=ObjectMeta(ownerReferences=owner_refs))
             self.patch(patch_obj)
             return
 

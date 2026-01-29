@@ -1,22 +1,35 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-import functools
+import logging
 import os
 import re
+import secrets
+import subprocess
+from contextlib import suppress
 from pathlib import Path
-from typing import AsyncGenerator, Awaitable, Callable, Optional
+from typing import Callable, Generator
 
-import httpx
+import jubilant
 import pytest
-import pytest_asyncio
-import yaml
-from httpx import AsyncClient, Response
-from juju.application import Application
-from juju.unit import Unit
-from pytest_operator.plugin import OpsTest
+import requests
+from integration.constants import (
+    ADMIN_PASSWORD,
+    DB_APP,
+    KRATOS_APP,
+    KRATOS_IMAGE,
+    LOGIN_UI_APP,
+    TRAEFIK_ADMIN_APP,
+    TRAEFIK_PUBLIC_APP,
+)
+from integration.utils import (
+    get_app_integration_data,
+    get_integration_data,
+    get_unit_address,
+    juju_model_factory,
+)
 
-from constants import (
+from src.constants import (
     INTERNAL_ROUTE_INTEGRATION_NAME,
     KRATOS_INFO_INTEGRATION_NAME,
     LOGIN_UI_INTEGRATION_NAME,
@@ -24,217 +37,225 @@ from constants import (
     PUBLIC_ROUTE_INTEGRATION_NAME,
 )
 
-METADATA = yaml.safe_load(Path("./charmcraft.yaml").read_text())
-KRATOS_APP = METADATA["name"]
-KRATOS_IMAGE = METADATA["resources"]["oci-image"]["upstream-source"]
-TRAEFIK_CHARM = "traefik-k8s"
-DB_APP = "postgresql-k8s"
-CA_APP = "self-signed-certificates"
-LOGIN_UI_APP = "identity-platform-login-ui-operator"
-TRAEFIK_PUBLIC_APP = "traefik-public"
-TRAEFIK_ADMIN_APP = "traefik-admin"
-PUBLIC_INGRESS_DOMAIN = "public"
-ADMIN_INGRESS_DOMAIN = "admin"
-ADMIN_EMAIL = "admin1@adminmail.com"
-ADMIN_PASSWORD = "admin"
-IDENTITY_SCHEMA = {
-    "$id": "https://schemas.ory.sh/presets/kratos/quickstart/email-password/identity.schema.json",
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "title": "Person",
-    "type": "object",
-    "properties": {
-        "traits": {
-            "type": "object",
-            "properties": {
-                "email": {"type": "string", "format": "email", "title": "E-Mail"},
-                "name": {"type": "string"},
-            },
-        }
-    },
-}
+logger = logging.getLogger(__name__)
 
 
-async def integrate_dependencies(ops_test: OpsTest) -> None:
-    await ops_test.model.integrate(KRATOS_APP, DB_APP)
-    await ops_test.model.integrate(
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Add custom command-line options for model management and deployment control."""
+    parser.addoption(
+        "--keep-models",
+        "--no-teardown",
+        action="store_true",
+        dest="no_teardown",
+        default=False,
+        help="Keep the model after the test is finished.",
+    )
+    parser.addoption(
+        "--model",
+        action="store",
+        dest="model",
+        default=None,
+        help="The model to run the tests on.",
+    )
+    parser.addoption(
+        "--no-deploy",
+        "--no-setup",
+        action="store_true",
+        dest="no_setup",
+        default=False,
+        help="Skip deployment of the charm.",
+    )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Register custom markers."""
+    config.addinivalue_line("markers", "setup: tests that setup some parts of the environment")
+    config.addinivalue_line(
+        "markers", "teardown: tests that teardown some parts of the environment."
+    )
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Modify collected test items based on command-line options."""
+    skip_setup = pytest.mark.skip(reason="no_setup provided")
+    skip_teardown = pytest.mark.skip(reason="no_teardown provided")
+    for item in items:
+        if config.getoption("no_setup") and "setup" in item.keywords:
+            item.add_marker(skip_setup)
+        if config.getoption("no_teardown") and "teardown" in item.keywords:
+            item.add_marker(skip_teardown)
+
+
+@pytest.fixture(scope="module")
+def juju(request: pytest.FixtureRequest) -> Generator[jubilant.Juju, None, None]:
+    """Create a temporary Juju model for integration tests."""
+    model_name = request.config.getoption("--model")
+    if not model_name:
+        model_name = f"test-kratos-{secrets.token_hex(4)}"
+
+    juju_ = juju_model_factory(model_name)
+    juju_.wait_timeout = 10 * 60
+
+    try:
+        yield juju_
+    finally:
+        if request.session.testsfailed:
+            log = juju_.debug_log(limit=1000)
+            print(log, end="")
+
+        no_teardown = bool(request.config.getoption("--no-teardown"))
+        keep_model = no_teardown or request.session.testsfailed > 0
+        if not keep_model:
+            with suppress(jubilant.CLIError):
+                args = [
+                    "destroy-model",
+                    juju_.model,
+                    "--no-prompt",
+                    "--destroy-storage",
+                    "--force",
+                    "--timeout",
+                    "600s",
+                ]
+                juju_.cli(*args, include_model=False)
+
+
+@pytest.fixture(scope="session")
+def local_charm() -> Path:
+    """Get the path to the charm-under-test."""
+    charm: str | Path | None = os.getenv("CHARM_PATH")
+    if not charm:
+        subprocess.run(["charmcraft", "pack"], check=True)
+        if not (charms := list(Path(".").glob("*.charm"))):
+            raise RuntimeError("Charm not found and build failed")
+        charm = charms[0].absolute()
+    return Path(charm)
+
+
+@pytest.fixture
+def http_client() -> Generator[requests.Session, None, None]:
+    with requests.Session() as client:
+        client.verify = False
+        yield client
+
+
+def integrate_dependencies(juju: jubilant.Juju) -> None:
+    juju.integrate(KRATOS_APP, DB_APP)
+    juju.integrate(
         f"{KRATOS_APP}:{LOGIN_UI_INTEGRATION_NAME}", f"{LOGIN_UI_APP}:{LOGIN_UI_INTEGRATION_NAME}"
     )
-    await ops_test.model.integrate(
-        f"{KRATOS_APP}:{INTERNAL_ROUTE_INTEGRATION_NAME}", TRAEFIK_ADMIN_APP
-    )
-    await ops_test.model.integrate(
-        f"{KRATOS_APP}:{PUBLIC_ROUTE_INTEGRATION_NAME}", TRAEFIK_PUBLIC_APP
-    )
-    await ops_test.model.integrate(
+    juju.integrate(f"{KRATOS_APP}:{INTERNAL_ROUTE_INTEGRATION_NAME}", TRAEFIK_ADMIN_APP)
+    juju.integrate(f"{KRATOS_APP}:{PUBLIC_ROUTE_INTEGRATION_NAME}", TRAEFIK_PUBLIC_APP)
+    juju.integrate(
         f"{KRATOS_APP}:{KRATOS_INFO_INTEGRATION_NAME}",
         f"{LOGIN_UI_APP}:{KRATOS_INFO_INTEGRATION_NAME}",
     )
 
 
-async def get_unit_data(ops_test: OpsTest, unit_name: str) -> dict:
-    show_unit_cmd = (f"show-unit {unit_name}").split()
-    _, stdout, _ = await ops_test.juju(*show_unit_cmd)
-    cmd_output = yaml.safe_load(stdout)
-    return cmd_output[unit_name]
+@pytest.fixture
+def app_integration_data(juju: jubilant.Juju) -> Callable:
+    def _get_data(app_name: str, integration_name: str, unit_num: int = 0) -> dict | None:
+        return get_app_integration_data(juju, app_name, integration_name, unit_num)
+
+    return _get_data
 
 
-async def get_integration_data(
-    ops_test: OpsTest, app_name: str, integration_name: str, unit_num: int = 0
-) -> Optional[dict]:
-    data = await get_unit_data(ops_test, f"{app_name}/{unit_num}")
-    return next(
-        (
-            integration
-            for integration in data["relation-info"]
-            if integration["endpoint"] == integration_name
-        ),
-        None,
-    )
+@pytest.fixture
+def leader_peer_integration_data(app_integration_data: Callable) -> dict | None:
+    return app_integration_data(KRATOS_APP, PEER_INTEGRATION_NAME)
 
 
-async def get_app_integration_data(
-    ops_test: OpsTest,
-    app_name: str,
-    integration_name: str,
-    unit_num: int = 0,
-) -> Optional[dict]:
-    data = await get_integration_data(ops_test, app_name, integration_name, unit_num)
-    return data["application-data"] if data else None
-
-
-@pytest_asyncio.fixture
-async def app_integration_data(ops_test: OpsTest) -> Callable:
-    return functools.partial(get_app_integration_data, ops_test)
-
-
-@pytest_asyncio.fixture
-async def leader_peer_integration_data(app_integration_data: Callable) -> Optional[dict]:
-    return await app_integration_data(KRATOS_APP, PEER_INTEGRATION_NAME)
-
-
-@pytest_asyncio.fixture
-async def leader_login_ui_endpoint_integration_data(
+@pytest.fixture
+def leader_login_ui_endpoint_integration_data(
     app_integration_data: Callable,
-) -> Optional[dict]:
-    return await app_integration_data(KRATOS_APP, LOGIN_UI_INTEGRATION_NAME)
+) -> dict | None:
+    return app_integration_data(KRATOS_APP, LOGIN_UI_INTEGRATION_NAME)
 
 
-@pytest_asyncio.fixture
-async def leader_public_route_integration_data(app_integration_data: Callable) -> Optional[dict]:
-    return await app_integration_data(KRATOS_APP, PUBLIC_ROUTE_INTEGRATION_NAME)
+@pytest.fixture
+def leader_public_route_integration_data(app_integration_data: Callable) -> dict | None:
+    return app_integration_data(KRATOS_APP, PUBLIC_ROUTE_INTEGRATION_NAME)
 
 
-@pytest_asyncio.fixture
-async def leader_internal_ingress_integration_data(
+@pytest.fixture
+def leader_internal_ingress_integration_data(
     app_integration_data: Callable,
-) -> Optional[dict]:
-    return await app_integration_data(KRATOS_APP, INTERNAL_ROUTE_INTEGRATION_NAME)
+) -> dict | None:
+    return app_integration_data(KRATOS_APP, INTERNAL_ROUTE_INTEGRATION_NAME)
 
 
-@pytest_asyncio.fixture
-async def leader_kratos_info_integration_data(app_integration_data: Callable) -> Optional[dict]:
-    return await app_integration_data(LOGIN_UI_APP, KRATOS_INFO_INTEGRATION_NAME)
+@pytest.fixture
+def leader_kratos_info_integration_data(app_integration_data: Callable) -> dict | None:
+    return app_integration_data(LOGIN_UI_APP, KRATOS_INFO_INTEGRATION_NAME)
 
 
-async def unit_address(ops_test: OpsTest, *, app_name: str, unit_num: int = 0) -> str:
-    status = await ops_test.model.get_status()
-    return status["applications"][app_name]["units"][f"{app_name}/{unit_num}"]["address"]
+@pytest.fixture
+def public_address(juju: jubilant.Juju) -> str:
+    return get_unit_address(juju, app_name=TRAEFIK_PUBLIC_APP)
 
 
-@pytest_asyncio.fixture
-async def public_address() -> Callable[[OpsTest, int], Awaitable[str]]:
-    return functools.partial(unit_address, app_name=TRAEFIK_PUBLIC_APP)
+@pytest.fixture
+def admin_address(juju: jubilant.Juju) -> str:
+    return get_unit_address(juju, app_name=TRAEFIK_ADMIN_APP)
 
 
-@pytest_asyncio.fixture
-async def admin_address() -> Callable[[OpsTest, int], Awaitable[str]]:
-    return functools.partial(unit_address, app_name=TRAEFIK_ADMIN_APP)
+@pytest.fixture
+def get_webauthn_js(
+    public_address: str,
+    http_client: requests.Session,
+) -> requests.Response:
+    url = f"https://{public_address}/.well-known/webauthn.js"
+    return http_client.get(url)
 
 
-@pytest_asyncio.fixture
-async def http_client() -> AsyncGenerator[httpx.AsyncClient, None]:
-    async with httpx.AsyncClient(verify=False) as client:
-        yield client
+@pytest.fixture
+def get_identity_schemas(
+    public_address: str,
+    http_client: requests.Session,
+) -> Callable[[], requests.Response]:
 
-
-@pytest_asyncio.fixture
-async def get_webauthn_js(
-    ops_test: OpsTest,
-    public_address: Callable,
-    admin_address: Callable,
-    http_client: AsyncClient,
-) -> Response:
-    address = await public_address(ops_test)
-    url = f"https://{address}/.well-known/webauthn.js"
-    return await http_client.get(url)
-
-
-@pytest_asyncio.fixture
-async def get_identity_schemas(
-    ops_test: OpsTest,
-    public_address: Callable,
-    http_client: AsyncClient,
-) -> Callable[[], Awaitable[Response]]:
-    address = await public_address(ops_test)
-
-    async def wrapper() -> Response:
-        url = f"https://{address}/schemas"
-        return await http_client.get(url)
+    def wrapper() -> requests.Response:
+        url = f"https://{public_address}/schemas"
+        return http_client.get(url)
 
     return wrapper
 
 
-@pytest_asyncio.fixture
-async def get_identities(
-    ops_test: OpsTest, admin_address: Callable, http_client: AsyncClient
-) -> Response:
-    address = await admin_address(ops_test)
-    url = f"http://{address}/admin/identities"
-    return await http_client.get(url)
+@pytest.fixture
+def get_identities(admin_address: str, http_client: requests.Session) -> requests.Response:
+    url = f"http://{admin_address}/admin/identities"
+    return http_client.get(url)
 
 
-@pytest_asyncio.fixture
-async def get_whoami(
-    ops_test: OpsTest, admin_address: Callable, http_client: AsyncClient
-) -> Response:
-    address = await admin_address(ops_test)
-    url = f"http://{address}/sessions/whoami"
-    return await http_client.get(url)
+@pytest.fixture
+def get_whoami(admin_address: str, http_client: requests.Session) -> requests.Response:
+    url = f"http://{admin_address}/sessions/whoami"
+    return http_client.get(url)
 
 
-@pytest_asyncio.fixture
-async def password_secret(ops_test: OpsTest) -> Callable[[str, str], Awaitable[str]]:
-    async def _create_secret(label: str, password: str) -> str:
-        secrets = await ops_test.model.list_secrets({"label": label})
-        if not secrets:
-            secret_id = await ops_test.model.add_secret(label, [f"password={password}"])
-        else:
-            secret_id = secrets[0].uri
+@pytest.fixture
+def password_secret(juju: jubilant.Juju) -> Callable[[str, str], str]:
+    def _create_secret(label: str, password: str) -> str:
+        try:
+            secret = juju.show_secret(label)
+            sid = secret.uri.unique_identifier
+        except jubilant.CLIError:
+            secret_uri = juju.add_secret(label, {"password": password})
+            sid = secret_uri.unique_identifier
 
-        await ops_test.model.grant_secret(label, KRATOS_APP)
-        return secret_id
+        juju.grant_secret(sid, KRATOS_APP)
+        return sid
 
     return _create_secret
 
 
-@pytest_asyncio.fixture
-async def admin_password_secret(password_secret: Callable) -> str:
-    return await password_secret("admin-password", ADMIN_PASSWORD)
+@pytest.fixture
+def admin_password_secret(password_secret: Callable) -> str:
+    return password_secret("admin-password", ADMIN_PASSWORD)
 
 
-@pytest_asyncio.fixture
-async def new_admin_password_secret(password_secret: Callable) -> str:
-    return await password_secret("new-admin-password", f"new-{ADMIN_PASSWORD}")
-
-
-@pytest_asyncio.fixture(scope="module")
-async def local_charm(ops_test: OpsTest) -> str | Path:
-    # in GitHub CI, charms are built with charmcraftcache and uploaded to $CHARM_PATH
-    charm = os.getenv("CHARM_PATH")
-    if not charm:
-        # fall back to build locally - required when run outside of GitHub CI
-        charm = await ops_test.build_charm(".")
-    return charm
+@pytest.fixture
+def new_admin_password_secret(password_secret: Callable) -> str:
+    return password_secret("new-admin-password", f"new-{ADMIN_PASSWORD}")
 
 
 @pytest.fixture(scope="session")
@@ -244,23 +265,6 @@ def kratos_version() -> str:
 
 
 @pytest.fixture
-def migration_key(ops_test: OpsTest) -> str:
-    db_integration = next(
-        (
-            integration
-            for integration in ops_test.model.relations
-            if integration.matches(f"{KRATOS_APP}:pg-database", f"{DB_APP}:database")
-        ),
-        None,
-    )
-    return f"migration_version_{db_integration.entity_id}" if db_integration else ""
-
-
-@pytest.fixture
-def kratos_application(ops_test: OpsTest) -> Application:
-    return ops_test.model.applications[KRATOS_APP]
-
-
-@pytest.fixture
-def kratos_unit(kratos_application: Application) -> Unit:
-    return kratos_application.units[0]
+def migration_key(juju: jubilant.Juju) -> str:
+    data = get_integration_data(juju, KRATOS_APP, "pg-database")
+    return f"migration_version_{data['relation-id']}" if data else ""
