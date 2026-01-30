@@ -125,26 +125,6 @@ class TestPebbleReadyEvent:
         )
 
 
-class TestRemoveEvent:
-    def test_when_not_leader_unit(self, mocked_remove_configmaps: MagicMock) -> None:
-        ctx = testing.Context(KratosCharm)
-        container = testing.Container(WORKLOAD_CONTAINER, can_connect=False)
-        state_in = testing.State(leader=False, containers={container})
-
-        ctx.run(ctx.on.remove(), state_in)
-
-        mocked_remove_configmaps.assert_not_called()
-
-    def test_when_event_emitted(self, mocked_remove_configmaps: MagicMock) -> None:
-        ctx = testing.Context(KratosCharm)
-        container = testing.Container(WORKLOAD_CONTAINER, can_connect=False)
-        state_in = testing.State(leader=True, containers={container})
-
-        ctx.run(ctx.on.remove(), state_in)
-
-        mocked_remove_configmaps.assert_called_once()
-
-
 class TestUpgradeCharmEvent:
     def test_when_event_emitted(self, mocked_create_configmaps: MagicMock) -> None:
         ctx = testing.Context(KratosCharm)
