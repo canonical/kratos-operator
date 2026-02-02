@@ -72,7 +72,7 @@ jobs:
       JIMM_URL: ${{ secrets.JIMM_URL }}
       MODEL_UUID: ${{ secrets.DEV_MODEL_UUID }}
     with:
-      model: dev-iam
+      model: blue-iam
       revision: ${{ needs.revision.outputs.revision }}
       channel: ${{ github.event.inputs.destination-channel }}
       application: kratos
@@ -92,7 +92,7 @@ jobs:
       JIMM_URL: ${{ secrets.JIMM_URL }}
       MODEL_UUID: ${{ secrets.STG_MODEL_UUID }}
     with:
-      model: stg-iam
+      model: green-iam
       revision: ${{ needs.revision.outputs.revision }}
       channel: ${{ github.event.inputs.destination-channel }}
       application: kratos
