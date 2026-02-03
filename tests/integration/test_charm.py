@@ -6,10 +6,13 @@ import http
 import json
 import logging
 from pathlib import Path
-from typing import Awaitable, Callable, Optional
+from typing import Callable, Optional
 
+import jubilant
 import pytest
-from conftest import (
+import requests
+from integration.conftest import integrate_dependencies
+from integration.constants import (
     ADMIN_EMAIL,
     ADMIN_INGRESS_DOMAIN,
     CA_APP,
@@ -22,77 +25,94 @@ from conftest import (
     TRAEFIK_ADMIN_APP,
     TRAEFIK_CHARM,
     TRAEFIK_PUBLIC_APP,
-    integrate_dependencies,
 )
-from httpx import Response
-from juju.application import Application
-from juju.unit import Unit
-from pytest_operator.plugin import OpsTest
+from integration.utils import (
+    StatusPredicate,
+    all_active,
+    and_,
+    any_error,
+    is_blocked,
+    remove_integration,
+    unit_number,
+)
 
-from constants import PEER_INTEGRATION_NAME
+from src.constants import (
+    DATABASE_INTEGRATION_NAME,
+    LOGIN_UI_INTEGRATION_NAME,
+    PEER_INTEGRATION_NAME,
+    PUBLIC_ROUTE_INTEGRATION_NAME,
+)
 
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.skip_if_deployed
-@pytest.mark.abort_on_fail
-async def test_build_and_deploy(ops_test: OpsTest, local_charm: str | Path) -> None:
-    await ops_test.model.deploy(
-        entity_url=str(local_charm),
+@pytest.mark.setup
+def test_build_and_deploy(juju: jubilant.Juju, local_charm: Path) -> None:
+    juju.deploy(
+        str(local_charm),
         resources={"oci-image": KRATOS_IMAGE},
-        application_name=KRATOS_APP,
+        app=KRATOS_APP,
         trust=True,
-        series="jammy",
     )
 
-    await ops_test.model.deploy(
+    juju.deploy(
         DB_APP,
         channel="14/stable",
         trust=True,
         config={"plugin_pg_trgm_enable": "True", "plugin_btree_gin_enable": "True"},
     )
 
-    await ops_test.model.deploy(
+    juju.deploy(
         CA_APP,
         channel="1/stable",
         trust=True,
     )
 
-    await ops_test.model.deploy(
+    juju.deploy(
         TRAEFIK_CHARM,
-        application_name=TRAEFIK_PUBLIC_APP,
+        app=TRAEFIK_PUBLIC_APP,
         channel="latest/edge",
         config={"external_hostname": PUBLIC_INGRESS_DOMAIN},
         trust=True,
     )
-    await ops_test.model.deploy(
+    juju.deploy(
         TRAEFIK_CHARM,
-        application_name=TRAEFIK_ADMIN_APP,
+        app=TRAEFIK_ADMIN_APP,
         channel="latest/edge",
         config={"external_hostname": ADMIN_INGRESS_DOMAIN},
         trust=True,
     )
-    await ops_test.model.deploy(
+    juju.deploy(
         LOGIN_UI_APP,
         channel="latest/edge",
         trust=True,
     )
-    await ops_test.model.integrate(TRAEFIK_PUBLIC_APP, f"{LOGIN_UI_APP}:public-route")
-    await ops_test.model.integrate(f"{TRAEFIK_PUBLIC_APP}:certificates", f"{CA_APP}:certificates")
+    juju.integrate(TRAEFIK_PUBLIC_APP, f"{LOGIN_UI_APP}:public-route")
+    juju.integrate(f"{TRAEFIK_PUBLIC_APP}:certificates", f"{CA_APP}:certificates")
 
     # Integrate with dependencies
-    await integrate_dependencies(ops_test)
+    integrate_dependencies(juju)
 
-    await ops_test.model.wait_for_idle(
-        apps=[KRATOS_APP, DB_APP, TRAEFIK_PUBLIC_APP, TRAEFIK_ADMIN_APP, LOGIN_UI_APP],
-        status="active",
-        raise_on_blocked=False,
-        raise_on_error=False,
-        timeout=5 * 60,
+    juju.wait(
+        ready=all_active(
+            KRATOS_APP,
+            DB_APP,
+            TRAEFIK_PUBLIC_APP,
+            TRAEFIK_ADMIN_APP,
+            LOGIN_UI_APP,
+        ),
+        error=any_error(
+            KRATOS_APP,
+            DB_APP,
+            TRAEFIK_PUBLIC_APP,
+            TRAEFIK_ADMIN_APP,
+            LOGIN_UI_APP,
+        ),
+        timeout=15 * 60,
     )
 
 
-async def test_peer_integration(
+def test_peer_integration(
     leader_peer_integration_data: Optional[dict],
     kratos_version: str,
     migration_key: str,
@@ -101,24 +121,23 @@ async def test_peer_integration(
     assert json.loads(leader_peer_integration_data[migration_key]) == kratos_version
 
 
-async def test_login_ui_endpoint_integration(
+def test_login_ui_endpoint_integration(
     leader_login_ui_endpoint_integration_data: Optional[dict],
 ) -> None:
     assert leader_login_ui_endpoint_integration_data
     assert all(leader_login_ui_endpoint_integration_data.values())
 
 
-async def test_kratos_info_integration(
+def test_kratos_info_integration(
     leader_kratos_info_integration_data: Optional[dict],
 ) -> None:
     assert leader_kratos_info_integration_data
     assert all(leader_kratos_info_integration_data.values())
 
 
-async def test_public_route_integration(
-    ops_test: OpsTest,
+def test_public_route_integration(
     leader_public_route_integration_data: Optional[dict],
-    get_webauthn_js: Response,
+    get_webauthn_js: requests.Response,
 ) -> None:
     assert leader_public_route_integration_data
     assert leader_public_route_integration_data["external_host"] == PUBLIC_INGRESS_DOMAIN
@@ -127,31 +146,50 @@ async def test_public_route_integration(
     assert get_webauthn_js.status_code == http.HTTPStatus.OK
 
 
-async def test_internal_ingress_integration(
+def test_internal_ingress_integration(
     leader_internal_ingress_integration_data: Optional[dict],
-    get_identities: Response,
-    get_whoami: Response,
+    get_identities: requests.Response,
+    get_whoami: requests.Response,
 ) -> None:
     assert leader_internal_ingress_integration_data
     assert leader_internal_ingress_integration_data["external_host"] == ADMIN_INGRESS_DOMAIN
     assert leader_internal_ingress_integration_data["scheme"] == "http"
 
-    # examine the admin endpoint
     assert get_identities.status_code == http.HTTPStatus.OK
 
-    # examine the public endpoint
     assert get_whoami.status_code == http.HTTPStatus.UNAUTHORIZED
 
 
-@pytest.mark.abort_on_fail
-async def test_create_admin_account_action(
-    kratos_unit: Unit,
-    admin_password_secret: str,
-    request: pytest.FixtureRequest,
+def test_kratos_scale_up(
+    juju: jubilant.Juju,
+    leader_peer_integration_data: Optional[dict],
+    app_integration_data: Callable,
 ) -> None:
-    action = await kratos_unit.run_action(
+    target_unit_number = 2
+    juju.cli("scale-application", KRATOS_APP, str(target_unit_number))
+
+    juju.wait(
+        ready=and_(
+            all_active(KRATOS_APP),
+            unit_number(KRATOS_APP, target_unit_number),
+        ),
+        error=any_error(KRATOS_APP),
+        timeout=5 * 60,
+    )
+
+    follower_peer_data = app_integration_data(KRATOS_APP, PEER_INTEGRATION_NAME, 1)
+    assert follower_peer_data
+    assert leader_peer_integration_data == follower_peer_data
+
+
+def test_create_admin_account_action(
+    juju: jubilant.Juju,
+    admin_password_secret: str,
+) -> None:
+    res = juju.run(
+        f"{KRATOS_APP}/0",
         "create-admin-account",
-        **{
+        params={
             "username": "admin",
             "email": ADMIN_EMAIL,
             "name": "Admin Admin",
@@ -159,222 +197,232 @@ async def test_create_admin_account_action(
             "password-secret-id": admin_password_secret,
         },
     )
-    res = (await action.wait()).results
 
-    assert res["identity-id"]
-
-    request.config.cache.set("identity-id", res["identity-id"])
+    assert res.results["identity-id"]
 
 
-async def test_get_identity_action_by_email(kratos_unit: Unit) -> None:
-    action = await kratos_unit.run_action(
-        "get-identity",
-        email=ADMIN_EMAIL,
-    )
-
-    res = (await action.wait()).results
-
-    assert res["id"]
-
-
-async def test_get_identity_action_by_id(
-    kratos_unit: Unit, request: pytest.FixtureRequest
+def test_get_identity_action_by_email(
+    juju: jubilant.Juju,
+    request: pytest.FixtureRequest,
 ) -> None:
-    action = await kratos_unit.run_action(
+    res = juju.run(
+        f"{KRATOS_APP}/0",
         "get-identity",
-        **{"identity-id": request.config.cache.get("identity-id", "")},
+        params={"email": ADMIN_EMAIL},
     )
 
-    res = (await action.wait()).results
+    assert res.results["id"]
+    request.config.cache.set("identity-id", res.results["id"])
 
-    assert res["traits"]["email"] == ADMIN_EMAIL
+
+def test_get_identity_action_by_id(juju: jubilant.Juju, request: pytest.FixtureRequest) -> None:
+    res = juju.run(
+        f"{KRATOS_APP}/0",
+        "get-identity",
+        params={"identity-id": request.config.cache.get("identity-id", "")},
+    )
+
+    assert res.results["traits"]["email"] == ADMIN_EMAIL
 
 
-async def test_reset_password_action(
-    kratos_unit: Unit,
+def test_reset_password_action(
+    juju: jubilant.Juju,
     new_admin_password_secret: str,
     request: pytest.FixtureRequest,
 ) -> None:
     identity_id = request.config.cache.get("identity-id", "")
 
-    action = await kratos_unit.run_action(
+    res = juju.run(
+        f"{KRATOS_APP}/0",
         "reset-password",
-        **{
+        params={
             "identity-id": identity_id,
             "password-secret-id": new_admin_password_secret,
         },
     )
 
-    res = (await action.wait()).results
-
-    assert res["id"] == identity_id
+    assert res.results["id"] == identity_id
 
 
-async def test_reset_password_action_with_recovery_code(
-    kratos_unit: Unit, request: pytest.FixtureRequest
+def test_reset_password_action_with_recovery_code(
+    juju: jubilant.Juju, request: pytest.FixtureRequest
 ) -> None:
     identity_id = request.config.cache.get("identity-id", "")
 
-    action = await kratos_unit.run_action("reset-password", **{"identity-id": identity_id})
+    res = juju.run(f"{KRATOS_APP}/0", "reset-password", params={"identity-id": identity_id})
 
-    res = (await action.wait()).results
-
-    assert res["recovery-link"]
-    assert res["recovery-code"]
+    assert res.results["recovery-link"]
+    assert res.results["recovery-code"]
 
 
-async def test_list_oidc_accounts(kratos_unit: Unit, request: pytest.FixtureRequest) -> None:
+def test_list_oidc_accounts(juju: jubilant.Juju, request: pytest.FixtureRequest) -> None:
     identity_id = request.config.cache.get("identity-id", "")
 
-    action = await kratos_unit.run_action("list-oidc-accounts", **{"identity-id": identity_id})
-
-    res = await action.wait()
+    res = juju.run(f"{KRATOS_APP}/0", "list-oidc-accounts", params={"identity-id": identity_id})
 
     assert res.status == "completed"
 
 
-async def test_reset_identity_mfa_action(
-    kratos_unit: Unit, request: pytest.FixtureRequest
-) -> None:
+def test_reset_identity_mfa_action(juju: jubilant.Juju, request: pytest.FixtureRequest) -> None:
     identity_id = request.config.cache.get("identity-id", "")
 
-    action = await kratos_unit.run_action(
+    res = juju.run(
+        f"{KRATOS_APP}/0",
         "reset-identity-mfa",
-        **{
+        params={
             "identity-id": identity_id,
             "mfa-type": "webauthn",
         },
     )
 
-    res = await action.wait()
-
     assert res.status == "completed"
 
 
-async def test_unlink_oidc_account(kratos_unit: Unit, request: pytest.FixtureRequest) -> None:
+def test_unlink_oidc_account(juju: jubilant.Juju, request: pytest.FixtureRequest) -> None:
     identity_id = request.config.cache.get("identity-id", "")
 
-    action = await kratos_unit.run_action(
+    res = juju.run(
+        f"{KRATOS_APP}/0",
         "unlink-oidc-account",
-        **{
+        params={
             "identity-id": identity_id,
             "credential-id": "credential-id",
         },
     )
 
-    res = await action.wait()
-
     assert res.status == "completed"
 
 
-async def test_invalidate_identity_sessions_action(
-    kratos_unit: Unit, request: pytest.FixtureRequest
+def test_invalidate_identity_sessions_action(
+    juju: jubilant.Juju, request: pytest.FixtureRequest
 ) -> None:
     identity_id = request.config.cache.get("identity-id", "")
 
-    action = await kratos_unit.run_action(
+    res = juju.run(
+        f"{KRATOS_APP}/0",
         "invalidate-identity-sessions",
-        **{"identity-id": identity_id},
+        params={"identity-id": identity_id},
     )
-
-    res = await action.wait()
 
     assert res.status == "completed"
 
 
-async def test_delete_identity_action(kratos_unit: Unit, request: pytest.FixtureRequest) -> None:
+def test_delete_identity_action(juju: jubilant.Juju, request: pytest.FixtureRequest) -> None:
     identity_id = request.config.cache.get("identity-id", "")
 
-    action = await kratos_unit.run_action(
+    res = juju.run(
+        f"{KRATOS_APP}/0",
         "delete-identity",
-        **{"identity-id": identity_id},
+        params={"identity-id": identity_id},
     )
 
-    res = await action.wait()
     assert res.status == "completed"
 
-    action = await kratos_unit.run_action(
-        "get-identity",
-        **{"identity-id": identity_id},
-    )
+    # Verify deletion
+    with pytest.raises(jubilant.TaskError, match="Identity not found"):
+        juju.run(
+            f"{KRATOS_APP}/0",
+            "get-identity",
+            params={"identity-id": identity_id},
+        )
 
-    res = await action.wait()
-    assert res.message == "Identity not found"
 
-
-async def test_identity_schemas_config(
-    ops_test: OpsTest,
-    get_identity_schemas: Callable[[], Awaitable[Response]],
-    kratos_application: Application,
+def test_identity_schemas_config(
+    juju: jubilant.Juju,
+    get_identity_schemas: Callable[[], requests.Response],
 ) -> None:
-    original_schemas = (await get_identity_schemas()).json()
+    original_schemas = get_identity_schemas().json()
 
     schema_id = "user_v1"
-    await kratos_application.set_config({
-        "identity_schemas": json.dumps({schema_id: IDENTITY_SCHEMA}),
-        "default_identity_schema_id": schema_id,
-    })
-    await ops_test.model.wait_for_idle(
-        apps=[KRATOS_APP],
-        status="active",
-        raise_on_blocked=True,
+    juju.config(
+        KRATOS_APP,
+        {
+            "identity_schemas": json.dumps({schema_id: IDENTITY_SCHEMA}),
+            "default_identity_schema_id": schema_id,
+        },
+    )
+
+    juju.wait(
+        ready=and_(
+            all_active(KRATOS_APP),
+        ),
+        error=any_error(KRATOS_APP),
         timeout=5 * 60,
     )
 
-    identity_schemas = (await get_identity_schemas()).json()
+    identity_schemas = get_identity_schemas().json()
     assert len(identity_schemas) == 1
     assert identity_schemas[0]["id"] == schema_id
 
-    await kratos_application.set_config({
-        "identity_schemas": "",
-        "default_identity_schema_id": "",
-    })
+    # Reset config
+    juju.config(
+        KRATOS_APP,
+        {
+            "identity_schemas": "",
+            "default_identity_schema_id": "",
+        },
+    )
 
-    await ops_test.model.wait_for_idle(
-        apps=[KRATOS_APP],
-        status="active",
-        raise_on_blocked=True,
+    juju.wait(
+        ready=and_(
+            all_active(KRATOS_APP),
+        ),
+        error=any_error(KRATOS_APP),
         timeout=5 * 60,
     )
 
-    identity_schemas = (await get_identity_schemas()).json()
+    identity_schemas = get_identity_schemas().json()
 
     assert all(schema in original_schemas for schema in identity_schemas)
     assert len(identity_schemas) == len(original_schemas)
 
 
-async def test_kratos_scale_up(
-    ops_test: OpsTest,
-    kratos_application: Application,
-    leader_peer_integration_data: Optional[dict],
-    app_integration_data: Callable,
+@pytest.mark.parametrize(
+    "remote_app_name,integration_name,is_status",
+    [
+        (DB_APP, DATABASE_INTEGRATION_NAME, is_blocked),
+        (TRAEFIK_PUBLIC_APP, PUBLIC_ROUTE_INTEGRATION_NAME, all_active),
+        (LOGIN_UI_APP, LOGIN_UI_INTEGRATION_NAME, all_active),
+    ],
+)
+def test_remove_integration(
+    juju: jubilant.Juju,
+    remote_app_name: str,
+    integration_name: str,
+    is_status: Callable[[str], StatusPredicate],
 ) -> None:
-    target_unit_number = 2
-    await kratos_application.scale(target_unit_number)
-
-    await ops_test.model.wait_for_idle(
-        apps=[KRATOS_APP],
-        status="active",
-        raise_on_blocked=False,
-        timeout=5 * 60,
-        wait_for_exact_units=target_unit_number,
+    """Test removing and re-adding integration."""
+    with remove_integration(juju, remote_app_name, integration_name):
+        juju.wait(
+            ready=is_status(KRATOS_APP),
+            error=any_error(KRATOS_APP),
+            timeout=10 * 60,
+        )
+    juju.wait(
+        ready=all_active(KRATOS_APP, remote_app_name),
+        error=any_error(KRATOS_APP, remote_app_name),
+        timeout=10 * 60,
     )
 
-    follower_peer_data = await app_integration_data(KRATOS_APP, PEER_INTEGRATION_NAME, 1)
-    assert follower_peer_data
-    assert leader_peer_integration_data == follower_peer_data
 
-
-async def test_kratos_scale_down(
-    ops_test: OpsTest,
-    kratos_application: Application,
+def test_kratos_scale_down(
+    juju: jubilant.Juju,
 ) -> None:
     target_unit_num = 1
-    await kratos_application.scale(target_unit_num)
+    juju.cli("scale-application", KRATOS_APP, str(target_unit_num))
 
-    await ops_test.model.wait_for_idle(
-        apps=[KRATOS_APP],
-        status="active",
+    juju.wait(
+        ready=and_(
+            all_active(KRATOS_APP),
+            unit_number(KRATOS_APP, target_unit_num),
+        ),
+        error=any_error(KRATOS_APP),
         timeout=5 * 60,
-        wait_for_exact_units=target_unit_num,
     )
+
+
+@pytest.mark.teardown
+def test_remove_application(juju: jubilant.Juju) -> None:
+    """Test removing the application."""
+    juju.remove_application(KRATOS_APP, destroy_storage=True)
+    juju.wait(lambda s: KRATOS_APP not in s.apps, timeout=1000)
