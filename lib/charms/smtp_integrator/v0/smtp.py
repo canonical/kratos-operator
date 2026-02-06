@@ -68,25 +68,51 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 15
+LIBPATCH = 21
 
-PYDEPS = ["pydantic>=2"]
+PYDEPS = ["pydantic>=1.10,<3", "email-validator>=2"]
 
 # pylint: disable=wrong-import-position
 import itertools
+import json
 import logging
 import typing
 from ast import literal_eval
 from enum import Enum
-from typing import Dict, Optional
+from typing import Any, Callable, Dict, List, Optional, TypeVar, cast
 
 import ops
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, EmailStr, Field, ValidationError
 
 logger = logging.getLogger(__name__)
 
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+try:
+    # Pydantic v2
+    from pydantic import field_validator as _pyd_field_validator
+
+    _PYDANTIC_V2 = True
+except ImportError:
+    _pyd_field_validator = None  # type: ignore[assignment]
+    _PYDANTIC_V2 = False
+
+# Pydantic v1 field validation decorator (v2 uses field_validator)
+from pydantic import validator as _pyd_validator  # type: ignore[attr-defined]
+
 DEFAULT_RELATION_NAME = "smtp"
 LEGACY_RELATION_NAME = "smtp-legacy"
+
+
+def recipients_validator() -> Callable[[_F], _F]:
+    """Return the correct recipients validator decorator for pydantic v1/v2.
+
+    Returns:
+        A decorator to validate/normalize the recipients field before EmailStr validation.
+    """
+    if _PYDANTIC_V2:
+        return cast(Any, _pyd_field_validator)("recipients", mode="before")
+    return cast(Any, _pyd_validator)("recipients", pre=True)
 
 
 class SmtpError(Exception):
@@ -138,6 +164,8 @@ class SmtpRelationData(BaseModel):
         transport_security: The security protocol to use for the outgoing SMTP relay.
         domain: The domain used by the emails sent from SMTP relay.
         skip_ssl_verify: Specifies if certificate trust verification is skipped in the SMTP relay.
+        smtp_sender: Optional sender email address for outgoing notifications.
+        recipients: List of recipient email addresses for notifications.
     """
 
     host: str = Field(..., min_length=1)
@@ -149,6 +177,14 @@ class SmtpRelationData(BaseModel):
     transport_security: TransportSecurity
     domain: Optional[str] = None
     skip_ssl_verify: Optional[bool] = False
+    smtp_sender: Optional[EmailStr] = None
+    recipients: List[EmailStr] = Field(default_factory=list)
+
+    @recipients_validator()
+    @classmethod
+    def _recipients_str_to_list(cls, value: Any) -> Any:
+        """Convert recipients input to list[str] before EmailStr validation."""
+        return parse_recipients(value)
 
     def to_relation_data(self) -> Dict[str, str]:
         """Convert an instance of SmtpRelationData to the relation representation.
@@ -170,7 +206,18 @@ class SmtpRelationData(BaseModel):
         if self.password:
             result["password"] = self.password
         if self.password_id:
+            if "password" in result:
+                logger.warning("password field exists along with password_id field, removing.")
+                del result["password"]
             result["password_id"] = self.password_id
+
+        if self.smtp_sender:
+            result["smtp_sender"] = str(self.smtp_sender)
+
+        if self.recipients:
+            recipients = list(self.recipients)
+            result["recipients"] = json.dumps([str(r) for r in recipients])
+
         return result
 
 
@@ -187,6 +234,8 @@ class SmtpDataAvailableEvent(ops.RelationEvent):
         transport_security: The security protocol to use for the outgoing SMTP relay.
         domain: The domain used by the emails sent from SMTP relay.
         skip_ssl_verify: Specifies if certificate trust verification is skipped in the SMTP relay.
+        smtp_sender: Optional sender email address for outgoing notifications.
+        recipients: List of recipient email addresses for notifications.
     """
 
     @property
@@ -245,6 +294,27 @@ class SmtpDataAvailableEvent(ops.RelationEvent):
             typing.cast(str, self.relation.data[self.relation.app].get("skip_ssl_verify"))
         )
 
+    @property
+    def smtp_sender(self) -> Optional[str]:
+        """Fetch the SMTP sender from the relation.
+
+        Returns:
+            smtp_sender: Optional sender email address for outgoing notifications.
+        """
+        assert self.relation.app
+        return self.relation.data[self.relation.app].get("smtp_sender")
+
+    @property
+    def recipients(self) -> List[str]:
+        """Fetch the SMTP recipients from the relation.
+
+        Returns:
+            recipients: list of recipient email addresses for notifications.
+        """
+        assert self.relation.app
+        raw = self.relation.data[self.relation.app].get("recipients")
+        return parse_recipients(raw)
+
 
 class SmtpRequiresEvents(ops.CharmEvents):
     """SMTP events.
@@ -278,6 +348,7 @@ class SmtpRequires(ops.Object):
         self.charm = charm
         self.relation_name = relation_name
         self.framework.observe(charm.on[relation_name].relation_changed, self._on_relation_changed)
+        self.framework.observe(charm.on.secret_changed, self._on_secret_changed)
 
     def get_relation_data(self) -> Optional[SmtpRelationData]:
         """Retrieve the relation data.
@@ -286,9 +357,9 @@ class SmtpRequires(ops.Object):
             SmtpRelationData: the relation data.
         """
         relation = self.model.get_relation(self.relation_name)
-        return self._get_relation_data_from_relation(relation) if relation else None
+        return self.get_relation_data_from_relation(relation) if relation else None
 
-    def _get_relation_data_from_relation(
+    def get_relation_data_from_relation(
         self, relation: ops.Relation
     ) -> Optional[SmtpRelationData]:
         """Retrieve the relation data.
@@ -298,36 +369,32 @@ class SmtpRequires(ops.Object):
 
         Returns:
             SmtpRelationData: the relation data.
+
+        Raises:
+            SecretError: if the secret can't be read.
         """
         assert relation.app
-        relation_data = relation.data[relation.app]
-        if not relation_data:
+        raw_relation_data = relation.data[relation.app]
+        if not raw_relation_data:
             return None
 
-        password = relation_data.get("password")
-        if password is None and relation_data.get("password_id"):
+        data: Dict[str, Any] = dict(raw_relation_data)
+
+        password = data.get("password")
+        if password is None and data.get("password_id"):
             try:
                 password = (
-                    self.model.get_secret(id=relation_data.get("password_id"))
-                    .get_content()
+                    self.model.get_secret(id=data["password_id"])
+                    .get_content(refresh=True)
                     .get("password")
                 )
             except ops.model.ModelError as exc:
-                raise SecretError(
-                    f"Could not consume secret {relation_data.get('password_id')}"
-                ) from exc
+                raise SecretError(f"Could not consume secret {data.get('password_id')}") from exc
 
-        return SmtpRelationData(
-            host=typing.cast(str, relation_data.get("host")),
-            port=typing.cast(int, relation_data.get("port")),
-            user=relation_data.get("user"),
-            password=password,
-            password_id=relation_data.get("password_id"),
-            auth_type=AuthType(relation_data.get("auth_type")),
-            transport_security=TransportSecurity(relation_data.get("transport_security")),
-            domain=relation_data.get("domain"),
-            skip_ssl_verify=typing.cast(bool, relation_data.get("skip_ssl_verify")),
-        )
+        # normalize recipients
+        data["recipients"] = parse_recipients(data.get("recipients"))
+
+        return SmtpRelationData(**{**data, "password": password})
 
     def _is_relation_data_valid(self, relation: ops.Relation) -> bool:
         """Validate the relation data.
@@ -339,7 +406,7 @@ class SmtpRequires(ops.Object):
             true: if the relation data is valid.
         """
         try:
-            _ = self._get_relation_data_from_relation(relation)
+            _ = self.get_relation_data_from_relation(relation)
             return True
         except ValidationError as ex:
             error_fields = set(
@@ -350,7 +417,7 @@ class SmtpRequires(ops.Object):
             return False
 
     def _on_relation_changed(self, event: ops.RelationChangedEvent) -> None:
-        """Event emitted when the relation has changed.
+        """Handle the relation changed event.
 
         Args:
             event: event triggering this handler.
@@ -364,6 +431,43 @@ class SmtpRequires(ops.Object):
                 logger.warning('Insecure setting: transport_security has value "none"')
             if self._is_relation_data_valid(event.relation):
                 self.on.smtp_data_available.emit(event.relation, app=event.app, unit=event.unit)
+
+    @staticmethod
+    def _secret_uri_equal(left: str, right: str) -> bool:
+        """Check if two juju secret URIs are equal."""
+        left_without_protocol = left.removeprefix("secret://")
+        left_without_protocol = left_without_protocol.removeprefix("secret:")
+        right_without_protocol = right.removeprefix("secret://")
+        right_without_protocol = right_without_protocol.removeprefix("secret:")
+        # If they are both fully qualified secret URLs, compare them directly
+        if "/" in left_without_protocol and "/" in right_without_protocol:
+            return left_without_protocol == right_without_protocol
+        # Otherwise, compare only the secret ID part and ignore the potential model UUID
+        left_id = left_without_protocol.split("/")[-1]
+        right_id = right_without_protocol.split("/")[-1]
+        return left_id == right_id
+
+    def _on_secret_changed(self, event: ops.SecretChangedEvent) -> None:
+        """Handle the relation secret event."""
+        changed_secret_uri = event.secret.id
+        if changed_secret_uri is None:
+            return
+        for relation in self.charm.model.relations[self.relation_name]:
+            if relation.app is None:
+                continue
+            relation_data = relation.data[relation.app]
+            password_id = relation_data.get("password_id")
+            if not password_id:
+                continue
+            try:
+                secret = self.model.get_secret(id=password_id)
+            except ops.ModelError:
+                continue
+            secret_uri = secret.id
+            if secret_uri is None:
+                continue
+            if self._secret_uri_equal(changed_secret_uri, secret_uri):
+                self.on.smtp_data_available.emit(relation, app=relation.app, unit=None)
 
 
 class SmtpProvides(ops.Object):
@@ -387,9 +491,68 @@ class SmtpProvides(ops.Object):
             relation: the relation for which to update the data.
             smtp_data: a SmtpRelationData instance wrapping the data to be updated.
         """
-        relation_data = smtp_data.to_relation_data()
-        if relation_data["auth_type"] == AuthType.NONE.value:
+        new_data = smtp_data.to_relation_data()
+        if new_data["auth_type"] == AuthType.NONE.value:
             logger.warning('Insecure setting: auth_type has a value "none"')
-        if relation_data["transport_security"] == TransportSecurity.NONE.value:
+        if new_data["transport_security"] == TransportSecurity.NONE.value:
             logger.warning('Insecure setting: transport_security has value "none"')
-        relation.data[self.charm.model.app].update(relation_data)
+        relation_data = relation.data[self.charm.model.app]
+        if dict(relation_data) != dict(new_data):
+            logger.info("update data in relation id:%s", relation.id)
+            relation_data.clear()
+            relation_data.update(new_data)
+
+
+def parse_recipients(raw: Any) -> list[str]:
+    """Normalize SMTP recipient input into a list of email strings.
+
+    The function produces a normalized list[str] so that downstream validation (EmailStr)
+    can be applied consistently.
+
+    Args:
+        raw: Recipient input as received from relation data, charm config,
+            May be None, str, or list.
+
+    Accepted input forms:
+        - None or empty string
+        - list of stripped string values
+        - JSON list string
+        - Comma-separated string
+        - Single address string
+
+    Returns:
+        A list of recipient strings. The email correctness is validated later by EmailStr.
+
+    Raises:
+        TypeError: If raw is not None, str or list.
+        ValueError: If a JSON-encoded value does not decode to a list.
+    """
+    if raw is None:
+        return []
+
+    if isinstance(raw, list):
+        return [str(x).strip() for x in raw if str(x).strip()]
+
+    if not isinstance(raw, str):
+        raise TypeError("recipients must be a string, list, or None")
+
+    s = raw.strip()
+    if not s:
+        return []
+
+    # JSON list string
+    if s.startswith("["):
+        loaded = json.loads(s)
+        if not isinstance(loaded, list):
+            raise ValueError("recipients JSON must decode to a list")
+        return [str(x).strip() for x in loaded if str(x).strip()]
+
+    # JSON without a bracelet: '"a@x.com", "b@y.com"'
+    if '"' in s and "," in s:
+        loaded = json.loads(f"[{s}]")
+        if not isinstance(loaded, list):
+            raise ValueError("recipients must decode to a list")
+        return [str(x).strip() for x in loaded if str(x).strip()]
+
+    # comma-separated or single
+    return [p.strip() for p in s.split(",") if p.strip()]
