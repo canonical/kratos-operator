@@ -1,6 +1,6 @@
 bcrypt==5.0.0
 cosl==1.4.0
-ops==3.5.1
+ops==3.5.2
 dacite
 Jinja2==3.1.6
 jsonschema==4.26.0
