@@ -8,7 +8,7 @@ description: |
 summary: |
   Identity and user management system
 links:
-  documentation: https://discourse.charmhub.io/t/kratos-docs-index/12136
+  documentation: https://canonical-identity.readthedocs-hosted.com/reference/charms/kratos
   source: https://github.com/canonical/kratos-operator
   issues: https://github.com/canonical/kratos-operator/issues
 containers:
