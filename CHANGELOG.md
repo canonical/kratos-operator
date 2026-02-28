@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.1.2](https://github.com/canonical/kratos-operator/compare/v2.1.1...v2.1.2) (2026-02-28)
+
+
+### Bug Fixes
+
+* manage ConfigMaps deletion via OwnerReference to StatefulSet ([8ba1858](https://github.com/canonical/kratos-operator/commit/8ba1858a5c93ba38b0ab3f1060dd92a6fcbacfcd))
+* manage ConfigMaps deletion via OwnerReference to StatefulSet ([#597](https://github.com/canonical/kratos-operator/issues/597)) ([729b9fb](https://github.com/canonical/kratos-operator/commit/729b9fb8ee45ba97e39824c9e7b4adbfe0cd9dea))
+* update charm dependent libs ([7b9f378](https://github.com/canonical/kratos-operator/commit/7b9f378755e6df5998cf80bb7b71226721600d76))
+* update charm dependent libs ([00064fc](https://github.com/canonical/kratos-operator/commit/00064fc2462542ca76201ac71c9f3985acd26bce))
+
 ## [2.1.1](https://github.com/canonical/kratos-operator/compare/v2.1.0...v2.1.1) (2026-01-16)
 
 
