@@ -11,6 +11,10 @@ WORKLOAD_CONTAINER = "kratos"
 PEBBLE_READY_CHECK_NAME = "ready"
 EMAIL_TEMPLATE_FILE_PATH = Path("/etc/config/templates") / "recovery-body.html.gotmpl"
 MAPPERS_LOCAL_DIR_PATH = Path("claim_mappers")
+VERIFICATION_EMAIL_TEMPLATE_RESOURCE_NAME = "verification-email-template"
+VERIFICATION_EMAIL_TEMPLATE_TARGET_PATH = Path(
+    "/etc/config/templates/verification_code/valid/email.body.gotmpl"
+)
 
 # Application constants
 KRATOS_ADMIN_PORT = 4434

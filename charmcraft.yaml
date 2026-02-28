@@ -19,6 +19,9 @@ resources:
     type: oci-image
     description: Kratos oci-image
     upstream-source: ghcr.io/canonical/kratos:25.4.0
+  verification-email-template:
+    type: file
+    description: Custom email verification template to use with code method
 requires:
   pg-database:
     interface: postgresql_client
@@ -129,6 +132,10 @@ config:
         Disabling this option will allow users to log in with password or webauthn without completing 2fa.
       type: boolean
       default: True
+    enable_verification:
+      description: Enable email verification for identities
+      type: boolean
+      default: False
     enable_passwordless_login_method:
       description: |
         Enable passwordless authentication via webauthn. Requires `enable_local_idp=True`.
