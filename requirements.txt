@@ -1,5 +1,5 @@
 bcrypt==5.0.0
-cosl==1.5.0
+cosl==1.6.0
 ops==3.6.0
 dacite
 Jinja2==3.1.6
