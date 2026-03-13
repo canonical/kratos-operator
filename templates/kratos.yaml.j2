@@ -65,6 +65,14 @@ selfservice:
                 hooks:
                     - hook: revoke_active_sessions
         {%- endif %}
+        {%- if verification_ui_url and enable_local_idp %}
+        verification:
+            enabled: True
+            ui_url: {{ verification_ui_url }}
+            lifespan: 1h
+            use: code
+            notify_unknown_recipients: False
+        {%- endif %}
         {%- if registration_webhook_config or oidc_providers %}
         registration:
             {%- if registration_ui_url %}
@@ -103,7 +111,7 @@ selfservice:
             enabled: False
         passkey:
             enabled: False
-        {%- if recovery_ui_url and enable_local_idp %}
+        {%- if (recovery_ui_url or verification_ui_url) and enable_local_idp %}
         code:
             enabled: True
         {%- endif %}
