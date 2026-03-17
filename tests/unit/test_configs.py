@@ -94,6 +94,7 @@ class TestCharmConfig:
             "enforce_mfa": False,
             "enable_passwordless_login_method": True,
             "enable_oidc_webauthn_sequencing": False,
+            "enable_verification": False,
         }
 
 
