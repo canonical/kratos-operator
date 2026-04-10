@@ -616,6 +616,7 @@ class KratosCharm(CharmBase):
         configmaps_namespace = self.model.name
         mfa_enabled = self.config.get("enforce_mfa")
         oidc_webauthn_sequencing_enabled = self.config.get("enable_oidc_webauthn_sequencing")
+        verification_enabled = self.config.get("enable_verification")
         active_flags = self._get_active_flags()
 
         if not (public_url := PublicRouteData.load(self.public_route).url):
@@ -630,6 +631,7 @@ class KratosCharm(CharmBase):
             configmaps_namespace,
             mfa_enabled,
             oidc_webauthn_sequencing_enabled,
+            verification_enabled,
             active_flags,
         )
 
