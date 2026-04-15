@@ -17,7 +17,8 @@ from lightkube import ApiError, Client
 from lightkube.models.meta_v1 import ObjectMeta, OwnerReference
 from lightkube.resources.apps_v1 import StatefulSet
 from lightkube.resources.core_v1 import ConfigMap
-from ops import ConfigData, Container
+from ops import ConfigData, Container, Resources
+from ops.model import ModelError
 from ops.pebble import PathError
 from typing_extensions import Self
 
@@ -28,6 +29,7 @@ from constants import (
     IDENTITY_SCHEMAS_LOCAL_DIR_PATH,
     MAPPERS_LOCAL_DIR_PATH,
     PROVIDERS_CONFIGMAP_FILE_NAME,
+    VERIFICATION_EMAIL_TEMPLATE_RESOURCE_NAME,
 )
 from env_vars import EnvVars
 from exceptions import ConfigMapError
@@ -106,6 +108,8 @@ class CharmConfig:
             "HTTP_PROXY": self._config["http_proxy"],
             "HTTPS_PROXY": self._config["https_proxy"],
             "NO_PROXY": self._config["no_proxy"],
+            "COURIER_SMTP_FROM_ADDRESS": self._config["sender_email"],
+            "COURIER_SMTP_FROM_NAME": self._config["sender_name"],
         }
 
         if self._config.get("recovery_email_template"):
@@ -127,6 +131,7 @@ class CharmConfig:
             "enforce_mfa": self._config["enforce_mfa"],
             "enable_passwordless_login_method": self._config["enable_passwordless_login_method"],
             "enable_oidc_webauthn_sequencing": self._config["enable_oidc_webauthn_sequencing"],
+            "enable_verification": self._config["enable_verification"],
         }
 
 
@@ -402,3 +407,36 @@ class IdentitySchema:
             "default_identity_schema_id": default_identity_schema_id,
             "identity_schemas": schemas,
         }
+
+
+class VerificationEmailTemplateResource:
+    """A class representing the data source of the verification email template."""
+
+    def __init__(self, resources: Resources) -> None:
+        self._resources = resources
+
+    def get_content(self) -> Optional[str]:
+        """Fetches and reads the verification email template content."""
+        try:
+            resource_path = self._resources.fetch(VERIFICATION_EMAIL_TEMPLATE_RESOURCE_NAME)
+        except ModelError as e:
+            logger.error(
+                "Custom template resource '%s' unavailable: %s",
+                VERIFICATION_EMAIL_TEMPLATE_RESOURCE_NAME, e
+            )
+            return None
+        except NameError as e:
+            logger.error("Template resource '%s' not found: %s", VERIFICATION_EMAIL_TEMPLATE_RESOURCE_NAME, e)
+            return None
+
+        try:
+            content = resource_path.read_text(encoding="utf-8")
+            if not content:
+                logger.debug("Provided verification email template is empty, default one will be used.")
+                return None
+            return content
+        except Exception as e:
+            logger.error(
+                "Error reading verification-email-template resource, falling back to the default one: %s", e
+            )
+            return None

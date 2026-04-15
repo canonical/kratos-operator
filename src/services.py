@@ -16,6 +16,7 @@ from constants import (
     KRATOS_ADMIN_PORT,
     KRATOS_PUBLIC_PORT,
     PEBBLE_READY_CHECK_NAME,
+    VERIFICATION_EMAIL_TEMPLATE_TARGET_PATH,
     WORKLOAD_CONTAINER,
     WORKLOAD_SERVICE,
 )
@@ -111,6 +112,12 @@ class WorkloadService:
 
     def push_ca_certs(self, ca_certs: str) -> None:
         self._container.push(str(CA_BUNDLE_PATH), ca_certs, make_dirs=True)
+
+    def push_verification_email_template(self, content: str) -> None:
+        """Pushes the verification email template to the workload container."""
+        self._container.push(
+            VERIFICATION_EMAIL_TEMPLATE_TARGET_PATH, content, make_dirs=True
+        )
 
 
 class PebbleService:

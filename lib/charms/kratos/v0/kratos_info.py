@@ -54,7 +54,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 5
+LIBPATCH = 6
 
 RELATION_NAME = "kratos-info"
 INTERFACE_NAME = "kratos_info"
@@ -98,6 +98,7 @@ class KratosInfoProvider(Object):
         configmaps_namespace: str,
         mfa_enabled: bool,
         oidc_webauthn_sequencing_enabled: bool,
+        verification_enabled: bool,
         feature_flags: Optional[list[str]] = None,
     ) -> None:
         """Updates relation with endpoints, config and configmaps info."""
@@ -117,6 +118,7 @@ class KratosInfoProvider(Object):
             "configmaps_namespace": configmaps_namespace,
             "mfa_enabled": str(mfa_enabled),
             "oidc_webauthn_sequencing_enabled": str(oidc_webauthn_sequencing_enabled),
+            "verification_enabled": str(verification_enabled),
         }
 
         if feature_flags:
