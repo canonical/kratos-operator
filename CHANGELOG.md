@@ -1,5 +1,25 @@
 # Changelog
 
+## [2.2.0](https://github.com/canonical/kratos-operator/compare/v2.1.1...v2.2.0) (2026-04-17)
+
+
+### Features
+
+* add "enable_verification" config ([6f88c73](https://github.com/canonical/kratos-operator/commit/6f88c73b43b6ff833951e00ca6e7f4d1798d6d48))
+* add "verification_ui_url" + enrich kratos.yaml template ([3c101e0](https://github.com/canonical/kratos-operator/commit/3c101e0d79f74f5b9d48d9c5da3ab658937ec000))
+* add custom email template for verification via code ([2b670be](https://github.com/canonical/kratos-operator/commit/2b670beb66811b3e650fc84873d60049e8adbe1e))
+* add verification_enabled flag to kratos-info ([ce4b42f](https://github.com/canonical/kratos-operator/commit/ce4b42ffcd3137d9b85a944de12908f34d821be7))
+* enable identifier first login ([af7fa61](https://github.com/canonical/kratos-operator/commit/af7fa6142460b790240256151e87f96b2d2b1a1b))
+* enable identifier first login ([#642](https://github.com/canonical/kratos-operator/issues/642)) ([890a0cd](https://github.com/canonical/kratos-operator/commit/890a0cda891a7206f7a72c4b143d7fde0708ae9f))
+
+
+### Bug Fixes
+
+* manage ConfigMaps deletion via OwnerReference to StatefulSet ([8ba1858](https://github.com/canonical/kratos-operator/commit/8ba1858a5c93ba38b0ab3f1060dd92a6fcbacfcd))
+* manage ConfigMaps deletion via OwnerReference to StatefulSet ([#597](https://github.com/canonical/kratos-operator/issues/597)) ([729b9fb](https://github.com/canonical/kratos-operator/commit/729b9fb8ee45ba97e39824c9e7b4adbfe0cd9dea))
+* update charm dependent libs ([7b9f378](https://github.com/canonical/kratos-operator/commit/7b9f378755e6df5998cf80bb7b71226721600d76))
+* update charm dependent libs ([00064fc](https://github.com/canonical/kratos-operator/commit/00064fc2462542ca76201ac71c9f3985acd26bce))
+
 ## [2.1.1](https://github.com/canonical/kratos-operator/compare/v2.1.0...v2.1.1) (2026-01-16)
 
 
