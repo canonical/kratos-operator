@@ -465,8 +465,24 @@ class KratosCharm(CharmBase):
 
         try:
             self._pebble_service.plan(self._pebble_layer, self.config_file)
+            self._configure_courier()
         except PebbleServiceError as e:
             logger.error("Failed to start the service, please check the container logs: %s", e)
+
+    def _configure_courier(self) -> None:
+        """Ensures the courier runs as a singleton on the leader."""
+        if not container_connectivity(self):
+            return
+
+        if not self.unit.is_leader():
+            if self._workload_service.is_running(COURIER_SERVICE):
+                logger.info("Unit is not the leader, stopping courier service")
+                self._pebble_service.stop(COURIER_SERVICE)
+            return
+
+        if self._pebble_service.config_changed or not self._workload_service.is_running(COURIER_SERVICE):
+            logger.info("Restarting kratos courier service")
+            self._pebble_service.restart(COURIER_SERVICE)
 
     @cached_property
     def config_file(self) -> ConfigFile:
@@ -543,10 +559,10 @@ class KratosCharm(CharmBase):
                 )
             )
 
-        if can_connect and self._workload_service.is_failing(COURIER_SERVICE):
+        if can_connect and self.unit.is_leader() and self._workload_service.is_failing(COURIER_SERVICE):
             event.add_status(
                 BlockedStatus(
-                    f"Failed to start the courier service, please check the {COURIER_SERVICE} container logs"
+                    f"Failed to start the courier service, please check the '{COURIER_SERVICE}' logs on the workload container"
                 )
             )
 
@@ -573,6 +589,12 @@ class KratosCharm(CharmBase):
 
     def _on_leader_elected(self, event: LeaderElectedEvent) -> None:
         self.unit.status = MaintenanceStatus("Configuring resources")
+
+        # Only the new leader unit receives this event.
+        # Update the peer relation to trigger a RelationChangedEvent on all followers
+        if peer_integration_exists(self):
+            self.peer_data["leader"] = self.unit.name
+
         self._holistic_handler(event)
 
     def _on_kratos_pebble_ready(self, event: PebbleReadyEvent) -> None:

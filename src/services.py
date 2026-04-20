@@ -141,20 +141,28 @@ class PebbleService:
         self._unit = unit
         self._container = unit.get_container(WORKLOAD_CONTAINER)
         self._layer_dict: LayerDict = PEBBLE_LAYER_DICT
+        self.config_changed = False
 
     def plan(self, layer: Layer, config_file: ConfigFile) -> None:
         self._container.add_layer(WORKLOAD_SERVICE, layer, combine=True)
-
         current_config_file = ConfigFile.from_workload_container(self._container)
+        self.config_changed = config_file != current_config_file
+
         try:
-            if config_file != current_config_file:
+            if self.config_changed:
                 self._container.push(CONFIG_FILE_PATH, config_file.content, make_dirs=True)
                 self._container.restart(WORKLOAD_SERVICE)
-                self._container.restart(COURIER_SERVICE)
             else:
                 self._container.replan()
         except Exception as e:
             raise PebbleServiceError(f"Pebble failed to restart the workload service. Error: {e}")
+
+    def restart(self, name: str = WORKLOAD_SERVICE) -> None:
+        """Restarts the specified pebble service."""
+        try:
+            self._container.restart(name)
+        except Exception as e:
+            raise PebbleServiceError(f"Pebble failed to restart the {name} service. Error: {e}")
 
     def stop(self, name: str = WORKLOAD_SERVICE) -> None:
         """Stops the specified pebble service."""
