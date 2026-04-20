@@ -107,6 +107,7 @@ from constants import (
     CERTIFICATE_TRANSFER_INTEGRATION_NAME,
     COOKIE_SECRET_CONTENT_KEY,
     COOKIE_SECRET_LABEL,
+    COURIER_SERVICE,
     DATABASE_INTEGRATION_NAME,
     EMAIL_TEMPLATE_FILE_PATH,
     GRAFANA_DASHBOARD_INTEGRATION_NAME,
@@ -539,6 +540,13 @@ class KratosCharm(CharmBase):
             event.add_status(
                 BlockedStatus(
                     f"Failed to start the service, please check the {WORKLOAD_CONTAINER} container logs"
+                )
+            )
+
+        if can_connect and self._workload_service.is_failing(COURIER_SERVICE):
+            event.add_status(
+                BlockedStatus(
+                    f"Failed to start the courier service, please check the {COURIER_SERVICE} container logs"
                 )
             )
 
