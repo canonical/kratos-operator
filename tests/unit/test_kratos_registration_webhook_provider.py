@@ -79,7 +79,9 @@ def test_provider_info_in_relation_databag(harness: Harness) -> None:
         "url": data.url,
         "body": data.body,
         "method": data.method,
-        "emit_analytics_event": str(data.emit_analytics_event),
+        "mode": data.mode,
+        "methods": "[]",
+        "weight": str(data.weight),
         "response_ignore": str(data.response_ignore),
         "response_parse": str(data.response_ignore),
         "auth_type": data.auth_type,
@@ -105,7 +107,9 @@ def test_provider_info_in_relation_databag_with_no_auth(harness: Harness) -> Non
         "url": data.url,
         "body": data.body,
         "method": data.method,
-        "emit_analytics_event": str(data.emit_analytics_event),
+        "mode": "after",
+        "methods": "[]",
+        "weight": "0",
         "response_ignore": str(data.response_ignore),
         "response_parse": str(data.response_ignore),
     }
@@ -117,3 +121,21 @@ def test_unavailable_event_emitted_when_relation_removed(harness: Harness) -> No
     harness.remove_relation(relation_id)
 
     assert any(isinstance(e, UnavailableEvent) for e in harness.charm.events)
+
+
+def test_weight_serialized_as_string(harness: Harness) -> None:
+    harness.charm.data = ProviderData(
+        url="https://path/to/hook",
+        body="body",
+        method="POST",
+        weight=2,
+        response_ignore=True,
+        response_parse=True,
+        auth_config_value="token",
+    )
+    relation_id = harness.add_relation("kratos-registration-webhook", "requirer")
+
+    relation_data = harness.get_relation_data(relation_id, harness.model.app.name)
+
+    assert relation_data["weight"] == "2"
+    assert isinstance(relation_data["weight"], str)

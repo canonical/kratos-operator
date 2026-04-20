@@ -33,16 +33,101 @@ identity:
 selfservice:
     default_browser_return_url:
         {{ default_browser_return_url | d("http://example-default-return-url.com", true) }}
-    {%- if error_ui_url or login_ui_url or oidc_providers or registration_webhook_config %}
+{%- macro render_web_hooks(hooks, indent) %}
+{%- for wh in hooks %}
+{{ indent }}- hook: web_hook
+{{ indent }}  config:
+{{ indent }}    url: {{ wh.get("url") }}
+{{ indent }}    body: {{ wh.get("body") }}
+{{ indent }}    method: {{ wh.get("method") }}
+{{ indent }}    emit_analytics_event: {{ tracing_enabled | d(false) | lower }}
+{{ indent }}    response:
+{{ indent }}        ignore: {{ wh.get("response_ignore") }}
+{{ indent }}        parse: {{ wh.get("response_parse") }}
+{%- if wh.get("auth_enabled") %}
+{{ indent }}    auth:
+{{ indent }}        type: {{ wh.get("auth_type") }}
+{{ indent }}        config:
+{{ indent }}            name: {{ wh.get("auth_config_name") }}
+{{ indent }}            value: {{ wh.get("auth_config_value") }}
+{{ indent }}            in: {{ wh.get("auth_config_in") }}
+{%- endif %}
+{%- endfor %}
+{%- endmacro %}
+    {%- set _has_login_hooks = login_flow is defined %}
+    {%- set _has_reg_hooks = registration_flow is defined %}
+    {%- set _empty_flow = {"before": {"hooks": []}, "after": {"hooks": []}} %}
+    {%- set registration_flow = registration_flow | d(_empty_flow) %}
+    {%- set login_flow = login_flow | d(_empty_flow) %}
+    {%- if error_ui_url or login_ui_url or oidc_providers or _has_reg_hooks or _has_login_hooks %}
     flows:
         {%- if error_ui_url %}
         error:
             ui_url: {{ error_ui_url }}
         {%- endif %}
-        {%- if login_ui_url %}
+        {%- if login_ui_url or _has_login_hooks %}
         login:
+            {%- if login_ui_url %}
             ui_url: {{ login_ui_url }}
             style: identifier_first
+            {%- endif %}
+            {%- if _has_login_hooks and login_flow.before.hooks %}
+            before:
+                hooks:
+                    {{- render_web_hooks(login_flow.before.hooks, "                    ") }}
+            {%- endif %}
+            {#- Kratos uses fallback semantics: per-method hooks override global after.hooks.
+                To ensure all-methods hooks fire for every active method, we render them
+                inside each per-method section rather than relying on the global catch-all. -#}
+            {%- set _login_after = login_flow.after %}
+            {%- set _login_all = _login_after.hooks | d([]) %}
+            {%- set _login_method_keys = _login_after.keys() | reject('equalto', 'hooks') | list %}
+            {%- set _login_has_after = _login_all or _login_method_keys %}
+            {%- set _need_login_password = enable_local_idp and (_login_all or _login_after.password | d([])) %}
+            {%- set _need_login_oidc = oidc_providers and (_login_all or _login_after.oidc | d([])) %}
+            {%- set _need_login_code = enable_local_idp and (_login_all or _login_after.code | d([])) %}
+            {%- set _need_login_webauthn = (enable_passwordless_login_method or enable_oidc_webauthn_sequencing) and (_login_all or _login_after.webauthn | d([])) %}
+            {%- set _need_login_totp = (enforce_mfa and enable_local_idp) and (_login_all or _login_after.totp | d([])) %}
+            {%- set _need_login_lookup = (enable_oidc_webauthn_sequencing or (enforce_mfa and enable_local_idp)) and (_login_all or _login_after.lookup_secret | d([])) %}
+            {%- if _need_login_password or _need_login_oidc or _need_login_code or _need_login_webauthn or _need_login_totp or _need_login_lookup %}
+            after:
+                {%- if _need_login_password %}
+                password:
+                    hooks:
+                        {{- render_web_hooks(_login_all, "                        ") }}
+                        {{- render_web_hooks(_login_after.password | d([]), "                        ") }}
+                {%- endif %}
+                {%- if _need_login_oidc %}
+                oidc:
+                    hooks:
+                        {{- render_web_hooks(_login_all, "                        ") }}
+                        {{- render_web_hooks(_login_after.oidc | d([]), "                        ") }}
+                {%- endif %}
+                {%- if _need_login_code %}
+                code:
+                    hooks:
+                        {{- render_web_hooks(_login_all, "                        ") }}
+                        {{- render_web_hooks(_login_after.code | d([]), "                        ") }}
+                {%- endif %}
+                {%- if _need_login_webauthn %}
+                webauthn:
+                    hooks:
+                        {{- render_web_hooks(_login_all, "                        ") }}
+                        {{- render_web_hooks(_login_after.webauthn | d([]), "                        ") }}
+                {%- endif %}
+                {%- if _need_login_totp %}
+                totp:
+                    hooks:
+                        {{- render_web_hooks(_login_all, "                        ") }}
+                        {{- render_web_hooks(_login_after.totp | d([]), "                        ") }}
+                {%- endif %}
+                {%- if _need_login_lookup %}
+                lookup_secret:
+                    hooks:
+                        {{- render_web_hooks(_login_all, "                        ") }}
+                        {{- render_web_hooks(_login_after.lookup_secret | d([]), "                        ") }}
+                {%- endif %}
+            {%- endif %}
         {%- endif %}
         {%- if settings_ui_url %}
         settings:
@@ -74,45 +159,61 @@ selfservice:
             use: code
             notify_unknown_recipients: False
         {%- endif %}
-        {%- if registration_webhook_config or oidc_providers or enable_local_idp %}
+        {%- if _has_reg_hooks or oidc_providers or enable_local_idp %}
         registration:
             {%- if registration_ui_url %}
             enabled: True
             ui_url: {{ registration_ui_url }}
             {%- endif %}
+            {%- if _has_reg_hooks and registration_flow.before.hooks %}
+            before:
+                hooks:
+                    {{- render_web_hooks(registration_flow.before.hooks, "                    ") }}
+            {%- endif %}
+            {#- Kratos uses fallback semantics: per-method hooks override global after.hooks.
+                Since each method needs built-in hooks (session, show_verification_ui),
+                all-methods webhooks are included inside every per-method section. -#}
+            {%- set _need_reg_password = enable_local_idp %}
+            {%- set _need_reg_oidc = _has_reg_hooks or oidc_providers %}
+            {%- set _need_reg_webauthn = enable_passwordless_login_method %}
+            {%- set _need_reg_code = enable_local_idp or enable_oidc_webauthn_sequencing %}
+            {%- if _need_reg_password or _need_reg_oidc or _need_reg_webauthn or _need_reg_code %}
             after:
-                {%- if enable_local_idp %}
+                {%- if _need_reg_password %}
                 password:
-                  hooks:
-                    {%- if enable_verification %}
-                    - hook: show_verification_ui
-                    {%- endif %}
-                    - hook: session
-                {%- endif %}
-                {%- if registration_webhook_config or oidc_providers %}
-                oidc:
                     hooks:
-                        {%- if registration_webhook_config %}
-                        - hook: web_hook
-                          config:
-                            url: {{ registration_webhook_config.get("url") }}
-                            body: {{ registration_webhook_config.get("body") }}
-                            method: {{ registration_webhook_config.get("method") }}
-                            emit_analytics_event: {{ registration_webhook_config.get("emit_analytics_event") }}
-                            response:
-                                ignore: {{ registration_webhook_config.get("response_ignore") }}
-                                parse: {{ registration_webhook_config.get("response_parse") }}
-                            {%- if registration_webhook_config.get("auth_enabled") %}
-                            auth:
-                                type: {{ registration_webhook_config.get("auth_type") }}
-                                config:
-                                    name: {{ registration_webhook_config.get("auth_config_name") }}
-                                    value: {{ registration_webhook_config.get("auth_config_value") }}
-                                    in: {{ registration_webhook_config.get("auth_config_in") }}
-                            {%- endif %}
+                        {{- render_web_hooks(registration_flow.after.hooks | d([]), "                        ") }}
+                        {{- render_web_hooks(registration_flow.after.password | d([]), "                        ") }}
+                        {%- if enable_verification %}
+                        - hook: show_verification_ui
                         {%- endif %}
                         - hook: session
                 {%- endif %}
+                {%- if _need_reg_oidc %}
+                oidc:
+                    hooks:
+                        {{- render_web_hooks(registration_flow.after.hooks | d([]), "                        ") }}
+                        {{- render_web_hooks(registration_flow.after.oidc | d([]), "                        ") }}
+                        - hook: session
+                {%- endif %}
+                {%- if _need_reg_webauthn %}
+                webauthn:
+                    hooks:
+                        {{- render_web_hooks(registration_flow.after.hooks | d([]), "                        ") }}
+                        {{- render_web_hooks(registration_flow.after.webauthn | d([]), "                        ") }}
+                        - hook: session
+                {%- endif %}
+                {%- if _need_reg_code %}
+                code:
+                    hooks:
+                        {{- render_web_hooks(registration_flow.after.hooks | d([]), "                        ") }}
+                        {{- render_web_hooks(registration_flow.after.code | d([]), "                        ") }}
+                        {%- if enable_verification %}
+                        - hook: show_verification_ui
+                        {%- endif %}
+                        - hook: session
+                {%- endif %}
+            {%- endif %}
         {%- endif %}
     {%- endif %}
     {%- if oidc_providers or recovery_ui_url or enable_local_idp and login_ui_url %}

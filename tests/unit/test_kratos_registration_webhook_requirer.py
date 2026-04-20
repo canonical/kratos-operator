@@ -122,3 +122,26 @@ def test_unavailable_event_emitted_when_relation_removed(harness: Harness) -> No
     harness.remove_relation(relation_id)
 
     assert any(isinstance(e, UnavailableEvent) for e in harness.charm.events)
+
+
+def test_weight_deserialized_from_string(harness: Harness) -> None:
+    """Verify that a string weight in the databag is correctly parsed back to int."""
+    provider_data = ProviderData(
+        url="https://path/to/hook",
+        body="body",
+        method="POST",
+        response_ignore=True,
+        response_parse=True,
+    )
+    databag = provider_data.model_dump(exclude_none=True)
+    # Simulate what Juju delivers: all values are strings, weight arrives as "1"
+    databag["weight"] = "1"
+
+    relation_id = harness.add_relation("kratos-registration-webhook", "provider")
+    harness.add_relation_unit(relation_id, "provider/0")
+    harness.update_relation_data(relation_id, "provider", databag)
+
+    relation_data = harness.charm.kratos_registration_webhook.consume_relation_data(relation_id)
+
+    assert relation_data.weight == 1
+    assert isinstance(relation_data.weight, int)

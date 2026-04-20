@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2025 Canonical Ltd.
+# Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 """Interface library for configuring a kratos login webhook.
@@ -11,10 +11,11 @@ The requirer side (kratos) takes the configuration provided and updates its
 config.
 """
 
+import json
 import logging
 from functools import cached_property
 from string import Template
-from typing import Annotated, Literal, Optional
+from typing import Annotated, List, Literal, Optional
 
 from ops import (
     CharmBase,
@@ -24,6 +25,7 @@ from ops import (
     ObjectEvents,
     Relation,
     RelationBrokenEvent,
+    RelationChangedEvent,
     RelationCreatedEvent,
     RelationEvent,
     Secret,
@@ -36,6 +38,7 @@ from pydantic import (
     PlainSerializer,
     StrictBool,
     field_serializer,
+    field_validator,
 )
 
 LIBID = "070d0bcbc42042309cc556b43f3f77fd"
@@ -61,9 +64,32 @@ def deserialize_bool(v: str | bool) -> bool:
 
 SerializableBool = Annotated[
     StrictBool,
-    PlainSerializer(lambda v: str(v), return_type=str),
+    PlainSerializer(lambda v: str(v), return_type=str, when_used="always"),
     BeforeValidator(deserialize_bool),
 ]
+
+SerializableInt = Annotated[
+    int,
+    PlainSerializer(lambda v: str(v), return_type=str, when_used="always"),
+    BeforeValidator(lambda v: int(v) if isinstance(v, str) else v),
+]
+
+SerializableStrList = Annotated[
+    list[str],
+    PlainSerializer(lambda v: json.dumps(v), return_type=str, when_used="always"),
+    BeforeValidator(lambda v: json.loads(v) if isinstance(v, str) else v),
+]
+
+# Kratos login credential types that support after-hooks.
+LOGIN_METHODS = frozenset({
+    "password",
+    "oidc",
+    "code",
+    "passkey",
+    "totp",
+    "webauthn",
+    "lookup_secret",
+})
 
 
 class ProviderData(BaseModel):
@@ -71,7 +97,13 @@ class ProviderData(BaseModel):
     body: str
     method: str
     mode: Literal["before", "after"] = "after"
-    emit_analytics_event: SerializableBool = False
+    # methods: Kratos login methods this hook targets.
+    # An empty list means the hook applies to ALL active methods.
+    # E.g. ["oidc", "password"] to target those two specifically.
+    methods: SerializableStrList = Field(default_factory=list)
+    # weight controls the rendering order within a Kratos hook phase.
+    # Lower values render first. Must be >= 0. Default 0.
+    weight: SerializableInt = 0
     response_ignore: SerializableBool
     response_parse: SerializableBool
     auth_type: str = Field(default="api_key")
@@ -79,6 +111,17 @@ class ProviderData(BaseModel):
     auth_config_value: Optional[str] = Field(default=None, exclude=True)
     auth_config_value_secret: Optional[str] = None
     auth_config_in: Optional[str] = Field(default="header")
+
+    @field_validator("methods")
+    @classmethod
+    def validate_methods(cls, v: list[str]) -> list[str]:
+        invalid = set(v) - LOGIN_METHODS
+        if invalid:
+            raise ValueError(
+                f"unknown login methods: {invalid}. "
+                f"Allowed: {sorted(LOGIN_METHODS)}"
+            )
+        return v
 
     @cached_property
     def auth_enabled(self) -> bool:
@@ -153,7 +196,7 @@ class KratosLoginWebhookProvider(Object):
             if data.auth_config_value:
                 secret = self._create_or_update_secret(data.auth_config_value, relation)
                 data.auth_config_value_secret = secret.id
-            relation.data[self._charm.app].update(data.model_dump(exclude_none=True))
+            relation.data[self._charm.app].update(data.model_dump(mode="json", exclude_none=True))
 
     def _delete_juju_secret(self, relation: Relation) -> None:
         try:
@@ -193,7 +236,7 @@ class KratosLoginWebhookRequirer(Object):
         self.framework.observe(events.relation_changed, self._on_relation_changed)
         self.framework.observe(events.relation_broken, self._on_relation_broken)
 
-    def _on_relation_changed(self, event: RelationCreatedEvent) -> None:
+    def _on_relation_changed(self, event: RelationChangedEvent) -> None:
         provider_app = event.relation.app
 
         if not event.relation.active or not event.relation.data.get(provider_app):
@@ -229,3 +272,41 @@ class KratosLoginWebhookRequirer(Object):
             if secret := self._get_secret(secret_id):
                 provider_data["auth_config_value"] = secret.get_content().get("auth-config-value")
         return ProviderData(**provider_data) if provider_data else None
+
+    def _is_relation_active(self, relation: Relation) -> bool:
+        """Whether the relation is active based on contained data."""
+        try:
+            _ = repr(relation.data)
+            return True
+        except (RuntimeError, ModelError):
+            return False
+
+    @property
+    def relations(self) -> List[Relation]:
+        """The list of Relation instances associated with this relation_name."""
+        return [
+            relation
+            for relation in self._charm.model.relations[self._relation_name]
+            if self._is_relation_active(relation)
+        ]
+
+    def _ready(self, relation: Relation) -> bool:
+        if not relation.app:
+            return False
+
+        return "url" in relation.data[relation.app] and "body" in relation.data[relation.app]
+
+    def ready(self, relation_id: Optional[int] = None) -> bool:
+        """Check if the relation data is ready."""
+        if relation_id is None:
+            return (
+                all(self._ready(relation) for relation in self.relations)
+                if self.relations
+                else False
+            )
+
+        try:
+            relation = [relation for relation in self.relations if relation.id == relation_id][0]
+            return self._ready(relation)
+        except IndexError:
+            raise IndexError(f"relation id {relation_id} cannot be accessed")

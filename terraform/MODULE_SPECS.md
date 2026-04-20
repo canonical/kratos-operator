@@ -29,6 +29,7 @@ using the Juju Terraform provider.
 | <a name="input_base"></a> [base](#input\_base) | The charm base | `string` | `"ubuntu@22.04"` | no |
 | <a name="input_channel"></a> [channel](#input\_channel) | The charm channel | `string` | `"latest/stable"` | no |
 | <a name="input_revision"></a> [revision](#input\_revision) | The charm revision | `number` | `null` | no |
+| <a name="input_resources"></a> [resources](#input\_resources) | The charm resources (e.g. oci-image override for a local registry) | `map(string)` | `{}` | no |
 ---
 ## Outputs
 

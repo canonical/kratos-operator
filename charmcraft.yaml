@@ -40,6 +40,9 @@ requires:
   kratos-registration-webhook:
     interface: kratos_registration_webhook
     optional: true
+  kratos-login-webhook:
+    interface: kratos_login_webhook
+    optional: true
   logging:
     interface: loki_push_api
     optional: true

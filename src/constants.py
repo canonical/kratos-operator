@@ -14,7 +14,9 @@ PEBBLE_READY_CHECK_NAME = "ready"
 EMAIL_TEMPLATE_FILE_PATH = Path("/etc/config/templates") / "recovery-body.html.gotmpl"
 MAPPERS_LOCAL_DIR_PATH = Path("claim_mappers")
 VERIFICATION_EMAIL_TEMPLATE_RESOURCE_NAME = "verification-email-template"
-VERIFICATION_EMAIL_TEMPLATE_TARGET_PATH = "/etc/config/templates/verification_code/valid/email.body.gotmpl"
+VERIFICATION_EMAIL_TEMPLATE_TARGET_PATH = (
+    "/etc/config/templates/verification_code/valid/email.body.gotmpl"
+)
 
 # Application constants
 KRATOS_ADMIN_PORT = 4434
@@ -35,6 +37,7 @@ DATABASE_INTEGRATION_NAME = "pg-database"
 HYDRA_ENDPOINT_INTEGRATION_NAME = "hydra-endpoint-info"
 KRATOS_EXTERNAL_IDP_INTEGRATOR_INTEGRATION_NAME = "kratos-external-idp"
 REGISTRATION_WEBHOOK_INTEGRATION_NAME = "kratos-registration-webhook"
+LOGIN_WEBHOOK_INTEGRATION_NAME = "kratos-login-webhook"
 LOGIN_UI_INTEGRATION_NAME = "ui-endpoint-info"
 KRATOS_INFO_INTEGRATION_NAME = "kratos-info"
 PROMETHEUS_SCRAPE_INTEGRATION_NAME = "metrics-endpoint"

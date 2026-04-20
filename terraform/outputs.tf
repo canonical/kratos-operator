@@ -9,16 +9,17 @@ output "app_name" {
 output "requires" {
   description = "The Juju integrations that the charm requires"
   value = {
-    pg-database         = "pg-database"
-    public-route        = "public-route"
-    internal-route      = "internal-route"
-    kratos-external-idp = "kratos-external-idp"
-    hydra-endpoint-info = "hydra-endpoint-info"
-    ui-endpoint-info    = "ui-endpoint-info"
-    receive-ca-cert     = "receive-ca-cert"
-    smtp                = "smtp"
-    logging             = "logging"
-    tracing             = "tracing"
+    pg-database          = "pg-database"
+    public-route         = "public-route"
+    internal-route       = "internal-route"
+    kratos-external-idp  = "kratos-external-idp"
+    hydra-endpoint-info  = "hydra-endpoint-info"
+    ui-endpoint-info     = "ui-endpoint-info"
+    receive-ca-cert      = "receive-ca-cert"
+    smtp                 = "smtp"
+    logging              = "logging"
+    tracing              = "tracing"
+    kratos-login-webhook = "kratos-login-webhook"
   }
 }
 

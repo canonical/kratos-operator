@@ -58,7 +58,7 @@ provider "juju" {
 }
 
 data "juju_model" "model" {
-  name = var.model
+  name  = var.model
   owner = format("%s@serviceaccount", var.client_id)
 }
 

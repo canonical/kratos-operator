@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright 2025 Canonical Ltd.
+# Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
 
 """Interface library for configuring a kratos registration webhook.
@@ -11,10 +11,11 @@ The requirer side (kratos) takes the configuration provided and updates its
 config.
 """
 
+import json
 import logging
 from functools import cached_property
 from string import Template
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Literal, Optional
 
 from ops import (
     CharmBase,
@@ -24,6 +25,7 @@ from ops import (
     ObjectEvents,
     Relation,
     RelationBrokenEvent,
+    RelationChangedEvent,
     RelationCreatedEvent,
     RelationEvent,
     Secret,
@@ -36,11 +38,12 @@ from pydantic import (
     PlainSerializer,
     StrictBool,
     field_serializer,
+    field_validator,
 )
 
 LIBID = "37ddb4471fae41adb74299f091ee3a28"
 LIBAPI = 0
-LIBPATCH = 4
+LIBPATCH = 5
 
 PYDEPS = ["pydantic"]
 
@@ -61,16 +64,44 @@ def deserialize_bool(v: str | bool) -> bool:
 
 SerializableBool = Annotated[
     StrictBool,
-    PlainSerializer(lambda v: str(v), return_type=str),
+    PlainSerializer(lambda v: str(v), return_type=str, when_used="always"),
     BeforeValidator(deserialize_bool),
 ]
+
+SerializableInt = Annotated[
+    int,
+    PlainSerializer(lambda v: str(v), return_type=str, when_used="always"),
+    BeforeValidator(lambda v: int(v) if isinstance(v, str) else v),
+]
+
+SerializableStrList = Annotated[
+    list[str],
+    PlainSerializer(lambda v: json.dumps(v), return_type=str, when_used="always"),
+    BeforeValidator(lambda v: json.loads(v) if isinstance(v, str) else v),
+]
+
+# Kratos registration credential types that support after-hooks.
+REGISTRATION_METHODS = frozenset({
+    "password",
+    "oidc",
+    "code",
+    "passkey",
+    "webauthn",
+})
 
 
 class ProviderData(BaseModel):
     url: str
     body: str
     method: str
-    emit_analytics_event: SerializableBool = False
+    mode: Literal["before", "after"] = "after"
+    # methods: Kratos registration methods this hook targets.
+    # An empty list means the hook applies to ALL active methods.
+    # E.g. ["oidc"] for OIDC-only, ["password", "code"] for those two.
+    methods: SerializableStrList = Field(default_factory=list)
+    # weight controls the rendering order within a Kratos hook phase.
+    # Lower values render first. Must be >= 0. Default 0.
+    weight: SerializableInt = 0
     response_ignore: SerializableBool
     response_parse: SerializableBool
     auth_type: str = Field(default="api_key")
@@ -78,6 +109,17 @@ class ProviderData(BaseModel):
     auth_config_value: Optional[str] = Field(default=None, exclude=True)
     auth_config_value_secret: Optional[str] = None
     auth_config_in: Optional[str] = Field(default="header")
+
+    @field_validator("methods")
+    @classmethod
+    def validate_methods(cls, v: list[str]) -> list[str]:
+        invalid = set(v) - REGISTRATION_METHODS
+        if invalid:
+            raise ValueError(
+                f"unknown registration methods: {invalid}. "
+                f"Allowed: {sorted(REGISTRATION_METHODS)}"
+            )
+        return v
 
     @cached_property
     def auth_enabled(self) -> bool:
@@ -152,7 +194,7 @@ class KratosRegistrationWebhookProvider(Object):
             if data.auth_config_value:
                 secret = self._create_or_update_secret(data.auth_config_value, relation)
                 data.auth_config_value_secret = secret.id
-            relation.data[self._charm.app].update(data.model_dump(exclude_none=True))
+            relation.data[self._charm.app].update(data.model_dump(mode="json", exclude_none=True))
 
     def _delete_juju_secret(self, relation: Relation) -> None:
         try:
@@ -192,7 +234,7 @@ class KratosRegistrationWebhookRequirer(Object):
         self.framework.observe(events.relation_changed, self._on_relation_changed)
         self.framework.observe(events.relation_broken, self._on_relation_broken)
 
-    def _on_relation_changed(self, event: RelationCreatedEvent) -> None:
+    def _on_relation_changed(self, event: RelationChangedEvent) -> None:
         provider_app = event.relation.app
 
         if not event.relation.active or not event.relation.data.get(provider_app):
