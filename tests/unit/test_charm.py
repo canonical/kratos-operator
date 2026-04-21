@@ -10,6 +10,7 @@ from scenario import TCPPort
 
 from charm import KratosCharm
 from constants import (
+    COURIER_SERVICE,
     KRATOS_ADMIN_PORT,
     KRATOS_PUBLIC_PORT,
     PEER_INTEGRATION_NAME,
@@ -738,3 +739,57 @@ class TestTracingEndpointRemovedEvent:
             ctx.run(ctx.on.relation_broken(tracing_integration), state_in)
 
         mocked_charm_holistic_handler.assert_called_once()
+
+
+class TestCourierProcess:
+    @patch("charm.PebbleService.stop")
+    def test_follower_stops_courier_process(
+        self,
+        mocked_pebble_stop: MagicMock,
+        mocked_workload_service_running: MagicMock,
+        mocked_charm_holistic_handler: MagicMock,
+    ) -> None:
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(leader=False, containers={container})
+
+        with ctx(ctx.on.update_status(), state_in) as manager:
+            manager.charm._configure_courier()
+
+        mocked_pebble_stop.assert_called_once_with(COURIER_SERVICE)
+
+    @patch("charm.PebbleService.restart")
+    @patch("charm.WorkloadService.is_running", return_value=False)
+    def test_leader_runs_courier(
+        self,
+        mocked_pebble_restart: MagicMock,
+        mocked_charm_holistic_handler: MagicMock,
+    ) -> None:
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(leader=True, containers={container})
+
+        with ctx(ctx.on.update_status(), state_in) as manager:
+            manager.charm._pebble_service.config_changed = False
+            manager.charm._configure_courier()
+
+        mocked_pebble_restart.assert_called_once_with(COURIER_SERVICE)
+
+    def test_peer_relation_updated_on_leader_elected(
+        self,
+        mocked_charm_holistic_handler: MagicMock,
+        peer_integration: testing.PeerRelation,
+    ) -> None:
+        """Test that the new leader writes its unit name to the peer relation to notify followers."""
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(
+            leader=True,
+            containers={container},
+            relations=[peer_integration],
+        )
+
+        state_out = ctx.run(ctx.on.leader_elected(), state_in)
+        peer_rel_out = state_out.get_relations(PEER_INTEGRATION_NAME)[0]
+
+        assert peer_rel_out.local_app_data["leader"] == json.dumps("kratos/0")
