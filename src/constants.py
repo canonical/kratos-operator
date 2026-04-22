@@ -7,6 +7,7 @@ from string import Template
 # Charm constants
 POSTGRESQL_DSN_TEMPLATE = Template("postgres://$username:$password@$endpoint/$database")
 WORKLOAD_SERVICE = "kratos"
+COURIER_SERVICE = "courier"
 WORKLOAD_CONTAINER = "kratos"
 PEBBLE_READY_CHECK_NAME = "ready"
 EMAIL_TEMPLATE_FILE_PATH = Path("/etc/config/templates") / "recovery-body.html.gotmpl"

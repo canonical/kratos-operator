@@ -13,6 +13,7 @@ from configs import ConfigFile
 from constants import (
     CA_BUNDLE_PATH,
     CONFIG_FILE_PATH,
+    COURIER_SERVICE,
     KRATOS_ADMIN_PORT,
     KRATOS_PUBLIC_PORT,
     PEBBLE_READY_CHECK_NAME,
@@ -33,6 +34,12 @@ PEBBLE_LAYER_DICT = {
             "override": "replace",
             "summary": "entrypoint of the kratos image",
             "command": f"kratos serve all --config {CONFIG_FILE_PATH}",
+            "startup": "disabled",
+        },
+        COURIER_SERVICE: {
+            "override": "replace",
+            "summary": "kratos courier worker",
+            "command": f"kratos courier watch --config {CONFIG_FILE_PATH}",
             "startup": "disabled",
         }
     },
@@ -79,32 +86,39 @@ class WorkloadService:
 
         self._version = version
 
-    def get_service(self) -> Optional[ServiceInfo]:
+    def get_service(self, name: str = WORKLOAD_SERVICE) -> Optional[ServiceInfo]:
+        """Get service by name."""
         try:
-            return self._container.get_service(WORKLOAD_SERVICE)
+            return self._container.get_service(name)
         except (ModelError, ConnectionError) as e:
             logger.error("Failed to get pebble service: %s", e)
+            return None
 
-    def is_running(self) -> bool:
+    def is_running(self, name: str = WORKLOAD_SERVICE) -> bool:
         """Checks whether the service is running."""
-        if not (service := self.get_service()):
+        if not (service := self.get_service(name)):
             return False
 
         if not service.is_running():
             return False
 
-        c = self._container.get_checks().get(PEBBLE_READY_CHECK_NAME)
-        return c.status == CheckStatus.UP
+        if name == WORKLOAD_SERVICE:
+            c = self._container.get_checks().get(PEBBLE_READY_CHECK_NAME)
+            return c.status == CheckStatus.UP
 
-    def is_failing(self) -> bool:
+        return True
+
+    def is_failing(self, name: str = WORKLOAD_SERVICE) -> bool:
         """Checks whether the service has crashed."""
-        if not self.get_service():
+        if not (service := self.get_service(name)):
             return False
 
-        if not (c := self._container.get_checks().get(PEBBLE_READY_CHECK_NAME)):
-            return False
+        # For the kratos service, we take into account the pebble ready check
+        if name == WORKLOAD_SERVICE:
+            if c := self._container.get_checks().get(PEBBLE_READY_CHECK_NAME):
+                return c.failures > 0
 
-        return c.failures > 0
+        return not service.is_running()
 
     def open_ports(self) -> None:
         self._unit.open_port(protocol="tcp", port=KRATOS_PUBLIC_PORT)
@@ -127,13 +141,15 @@ class PebbleService:
         self._unit = unit
         self._container = unit.get_container(WORKLOAD_CONTAINER)
         self._layer_dict: LayerDict = PEBBLE_LAYER_DICT
+        self.config_changed = False
 
     def plan(self, layer: Layer, config_file: ConfigFile) -> None:
         self._container.add_layer(WORKLOAD_SERVICE, layer, combine=True)
-
         current_config_file = ConfigFile.from_workload_container(self._container)
+        self.config_changed = config_file != current_config_file
+
         try:
-            if config_file != current_config_file:
+            if self.config_changed:
                 self._container.push(CONFIG_FILE_PATH, config_file.content, make_dirs=True)
                 self._container.restart(WORKLOAD_SERVICE)
             else:
@@ -141,11 +157,19 @@ class PebbleService:
         except Exception as e:
             raise PebbleServiceError(f"Pebble failed to restart the workload service. Error: {e}")
 
-    def stop(self) -> None:
+    def restart(self, name: str = WORKLOAD_SERVICE) -> None:
+        """Restarts the specified pebble service."""
         try:
-            self._container.stop(WORKLOAD_SERVICE)
+            self._container.restart(name)
         except Exception as e:
-            raise PebbleServiceError(f"Pebble failed to stop the workload service. Error: {e}")
+            raise PebbleServiceError(f"Pebble failed to restart the {name} service. Error: {e}")
+
+    def stop(self, name: str = WORKLOAD_SERVICE) -> None:
+        """Stops the specified pebble service."""
+        try:
+            self._container.stop(name)
+        except Exception as e:
+            raise PebbleServiceError(f"Pebble failed to stop the {name} service. Error: {e}")
 
     def render_pebble_layer(self, *env_var_sources: EnvVarConvertible) -> Layer:
         updated_env_vars = ChainMap(*(source.to_env_vars() for source in env_var_sources))  # type: ignore
@@ -154,5 +178,6 @@ class PebbleService:
             **updated_env_vars,
         }
         self._layer_dict["services"][WORKLOAD_SERVICE]["environment"] = env_vars
+        self._layer_dict["services"][COURIER_SERVICE]["environment"] = env_vars
 
         return Layer(self._layer_dict)

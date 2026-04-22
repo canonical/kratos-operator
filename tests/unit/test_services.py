@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from ops import ModelError
+from ops.pebble import CheckStatus
 from pytest_mock import MockerFixture
 from scenario import CheckInfo
 
@@ -13,6 +14,7 @@ from configs import ConfigFile
 from constants import (
     CA_BUNDLE_PATH,
     CONFIG_FILE_PATH,
+    COURIER_SERVICE,
     KRATOS_ADMIN_PORT,
     KRATOS_PUBLIC_PORT,
     WORKLOAD_SERVICE,
@@ -61,20 +63,47 @@ class TestWorkloadService:
         mocked_unit.set_workload_version.assert_called_once_with("v1.0.0")
         assert f"Failed to set workload version: {error_msg}" in caplog.text
 
-    def test_is_running(
+    def test_is_running_workload_service_up(
         self, mocked_container: MagicMock, workload_service: WorkloadService
     ) -> None:
-        mocked_service_info = MagicMock(is_running=MagicMock(return_value=True))
-        check = CheckInfo(name="ready")
+        mocked_service_info = MagicMock()
+        mocked_service_info.is_running.return_value = True
+
+        # Mock CheckInfo returning UP
+        check = CheckInfo(name="ready", status=CheckStatus.UP)
         mocked_container.get_checks.return_value = {"ready": check}
 
         with patch.object(
             mocked_container, "get_service", return_value=mocked_service_info
         ) as get_service:
-            is_running = workload_service.is_running()
+            is_running = workload_service.is_running(WORKLOAD_SERVICE)
 
         assert is_running is True
         get_service.assert_called_once_with(WORKLOAD_SERVICE)
+
+    def test_is_running_courier_service(
+        self, mocked_container: MagicMock, workload_service: WorkloadService
+    ) -> None:
+        mocked_service_info = MagicMock()
+        mocked_service_info.is_running.return_value = True
+
+        with patch.object(
+            mocked_container, "get_service", return_value=mocked_service_info
+        ) as get_service:
+            # Courier does not rely on Pebble HTTP checks
+            is_running = workload_service.is_running(COURIER_SERVICE)
+
+        assert is_running is True
+        get_service.assert_called_once_with(COURIER_SERVICE)
+
+    def test_is_running_service_stopped(
+        self, mocked_container: MagicMock, workload_service: WorkloadService
+    ) -> None:
+        mocked_service_info = MagicMock()
+        mocked_service_info.is_running.return_value = False
+
+        with patch.object(mocked_container, "get_service", return_value=mocked_service_info):
+            assert workload_service.is_running(COURIER_SERVICE) is False
 
     def test_is_running_with_error(
         self, mocked_container: MagicMock, workload_service: WorkloadService
@@ -83,6 +112,27 @@ class TestWorkloadService:
             is_running = workload_service.is_running()
 
         assert is_running is False
+
+    def test_is_failing_workload_service_with_check_failures(
+        self, mocked_container: MagicMock, workload_service: WorkloadService
+    ) -> None:
+        mocked_service_info = MagicMock()
+        mocked_container.get_service.return_value = mocked_service_info
+
+        # Mock CheckInfo having failures
+        check = CheckInfo(name="ready", failures=3)
+        mocked_container.get_checks.return_value = {"ready": check}
+
+        assert workload_service.is_failing(WORKLOAD_SERVICE) is True
+
+    def test_is_failing_courier_service_not_running(
+        self, mocked_container: MagicMock, workload_service: WorkloadService
+    ) -> None:
+        mocked_service_info = MagicMock()
+        mocked_service_info.is_running.return_value = False
+        mocked_container.get_service.return_value = mocked_service_info
+
+        assert workload_service.is_failing(COURIER_SERVICE) is True
 
     def test_open_ports(self, mocked_unit: MagicMock, workload_service: WorkloadService) -> None:
         workload_service.open_ports()
@@ -120,13 +170,15 @@ class TestPebbleService:
     ) -> None:
         pebble_service.plan(mocked_layer, config_file=ConfigFile("new_config_file"))
 
+        assert pebble_service.config_changed is True
+
         mocked_container.add_layer.assert_called_once_with(
             WORKLOAD_SERVICE, mocked_layer, combine=True
         )
         mocked_container.push.assert_called_once_with(
             CONFIG_FILE_PATH, "new_config_file", make_dirs=True
         )
-        mocked_container.restart.assert_called_once()
+        mocked_container.restart.assert_called_once_with(WORKLOAD_SERVICE)
         mocked_container.replan.assert_not_called()
 
     @patch("ops.pebble.Layer")
@@ -138,6 +190,8 @@ class TestPebbleService:
         pebble_service: PebbleService,
     ) -> None:
         pebble_service.plan(mocked_layer, config_file=ConfigFile("config_file"))
+
+        assert pebble_service.config_changed is False
 
         mocked_container.add_layer.assert_called_once_with(
             WORKLOAD_SERVICE, mocked_layer, combine=True
@@ -155,15 +209,40 @@ class TestPebbleService:
         pebble_service: PebbleService,
     ) -> None:
         with (
-            patch.object(mocked_container, "replan", side_effect=Exception) as replan,
-            pytest.raises(PebbleServiceError),
+            patch.object(mocked_container, "replan", side_effect=Exception("plan_error")),
+            pytest.raises(PebbleServiceError) as exc_info,
         ):
             pebble_service.plan(mocked_layer, config_file=ConfigFile("config_file"))
 
         mocked_container.add_layer.assert_called_once_with(
             WORKLOAD_SERVICE, mocked_layer, combine=True
         )
-        replan.assert_called_once()
+        assert "Pebble failed to restart the workload service" in str(exc_info.value)
+        assert "plan_error" in str(exc_info.value)
+
+    def test_restart_success(self, mocked_container: MagicMock, pebble_service: PebbleService) -> None:
+        pebble_service.restart(COURIER_SERVICE)
+        mocked_container.restart.assert_called_once_with(COURIER_SERVICE)
+
+    def test_restart_failure(self, mocked_container: MagicMock, pebble_service: PebbleService) -> None:
+        mocked_container.restart.side_effect = Exception("restart_error")
+
+        with pytest.raises(PebbleServiceError) as exc_info:
+            pebble_service.restart(COURIER_SERVICE)
+
+        assert f"Pebble failed to restart the {COURIER_SERVICE} service" in str(exc_info.value)
+
+    def test_stop_success(self, mocked_container: MagicMock, pebble_service: PebbleService) -> None:
+        pebble_service.stop(COURIER_SERVICE)
+        mocked_container.stop.assert_called_once_with(COURIER_SERVICE)
+
+    def test_stop_failure(self, mocked_container: MagicMock, pebble_service: PebbleService) -> None:
+        mocked_container.stop.side_effect = Exception("stop_error")
+
+        with pytest.raises(PebbleServiceError) as exc_info:
+            pebble_service.stop(COURIER_SERVICE)
+
+        assert f"Pebble failed to stop the {COURIER_SERVICE} service" in str(exc_info.value)
 
     def test_render_pebble_layer(self, pebble_service: PebbleService) -> None:
         data_source = MagicMock(spec=EnvVarConvertible)
@@ -181,4 +260,7 @@ class TestPebbleService:
         layer = pebble_service.render_pebble_layer(data_source, another_data_source)
 
         layer_dict = layer.to_dict()
+
+        # Verify both services get the same environment variables
         assert layer_dict["services"][WORKLOAD_SERVICE]["environment"] == expected_env_vars
+        assert layer_dict["services"][COURIER_SERVICE]["environment"] == expected_env_vars
