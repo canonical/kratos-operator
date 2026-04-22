@@ -27,7 +27,7 @@ on:
 jobs:
   publish:
     name: Publish Charm
-    uses: canonical/identity-team/.github/workflows/charm-publish.yaml@732520bcf8f04f777f44d1c3677e7a89f7ce9ab6 # v1.11.0
+    uses: canonical/identity-team/.github/workflows/charm-publish.yaml@84c2f3e8f31c76602dd3ccceff9b8231316af615 # v1.11.1
     with:
       destination_channel: ${{ inputs.destination_channel}}
       source_branch: ${{ inputs.source_branch}}
@@ -73,7 +73,7 @@ jobs:
       - publish
       - revision
     if: ${{ (needs.publish.outputs.channel == 'latest/edge') }}
-    uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@732520bcf8f04f777f44d1c3677e7a89f7ce9ab6 # v1.11.0
+    uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@84c2f3e8f31c76602dd3ccceff9b8231316af615 # v1.11.1
     with:
         model: blue-iam
         revision: ${{ needs.revision.outputs.revision }}
@@ -94,7 +94,7 @@ jobs:
       - publish
       - revision
     if: ${{ (needs.publish.outputs.channel == 'latest/stable') }}
-    uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@732520bcf8f04f777f44d1c3677e7a89f7ce9ab6 # v1.11.0
+    uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@84c2f3e8f31c76602dd3ccceff9b8231316af615 # v1.11.1
     with:
       model: green-iam
       revision: ${{ needs.revision.outputs.revision }}
