@@ -50,3 +50,9 @@ variable "revision" {
   nullable    = true
   default     = null
 }
+
+variable "resources" {
+  description = "The charm resources (e.g. oci-image override for a local registry)"
+  type        = map(string)
+  default     = {}
+}

@@ -30,6 +30,13 @@ from charms.identity_platform_login_ui_operator.v0.login_ui_endpoints import (
     LoginUIEndpointsRequirer,
 )
 from charms.kratos.v0.kratos_info import KratosInfoProvider
+from charms.kratos.v0.kratos_login_webhook import (
+    KratosLoginWebhookRequirer,
+)
+from charms.kratos.v0.kratos_login_webhook import ReadyEvent as KratosLoginWebhookReadyEvent
+from charms.kratos.v0.kratos_login_webhook import (
+    UnavailableEvent as KratosLoginWebhookUnavailableEvent,
+)
 from charms.kratos.v0.kratos_registration_webhook import (
     KratosRegistrationWebhookRequirer,
 )
@@ -117,6 +124,7 @@ from constants import (
     KRATOS_EXTERNAL_IDP_INTEGRATOR_INTEGRATION_NAME,
     LOGGING_INTEGRATION_NAME,
     LOGIN_UI_INTEGRATION_NAME,
+    LOGIN_WEBHOOK_INTEGRATION_NAME,
     PEBBLE_READY_CHECK_NAME,
     PEER_INTEGRATION_NAME,
     PROMETHEUS_SCRAPE_INTEGRATION_NAME,
@@ -141,6 +149,7 @@ from integrations import (
     HydraEndpointData,
     InternalRouteData,
     LoginUIEndpointData,
+    LoginWebhookData,
     PeerData,
     PublicRouteData,
     RegistrationWebhookData,
@@ -231,6 +240,11 @@ class KratosCharm(CharmBase):
             relation_name=REGISTRATION_WEBHOOK_INTEGRATION_NAME,
         )
 
+        self.login_webhook_requirer = KratosLoginWebhookRequirer(
+            self,
+            relation_name=LOGIN_WEBHOOK_INTEGRATION_NAME,
+        )
+
         self.login_ui_requirer = LoginUIEndpointsRequirer(
             self,
             relation_name=LOGIN_UI_INTEGRATION_NAME,
@@ -306,6 +320,13 @@ class KratosCharm(CharmBase):
         self.framework.observe(
             self.registration_webhook_requirer.on.unavailable,
             self._on_registration_webhook_unavailable,
+        )
+
+        # kratos-login-webhook
+        self.framework.observe(self.login_webhook_requirer.on.ready, self._on_login_webhook_ready)
+        self.framework.observe(
+            self.login_webhook_requirer.on.unavailable,
+            self._on_login_webhook_unavailable,
         )
 
         # hydra-endpoint-info
@@ -503,7 +524,9 @@ class KratosCharm(CharmBase):
             ClaimMapper(),
             LoginUIEndpointData.load(self.login_ui_requirer),
             PublicRouteData.load(self.public_route),
+            TracingData.load(self.tracing),
             RegistrationWebhookData.load(self.registration_webhook_requirer),
+            LoginWebhookData.load(self.login_webhook_requirer),
             ExternalIdpIntegratorData.load(self.external_idp_requirer),
             identity_schema,
             OIDCProviderConfigMap(self._k8s_client, self.model.name, self.app.name),
@@ -633,6 +656,14 @@ class KratosCharm(CharmBase):
     def _on_registration_webhook_unavailable(
         self, event: KratosRegistrationWebhookUnavailableEvent
     ) -> None:
+        self.unit.status = MaintenanceStatus("Configuring resources")
+        self._holistic_handler(event)
+
+    def _on_login_webhook_ready(self, event: KratosLoginWebhookReadyEvent) -> None:
+        self.unit.status = MaintenanceStatus("Configuring resources")
+        self._holistic_handler(event)
+
+    def _on_login_webhook_unavailable(self, event: KratosLoginWebhookUnavailableEvent) -> None:
         self.unit.status = MaintenanceStatus("Configuring resources")
         self._holistic_handler(event)
 

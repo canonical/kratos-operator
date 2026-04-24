@@ -2,7 +2,7 @@
 # Copyright 2026 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""Interface library for configuring a kratos registration webhook.
+"""Interface library for configuring a kratos login webhook.
 
 The provider side is responsible for providing the configuration that kratos
 will use to call this webhook.
@@ -41,16 +41,16 @@ from pydantic import (
     field_validator,
 )
 
-LIBID = "37ddb4471fae41adb74299f091ee3a28"
+LIBID = "070d0bcbc42042309cc556b43f3f77fd"
 LIBAPI = 0
-LIBPATCH = 5
+LIBPATCH = 1
 
 PYDEPS = ["pydantic"]
 
-RELATION_NAME = "kratos-registration-webhook"
-INTERFACE_NAME = "kratos_registration_webhook"
+RELATION_NAME = "kratos-login-webhook"
+INTERFACE_NAME = "kratos_login_webhook"
 
-API_KEY_SECRET_LABEL_TEMPLATE = Template("relation-$relation_id-api-key-secret")
+API_KEY_SECRET_LABEL_TEMPLATE = Template("relation-$relation_id-login-api-key-secret")
 
 logger = logging.getLogger(__name__)
 
@@ -80,13 +80,15 @@ SerializableStrList = Annotated[
     BeforeValidator(lambda v: json.loads(v) if isinstance(v, str) else v),
 ]
 
-# Kratos registration credential types that support after-hooks.
-REGISTRATION_METHODS = frozenset({
+# Kratos login credential types that support after-hooks.
+LOGIN_METHODS = frozenset({
     "password",
     "oidc",
     "code",
     "passkey",
+    "totp",
     "webauthn",
+    "lookup_secret",
 })
 
 
@@ -95,9 +97,9 @@ class ProviderData(BaseModel):
     body: str
     method: str
     mode: Literal["before", "after"] = "after"
-    # methods: Kratos registration methods this hook targets.
+    # methods: Kratos login methods this hook targets.
     # An empty list means the hook applies to ALL active methods.
-    # E.g. ["oidc"] for OIDC-only, ["password", "code"] for those two.
+    # E.g. ["oidc", "password"] to target those two specifically.
     methods: SerializableStrList = Field(default_factory=list)
     # weight controls the rendering order within a Kratos hook phase.
     # Lower values render first. Must be >= 0. Default 0.
@@ -113,11 +115,11 @@ class ProviderData(BaseModel):
     @field_validator("methods")
     @classmethod
     def validate_methods(cls, v: list[str]) -> list[str]:
-        invalid = set(v) - REGISTRATION_METHODS
+        invalid = set(v) - LOGIN_METHODS
         if invalid:
             raise ValueError(
-                f"unknown registration methods: {invalid}. "
-                f"Allowed: {sorted(REGISTRATION_METHODS)}"
+                f"unknown login methods: {invalid}. "
+                f"Allowed: {sorted(LOGIN_METHODS)}"
             )
         return v
 
@@ -156,8 +158,8 @@ class RelationEvents(ObjectEvents):
     unavailable = EventSource(UnavailableEvent)
 
 
-class KratosRegistrationWebhookProvider(Object):
-    """Provider side of the kratos-registration-webhook relation."""
+class KratosLoginWebhookProvider(Object):
+    """Provider side of the kratos-login-webhook relation."""
 
     on = RelationEvents()
 
@@ -219,8 +221,8 @@ class KratosRegistrationWebhookProvider(Object):
         return secret
 
 
-class KratosRegistrationWebhookRequirer(Object):
-    """Requirer side of the kratos-registration-webhook relation."""
+class KratosLoginWebhookRequirer(Object):
+    """Requirer side of the kratos-login-webhook relation."""
 
     on = RelationEvents()
 

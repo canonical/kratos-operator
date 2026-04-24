@@ -424,21 +424,29 @@ class VerificationEmailTemplateResource:
         except ModelError as e:
             logger.error(
                 "Custom template resource '%s' unavailable: %s",
-                VERIFICATION_EMAIL_TEMPLATE_RESOURCE_NAME, e
+                VERIFICATION_EMAIL_TEMPLATE_RESOURCE_NAME,
+                e,
             )
             return None
         except NameError as e:
-            logger.error("Template resource '%s' not found: %s", VERIFICATION_EMAIL_TEMPLATE_RESOURCE_NAME, e)
+            logger.error(
+                "Template resource '%s' not found: %s",
+                VERIFICATION_EMAIL_TEMPLATE_RESOURCE_NAME,
+                e,
+            )
             return None
 
         try:
             content = resource_path.read_text(encoding="utf-8")
             if not content:
-                logger.debug("Provided verification email template is empty, default one will be used.")
+                logger.debug(
+                    "Provided verification email template is empty, default one will be used."
+                )
                 return None
             return content
         except Exception as e:
             logger.error(
-                "Error reading verification-email-template resource, falling back to the default one: %s", e
+                "Error reading verification-email-template resource, falling back to the default one: %s",
+                e,
             )
             return None

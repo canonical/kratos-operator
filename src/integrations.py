@@ -5,7 +5,7 @@ import json
 import logging
 import subprocess
 from dataclasses import asdict, dataclass, field
-from typing import Any, KeysView, Optional, Type, TypeAlias, Union
+from typing import Any, KeysView, Type, TypeAlias, Union
 from urllib.parse import urlparse
 
 import dacite
@@ -17,6 +17,7 @@ from charms.hydra.v0.hydra_endpoints import HydraEndpointsRequirer
 from charms.identity_platform_login_ui_operator.v0.login_ui_endpoints import (
     LoginUIEndpointsRequirer,
 )
+from charms.kratos.v0.kratos_login_webhook import KratosLoginWebhookRequirer
 from charms.kratos.v0.kratos_registration_webhook import KratosRegistrationWebhookRequirer
 from charms.kratos_external_idp_integrator.v1.kratos_external_provider import ExternalIdpRequirer
 from charms.smtp_integrator.v0.smtp import SmtpRequires
@@ -135,6 +136,9 @@ class TracingData:
             "TRACING_PROVIDERS_OTLP_INSECURE": "true",
             "TRACING_PROVIDERS_OTLP_SAMPLING_SAMPLING_RATIO": "1.0",
         }
+
+    def to_service_configs(self) -> ServiceConfigs:
+        return {"tracing_enabled": self.is_ready}
 
     @classmethod
     def load(cls, requirer: TracingEndpointRequirer) -> Self:
@@ -340,8 +344,7 @@ class PublicRouteData:
                 "SELFSERVICE_ALLOWED_RETURN_URLS": json.dumps(
                     [
                         str(
-                            self.url
-                            .with_path("")
+                            self.url.with_path("")
                             .without_query_params()
                             .with_fragment(None)
                             .with_path("/")
@@ -418,44 +421,145 @@ class InternalRouteData:
 
 
 @dataclass(frozen=True, slots=True)
-class RegistrationWebhookData:
-    """The data source from the kratos-registration-webhook integration."""
+class RegistrationWebhookConfig:
+    """Configuration for a single Kratos registration webhook."""
 
     url: str = ""
     body: str = ""
-    method: str = ""
-    emit_analytics_event: bool = False
+    method: str = "POST"
+    mode: str = "after"
+    methods: tuple[str, ...] = ()
+    weight: int = 0
     response_ignore: bool = False
     response_parse: bool = False
-    auth_enabled: bool = True
+    auth_enabled: bool = False
     auth_type: str = "api_key"
     auth_config_name: str = "Authorization"
-    auth_config_value: Optional[str] = None
+    auth_config_value: str = ""
     auth_config_in: str = "header"
-    is_ready: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class RegistrationWebhookData:
+    """The data source from the kratos-registration-webhook integration."""
+
+    configs: list[RegistrationWebhookConfig] = field(default_factory=list)
 
     def to_service_configs(self) -> ServiceConfigs:
-        return {"registration_webhook_config": asdict(self)} if self.is_ready else {}
+        if not self.configs:
+            return {}
+        sorted_configs = sorted(self.configs, key=lambda c: c.weight)
+
+        before: dict[str, list] = {"hooks": []}
+        after: dict[str, list] = {"hooks": []}
+
+        for c in sorted_configs:
+            d = asdict(c)
+            target = before if c.mode == "before" else after
+            if not c.methods:
+                target["hooks"].append(d)
+            else:
+                for m in c.methods:
+                    target.setdefault(m, []).append(d)
+
+        return {"registration_flow": {"before": before, "after": after}}
 
     @classmethod
     def load(cls, requirer: KratosRegistrationWebhookRequirer) -> Self:
-        webhook_data = requirer.consume_relation_data()
-        if not webhook_data:
-            return cls()
+        configs = []
+        for relation in requirer.relations:
+            webhook_data = requirer.consume_relation_data(relation=relation)
+            if not webhook_data:
+                continue
+            configs.append(
+                RegistrationWebhookConfig(
+                    url=webhook_data.url,
+                    body=webhook_data.body,
+                    method=webhook_data.method,
+                    mode=webhook_data.mode,
+                    methods=tuple(webhook_data.methods),
+                    weight=webhook_data.weight,
+                    response_ignore=webhook_data.response_ignore,
+                    response_parse=webhook_data.response_parse,
+                    auth_enabled=webhook_data.auth_enabled,
+                    auth_type=webhook_data.auth_type or "",
+                    auth_config_name=webhook_data.auth_config_name or "",
+                    auth_config_value=webhook_data.auth_config_value or "",
+                    auth_config_in=webhook_data.auth_config_in or "",
+                )
+            )
+        return cls(configs=configs)
 
-        return cls(
-            url=webhook_data.url,
-            body=webhook_data.body,
-            method=webhook_data.method,
-            response_ignore=webhook_data.response_ignore,
-            response_parse=webhook_data.response_parse,
-            auth_enabled=webhook_data.auth_enabled,
-            auth_type=webhook_data.auth_type,
-            auth_config_name=webhook_data.auth_config_name,  # type: ignore
-            auth_config_value=webhook_data.auth_config_value,
-            auth_config_in=webhook_data.auth_config_in,  # type: ignore
-            is_ready=True,
-        )
+
+@dataclass(frozen=True, slots=True)
+class LoginWebhookConfig:
+    """Configuration for a single Kratos login webhook."""
+
+    url: str = ""
+    body: str = ""
+    method: str = "POST"
+    mode: str = "after"
+    methods: tuple[str, ...] = ()
+    weight: int = 0
+    response_ignore: bool = False
+    response_parse: bool = False
+    auth_enabled: bool = False
+    auth_type: str = "api_key"
+    auth_config_name: str = "Authorization"
+    auth_config_value: str = ""
+    auth_config_in: str = "header"
+
+
+@dataclass(frozen=True, slots=True)
+class LoginWebhookData:
+    """The data source from the kratos-login-webhook integration."""
+
+    configs: list[LoginWebhookConfig] = field(default_factory=list)
+
+    def to_service_configs(self) -> ServiceConfigs:
+        if not self.configs:
+            return {}
+        sorted_configs = sorted(self.configs, key=lambda c: c.weight)
+
+        before: dict[str, list] = {"hooks": []}
+        after: dict[str, list] = {"hooks": []}
+
+        for c in sorted_configs:
+            d = asdict(c)
+            target = before if c.mode == "before" else after
+            if not c.methods:
+                target["hooks"].append(d)
+            else:
+                for m in c.methods:
+                    target.setdefault(m, []).append(d)
+
+        return {"login_flow": {"before": before, "after": after}}
+
+    @classmethod
+    def load(cls, requirer: KratosLoginWebhookRequirer) -> Self:
+        configs = []
+        for relation in requirer.relations:
+            webhook_data = requirer.consume_relation_data(relation=relation)
+            if not webhook_data:
+                continue
+            configs.append(
+                LoginWebhookConfig(
+                    url=webhook_data.url,
+                    body=webhook_data.body,
+                    method=webhook_data.method,
+                    mode=webhook_data.mode,
+                    methods=tuple(webhook_data.methods),
+                    weight=webhook_data.weight,
+                    response_ignore=webhook_data.response_ignore,
+                    response_parse=webhook_data.response_parse,
+                    auth_enabled=webhook_data.auth_enabled,
+                    auth_type=webhook_data.auth_type or "",
+                    auth_config_name=webhook_data.auth_config_name or "",
+                    auth_config_value=webhook_data.auth_config_value or "",
+                    auth_config_in=webhook_data.auth_config_in or "",
+                )
+            )
+        return cls(configs=configs)
 
 
 @dataclass(frozen=True, slots=True)

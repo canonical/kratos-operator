@@ -88,3 +88,6 @@ disallow_untyped_defs = true
 [[tool.mypy.overrides]]
 module = ["ops.*", "pytest.*", "pytest_operator.*", "urllib3.*", "jinja2.*", "lightkube.*", "pytest_mock.*"]
 ignore_missing_imports = true
+
+[tool.pyright]
+extraPaths = ["src", "lib"]

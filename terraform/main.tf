@@ -5,11 +5,20 @@
  * using the Juju Terraform provider.
  */
 
+locals {
+  charmcraft = yamldecode(file("${path.module}/../charmcraft.yaml"))
+  oci_image = {
+    "oci-image" : local.charmcraft.resources.oci-image.upstream-source
+  }
+  resources = merge(local.oci_image, var.resources)
+}
+
 resource "juju_application" "application" {
   name        = var.app_name
   trust       = true
   config      = var.config
   constraints = var.constraints
+  resources   = local.resources
   units       = var.units
 
   charm {

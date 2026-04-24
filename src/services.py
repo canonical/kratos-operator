@@ -129,9 +129,7 @@ class WorkloadService:
 
     def push_verification_email_template(self, content: str) -> None:
         """Pushes the verification email template to the workload container."""
-        self._container.push(
-            VERIFICATION_EMAIL_TEMPLATE_TARGET_PATH, content, make_dirs=True
-        )
+        self._container.push(VERIFICATION_EMAIL_TEMPLATE_TARGET_PATH, content, make_dirs=True)
 
 
 class PebbleService:

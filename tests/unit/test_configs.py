@@ -2,6 +2,7 @@
 # See LICENSE file for licensing details.
 import base64
 import json
+from pathlib import Path
 from unittest.mock import MagicMock, create_autospec, patch
 
 import httpx
@@ -17,6 +18,7 @@ from configs import (
     CharmConfig,
     CharmConfigIdentitySchemaProvider,
     ClaimMapper,
+    ConfigFile,
     ConfigMapIdentitySchemaProvider,
     IdentitySchema,
     IdentitySchemaConfigMap,
@@ -25,6 +27,12 @@ from configs import (
 )
 from constants import EMAIL_TEMPLATE_FILE_PATH, PROVIDERS_CONFIGMAP_FILE_NAME
 from exceptions import ConfigMapError
+from integrations import (
+    LoginWebhookConfig,
+    LoginWebhookData,
+    RegistrationWebhookConfig,
+    RegistrationWebhookData,
+)
 
 
 class TestCharmConfig:
@@ -458,3 +466,225 @@ class TestIdentitySchema:
             "default_identity_schema_id": "default",
             "identity_schemas": {"default": "encoded_schema"},
         }
+
+
+class TestConfigFile:
+    """Tests for kratos.yaml.j2 template rendering via ConfigFile.from_sources()."""
+
+    @pytest.fixture(autouse=True)
+    def set_cwd(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Ensure template file is resolvable regardless of CWD where pytest is invoked.
+        monkeypatch.chdir(Path(__file__).parent.parent.parent)
+
+    def _identity_source(self) -> MagicMock:
+        """Return a minimal ServiceConfigSource that satisfies the template's required fields."""
+        src = MagicMock()
+        src.to_service_configs.return_value = {
+            "default_identity_schema_id": "default",
+            "identity_schemas": {"default": "base64://e30="},
+        }
+        return src
+
+    def _make_reg_hook_config(
+        self, mode: str, methods: tuple[str, ...] = (), weight: int = 0
+    ) -> RegistrationWebhookConfig:
+        return RegistrationWebhookConfig(
+            url="http://example.com/hook",
+            body="base64://body.jsonnet",
+            method="POST",
+            mode=mode,
+            weight=weight,
+            methods=methods,
+            response_ignore=False,
+            response_parse=False,
+            auth_enabled=True,
+            auth_type="api_key",
+            auth_config_name="Authorization",
+            auth_config_value="secret",
+            auth_config_in="header",
+        )
+
+    def _make_login_hook_config(
+        self, mode: str, methods: tuple[str, ...] = (), weight: int = 0
+    ) -> LoginWebhookConfig:
+        return LoginWebhookConfig(
+            url="http://example.com/login-hook",
+            body="base64://body.jsonnet",
+            method="POST",
+            mode=mode,
+            weight=weight,
+            methods=methods,
+            response_ignore=False,
+            response_parse=False,
+            auth_enabled=True,
+            auth_type="api_key",
+            auth_config_name="Authorization",
+            auth_config_value="secret",
+            auth_config_in="header",
+        )
+
+    def _local_idp_source(self) -> MagicMock:
+        """Return a ServiceConfigSource that enables local IdP (activates password/code login sections)."""
+        src = MagicMock()
+        src.to_service_configs.return_value = {
+            "enable_local_idp": True,
+            "login_ui_url": "http://example.com/login",
+        }
+        return src
+
+    def test_no_registration_hooks_renders_no_registration_block(self) -> None:
+        cfg = ConfigFile.from_sources(self._identity_source(), RegistrationWebhookData())
+
+        flows = (cfg.yaml_content.get("selfservice") or {}).get("flows") or {}
+        assert "registration" not in flows
+
+    def test_registration_before_hook_renders_under_before_section(self) -> None:
+        data = RegistrationWebhookData(configs=[self._make_reg_hook_config("before")])
+
+        cfg = ConfigFile.from_sources(self._identity_source(), data)
+
+        reg = cfg.yaml_content["selfservice"]["flows"]["registration"]
+        assert reg["before"]["hooks"][0]["hook"] == "web_hook"
+        # No after-mode webhook → after.oidc.hooks contains only the session hook.
+        after_hook_names = [h["hook"] for h in reg["after"]["oidc"]["hooks"]]
+        assert "web_hook" not in after_hook_names
+        assert "session" in after_hook_names
+
+    def test_registration_after_hook_renders_under_after_section(self) -> None:
+        data = RegistrationWebhookData(configs=[self._make_reg_hook_config("after")])
+
+        cfg = ConfigFile.from_sources(self._identity_source(), data)
+
+        reg = cfg.yaml_content["selfservice"]["flows"]["registration"]
+        after_hooks = reg["after"]["oidc"]["hooks"]
+        assert after_hooks[0]["hook"] == "web_hook"
+        # session is always appended after any web_hooks.
+        assert after_hooks[-1]["hook"] == "session"
+        assert "before" not in reg
+
+    def test_registration_both_modes_render_both_sections(self) -> None:
+        data = RegistrationWebhookData(
+            configs=[
+                self._make_reg_hook_config("before"),
+                self._make_reg_hook_config("after"),
+            ]
+        )
+
+        cfg = ConfigFile.from_sources(self._identity_source(), data)
+
+        reg = cfg.yaml_content["selfservice"]["flows"]["registration"]
+        assert reg["before"]["hooks"][0]["hook"] == "web_hook"
+        after_hooks = reg["after"]["oidc"]["hooks"]
+        assert after_hooks[0]["hook"] == "web_hook"
+        assert after_hooks[-1]["hook"] == "session"
+
+    def test_registration_all_methods_after_hook_renders_in_every_method_section(self) -> None:
+        """An after hook with methods=() (all methods) must appear in every per-method section.
+
+        Kratos uses fallback semantics: per-method hooks override global hooks.
+        Since every method has a per-method section, all-methods hooks are included
+        inside each one.
+        """
+        data = RegistrationWebhookData(configs=[self._make_reg_hook_config("after", methods=())])
+        local_idp = self._local_idp_source()
+
+        cfg = ConfigFile.from_sources(self._identity_source(), local_idp, data)
+
+        reg = cfg.yaml_content["selfservice"]["flows"]["registration"]
+        # All-methods hooks appear inside each per-method section.
+        password_hook_names = [h["hook"] for h in reg["after"]["password"]["hooks"]]
+        assert "web_hook" in password_hook_names
+        assert "session" in password_hook_names
+        oidc_hook_names = [h["hook"] for h in reg["after"]["oidc"]["hooks"]]
+        assert "web_hook" in oidc_hook_names
+        assert "session" in oidc_hook_names
+
+    def test_registration_oidc_only_after_hook_not_in_password_section(self) -> None:
+        """An after hook with methods=("oidc",) must appear in after.oidc but not after.password."""
+        data = RegistrationWebhookData(
+            configs=[self._make_reg_hook_config("after", methods=("oidc",))]
+        )
+        local_idp = self._local_idp_source()
+
+        cfg = ConfigFile.from_sources(self._identity_source(), local_idp, data)
+
+        reg = cfg.yaml_content["selfservice"]["flows"]["registration"]
+        password_hook_names = [h["hook"] for h in reg["after"]["password"]["hooks"]]
+        assert "web_hook" not in password_hook_names
+        oidc_hook_names = [h["hook"] for h in reg["after"]["oidc"]["hooks"]]
+        assert "web_hook" in oidc_hook_names
+
+    def test_login_after_hook_renders_under_per_method_sections(self) -> None:
+        data = LoginWebhookData(configs=[self._make_login_hook_config("after")])
+
+        cfg = ConfigFile.from_sources(self._identity_source(), self._local_idp_source(), data)
+
+        login = cfg.yaml_content["selfservice"]["flows"]["login"]
+        # All-methods hooks render inside each per-method section (Kratos fallback semantics).
+        password_hooks = login["after"]["password"]["hooks"]
+        assert password_hooks[0]["hook"] == "web_hook"
+        code_hooks = login["after"]["code"]["hooks"]
+        assert code_hooks[0]["hook"] == "web_hook"
+        assert "before" not in login
+
+    def test_login_before_hook_renders_under_before_section(self) -> None:
+        data = LoginWebhookData(configs=[self._make_login_hook_config("before")])
+
+        cfg = ConfigFile.from_sources(self._identity_source(), self._local_idp_source(), data)
+
+        login = cfg.yaml_content["selfservice"]["flows"]["login"]
+        assert login["before"]["hooks"][0]["hook"] == "web_hook"
+        assert "after" not in login
+
+    def test_login_method_specific_hook_only_in_target_section(self) -> None:
+        """A login hook with methods=("password",) appears only in the password section."""
+        data = LoginWebhookData(
+            configs=[self._make_login_hook_config("after", methods=("password",))]
+        )
+
+        cfg = ConfigFile.from_sources(self._identity_source(), self._local_idp_source(), data)
+
+        login = cfg.yaml_content["selfservice"]["flows"]["login"]
+        password_hooks = login["after"]["password"]["hooks"]
+        assert any(h["hook"] == "web_hook" for h in password_hooks)
+        # code section should not render since there are no all-methods or code-specific hooks.
+        assert "code" not in login["after"]
+
+    def test_registration_weight_ordering(self) -> None:
+        """Hooks are rendered in weight order (lower first)."""
+        hook_high = RegistrationWebhookConfig(
+            url="http://example.com/high",
+            body="base64://body.jsonnet",
+            method="POST",
+            mode="after",
+            weight=10,
+            response_ignore=False,
+            response_parse=False,
+            auth_enabled=True,
+            auth_type="api_key",
+            auth_config_name="Authorization",
+            auth_config_value="secret",
+            auth_config_in="header",
+        )
+        hook_low = RegistrationWebhookConfig(
+            url="http://example.com/low",
+            body="base64://body.jsonnet",
+            method="POST",
+            mode="after",
+            weight=5,
+            response_ignore=False,
+            response_parse=False,
+            auth_enabled=True,
+            auth_type="api_key",
+            auth_config_name="Authorization",
+            auth_config_value="secret",
+            auth_config_in="header",
+        )
+        data = RegistrationWebhookData(configs=[hook_high, hook_low])
+
+        cfg = ConfigFile.from_sources(self._identity_source(), data)
+
+        reg = cfg.yaml_content["selfservice"]["flows"]["registration"]
+        oidc_hooks = [h for h in reg["after"]["oidc"]["hooks"] if h["hook"] == "web_hook"]
+        urls = [h["config"]["url"] for h in oidc_hooks]
+        assert urls == ["http://example.com/low", "http://example.com/high"]

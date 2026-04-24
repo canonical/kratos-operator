@@ -42,6 +42,7 @@ from integrations import (
     LoginUIEndpointData,
     PeerData,
     PublicRouteData,
+    RegistrationWebhookConfig,
     RegistrationWebhookData,
     SmtpData,
     TLSCertificates,
@@ -542,16 +543,43 @@ class TestRegistrationWebhookData:
         return create_autospec(KratosRegistrationWebhookRequirer)
 
     def test_to_service_configs(self) -> None:
-        data = RegistrationWebhookData(url="http://hook", method="POST", is_ready=True)
+        config = RegistrationWebhookConfig(
+            url="http://hook",
+            body="",
+            method="POST",
+            mode="after",
+            methods=(),
+            weight=0,
+            response_ignore=False,
+            response_parse=False,
+            auth_enabled=True,
+            auth_type="api_key",
+            auth_config_name="Authorization",
+            auth_config_value="",
+            auth_config_in="header",
+        )
+        data = RegistrationWebhookData(configs=[config])
         configs = data.to_service_configs()
 
-        assert configs == {"registration_webhook_config": asdict(data)}
+        assert configs == {
+            "registration_flow": {
+                "before": {"hooks": []},
+                "after": {"hooks": [asdict(config)]},
+            }
+        }
+
+    def test_to_service_configs_empty(self) -> None:
+        data = RegistrationWebhookData()
+        assert data.to_service_configs() == {}
 
     def test_load(self, mocked_requirer: MagicMock) -> None:
+        mock_relation = MagicMock()
+        mocked_requirer.relations = [mock_relation]
         mocked_requirer.consume_relation_data.return_value = ProviderData(
             url="http://webhook",
             body='{"foo":"bar"}',
             method="POST",
+            mode="after",
             response_ignore=True,
             response_parse=False,
             auth_type="bearer",
@@ -561,19 +589,54 @@ class TestRegistrationWebhookData:
         )
 
         data = RegistrationWebhookData.load(mocked_requirer)
-        assert data == RegistrationWebhookData(
-            url="http://webhook",
-            body='{"foo":"bar"}',
-            method="POST",
-            response_ignore=True,
-            response_parse=False,
-            auth_enabled=True,
-            auth_type="bearer",
-            auth_config_name="Authorization",
-            auth_config_in="header",
-            auth_config_value="token",
-            is_ready=True,
-        )
+        assert data.configs == [
+            RegistrationWebhookConfig(
+                url="http://webhook",
+                body='{"foo":"bar"}',
+                method="POST",
+                mode="after",
+                methods=(),
+                weight=0,
+                response_ignore=True,
+                response_parse=False,
+                auth_enabled=True,
+                auth_type="bearer",
+                auth_config_name="Authorization",
+                auth_config_in="header",
+                auth_config_value="token",
+            )
+        ]
+
+    def test_load_no_relations(self, mocked_requirer: MagicMock) -> None:
+        mocked_requirer.relations = []
+        data = RegistrationWebhookData.load(mocked_requirer)
+        assert data == RegistrationWebhookData()
+
+    def test_load_multiple_relations(self, mocked_requirer: MagicMock) -> None:
+        rel_a = MagicMock()
+        rel_b = MagicMock()
+        mocked_requirer.relations = [rel_a, rel_b]
+        mocked_requirer.consume_relation_data.side_effect = [
+            ProviderData(
+                url="http://hook-a",
+                body="a",
+                method="POST",
+                response_ignore=True,
+                response_parse=False,
+            ),
+            ProviderData(
+                url="http://hook-b",
+                body="b",
+                method="POST",
+                response_ignore=False,
+                response_parse=True,
+            ),
+        ]
+
+        data = RegistrationWebhookData.load(mocked_requirer)
+        assert len(data.configs) == 2
+        assert data.configs[0].url == "http://hook-a"
+        assert data.configs[1].url == "http://hook-b"
 
 
 class TestExternalIdpIntegrationData:
