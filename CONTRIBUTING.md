@@ -36,6 +36,22 @@ tox devenv
 source venv/bin/activate
 ```
 
+### Verification email template
+
+If the verification email template was changed, a new revision has to be uploaded to the store:
+
+```
+charmcraft upload-resource kratos verification-email-template --filepath=./templates/verification-email-template.gotmpl
+```
+
+The charming [action](https://github.com/canonical/charming-actions/tree/main/upload-charm#files) uploads the most recent resource to the charm release.
+It can also be uploaded manually with:
+
+```
+charmcraft release kratos --revision=<rev> --channel=<channel> --resource=verification-email-template:1
+```
+
+
 ## Testing
 
 ```shell
@@ -62,7 +78,7 @@ juju add-model dev
 # Enable DEBUG logging
 juju model-config logging-config="<root>=INFO;unit=DEBUG"
 # Deploy the charm
-juju deploy ./kratos_ubuntu-*-amd64.charm --resource oci-image=$(yq eval '.resources.oci-image.upstream-source' charmcraft.yaml)
+juju deploy ./kratos_ubuntu-*-amd64.charm --resource oci-image=$(yq eval '.resources.oci-image.upstream-source' charmcraft.yaml) --resource verification-email-template=./templates/verification-email-template.gotmpl --trust
 ```
 
 ## Canonical Contributor Agreement

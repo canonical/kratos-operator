@@ -61,6 +61,7 @@ class TestCharmConfig:
         assert env_vars["HTTP_PROXY"] == "http://proxy"
         assert env_vars["HTTPS_PROXY"] == "https://proxy"
         assert env_vars["NO_PROXY"] == "localhost,127.0.0.1"
+        assert env_vars["COURIER_TEMPLATE_OVERRIDE_PATH"] == "/etc/config/templates"
         assert env_vars["COURIER_SMTP_FROM_ADDRESS"] == "identity@canonical.com"
         assert env_vars["COURIER_SMTP_FROM_NAME"] == "Identity"
         assert "COURIER_TEMPLATES_RECOVERY_CODE_VALID_EMAIL_BODY_HTML" not in env_vars
