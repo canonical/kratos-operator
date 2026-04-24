@@ -24,6 +24,7 @@ from typing_extensions import Self
 
 from constants import (
     CONFIG_FILE_PATH,
+    COURIER_TEMPLATE_OVERRIDE_PATH,
     DEFAULT_SCHEMA_ID_FILE_NAME,
     EMAIL_TEMPLATE_FILE_PATH,
     IDENTITY_SCHEMAS_LOCAL_DIR_PATH,
@@ -108,6 +109,7 @@ class CharmConfig:
             "HTTP_PROXY": self._config["http_proxy"],
             "HTTPS_PROXY": self._config["https_proxy"],
             "NO_PROXY": self._config["no_proxy"],
+            "COURIER_TEMPLATE_OVERRIDE_PATH": COURIER_TEMPLATE_OVERRIDE_PATH,
             "COURIER_SMTP_FROM_ADDRESS": self._config["sender_email"],
             "COURIER_SMTP_FROM_NAME": self._config["sender_name"],
         }
