@@ -172,7 +172,7 @@ class LoginUIEndpointData:
 
     def to_service_configs(self) -> ServiceConfigs:
         return {
-            "default_browser_return_url": self.login_url,
+            "default_browser_return_url": self.settings_url,
             "login_ui_url": self.login_url,
             "error_ui_url": self.error_url,
             "settings_ui_url": self.settings_url,

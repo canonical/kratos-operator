@@ -254,7 +254,7 @@ class TestLoginUIEndpointData:
 
     def test_to_service_configs(self, endpoint_data: LoginUIEndpointData) -> None:
         expected = {
-            "default_browser_return_url": "login_url",
+            "default_browser_return_url": "settings_url",
             "login_ui_url": "login_url",
             "error_ui_url": "error_url",
             "settings_ui_url": "settings_url",
