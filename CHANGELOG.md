@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.2.1](https://github.com/canonical/kratos-operator/compare/v2.2.0...v2.2.1) (2026-04-28)
+
+
+### Bug Fixes
+
+* set the default return url to settings page ([e9faaaf](https://github.com/canonical/kratos-operator/commit/e9faaafe413db4247814c6e2e9dc574fa7e97e3b))
+* set the default return url to settings page ([#651](https://github.com/canonical/kratos-operator/issues/651)) ([c018d1d](https://github.com/canonical/kratos-operator/commit/c018d1d39ef625422317d804d0527852917f030f))
+
 ## [2.2.0](https://github.com/canonical/kratos-operator/compare/v2.1.1...v2.2.0) (2026-04-24)
 
 
