@@ -6,7 +6,7 @@ from collections import ChainMap
 from typing import Optional
 
 from ops import Container, ModelError, Unit
-from ops.pebble import CheckStatus, Layer, LayerDict, ServiceInfo
+from ops.pebble import CheckStatus, Layer, LayerDict, ServiceInfo, ServiceStatus
 
 from cli import CommandLine
 from configs import ConfigFile
@@ -118,7 +118,12 @@ class WorkloadService:
             if c := self._container.get_checks().get(PEBBLE_READY_CHECK_NAME):
                 return c.failures > 0
 
-        return not service.is_running()
+        # Check for explicit pebble service error status
+        if service.current == ServiceStatus.ERROR:
+            return True
+
+        # Service is 'active' or 'inactive'. For 'disabled' services, 'inactive' is a valid state and not a failure
+        return False
 
     def open_ports(self) -> None:
         self._unit.open_port(protocol="tcp", port=KRATOS_PUBLIC_PORT)
