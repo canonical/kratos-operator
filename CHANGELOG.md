@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.2.1](https://github.com/canonical/kratos-operator/compare/v2.2.0...v2.2.1) (2026-05-06)
+
+
+### Bug Fixes
+
+* explicitly check for pebble service error state ([f1bea67](https://github.com/canonical/kratos-operator/commit/f1bea6728311509e4d8d6b0c4c2ff7eda86f3bf9))
+* explicitly check for pebble service error state ([#655](https://github.com/canonical/kratos-operator/issues/655)) ([d678616](https://github.com/canonical/kratos-operator/commit/d6786169ee6bb487e7846c9f7d093628df4e2cec))
+* set the default return url to settings page ([e9faaaf](https://github.com/canonical/kratos-operator/commit/e9faaafe413db4247814c6e2e9dc574fa7e97e3b))
+* set the default return url to settings page ([#651](https://github.com/canonical/kratos-operator/issues/651)) ([c018d1d](https://github.com/canonical/kratos-operator/commit/c018d1d39ef625422317d804d0527852917f030f))
+
 ## [2.2.0](https://github.com/canonical/kratos-operator/compare/v2.1.1...v2.2.0) (2026-04-24)
 
 
