@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from ops import ModelError
-from ops.pebble import CheckStatus
+from ops.pebble import CheckStatus, ServiceStatus
 from pytest_mock import MockerFixture
 from scenario import CheckInfo
 
@@ -130,6 +130,7 @@ class TestWorkloadService:
     ) -> None:
         mocked_service_info = MagicMock()
         mocked_service_info.is_running.return_value = False
+        mocked_service_info.current = ServiceStatus.ERROR
         mocked_container.get_service.return_value = mocked_service_info
 
         assert workload_service.is_failing(COURIER_SERVICE) is True
