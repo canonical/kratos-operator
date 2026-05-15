@@ -16,16 +16,15 @@ import requests
 from integration.constants import (
     ADMIN_PASSWORD,
     DB_APP,
+    ISTIO_INTERNAL_APP,
+    ISTIO_PUBLIC_APP,
     KRATOS_APP,
     KRATOS_IMAGE,
     LOGIN_UI_APP,
-    TRAEFIK_ADMIN_APP,
-    TRAEFIK_PUBLIC_APP,
 )
 from integration.utils import (
     get_app_integration_data,
     get_integration_data,
-    get_unit_address,
     juju_model_factory,
 )
 
@@ -143,8 +142,8 @@ def integrate_dependencies(juju: jubilant.Juju) -> None:
     juju.integrate(
         f"{KRATOS_APP}:{LOGIN_UI_INTEGRATION_NAME}", f"{LOGIN_UI_APP}:{LOGIN_UI_INTEGRATION_NAME}"
     )
-    juju.integrate(f"{KRATOS_APP}:{INTERNAL_ROUTE_INTEGRATION_NAME}", TRAEFIK_ADMIN_APP)
-    juju.integrate(f"{KRATOS_APP}:{PUBLIC_ROUTE_INTEGRATION_NAME}", TRAEFIK_PUBLIC_APP)
+    juju.integrate(f"{KRATOS_APP}:{INTERNAL_ROUTE_INTEGRATION_NAME}", f"{ISTIO_INTERNAL_APP}:istio-ingress-route")
+    juju.integrate(f"{KRATOS_APP}:{PUBLIC_ROUTE_INTEGRATION_NAME}", f"{ISTIO_PUBLIC_APP}:istio-ingress-route")
     juju.integrate(
         f"{KRATOS_APP}:{KRATOS_INFO_INTEGRATION_NAME}",
         f"{LOGIN_UI_APP}:{KRATOS_INFO_INTEGRATION_NAME}",
@@ -190,12 +189,28 @@ def leader_kratos_info_integration_data(app_integration_data: Callable) -> dict 
 
 @pytest.fixture
 def public_address(juju: jubilant.Juju) -> str:
-    return get_unit_address(juju, app_name=TRAEFIK_PUBLIC_APP)
+    """Get the public address published by istio-ingress-k8s."""
+    app_data = get_app_integration_data(juju, KRATOS_APP, PUBLIC_ROUTE_INTEGRATION_NAME)
+
+    if app_data and (external_host := app_data.get("external_host")):
+        return external_host
+
+    raise ValueError(
+        f"Could not find 'external_host' in the '{PUBLIC_ROUTE_INTEGRATION_NAME}' relation data for {KRATOS_APP}"
+    )
 
 
 @pytest.fixture
 def admin_address(juju: jubilant.Juju) -> str:
-    return get_unit_address(juju, app_name=TRAEFIK_ADMIN_APP)
+    """Get the admin address published by istio-ingress-k8s."""
+    app_data = get_app_integration_data(juju, KRATOS_APP, INTERNAL_ROUTE_INTEGRATION_NAME)
+
+    if app_data and (external_host := app_data.get("external_host")):
+        return external_host
+
+    raise ValueError(
+        f"Could not find 'external_host' in the '{INTERNAL_ROUTE_INTEGRATION_NAME}' relation data for {KRATOS_APP}"
+    )
 
 
 @pytest.fixture
