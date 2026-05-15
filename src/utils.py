@@ -11,7 +11,7 @@ from constants import (
     KRATOS_EXTERNAL_IDP_INTEGRATOR_INTEGRATION_NAME,
     KRATOS_INFO_INTEGRATION_NAME,
     PEER_INTEGRATION_NAME,
-    PUBLIC_ROUTE_INTEGRATION_NAME,
+    PUBLIC_INGRESS_ROUTE_INTEGRATION_NAME,
     WORKLOAD_CONTAINER,
 )
 from integrations import PublicRouteData
@@ -69,7 +69,7 @@ kratos_info_integration_exists = integration_existence(KRATOS_INFO_INTEGRATION_N
 external_idp_integrator_integration_exists = integration_existence(
     KRATOS_EXTERNAL_IDP_INTEGRATOR_INTEGRATION_NAME
 )
-public_route_integration_exists = integration_existence(PUBLIC_ROUTE_INTEGRATION_NAME)
+public_ingress_route_integration_exists = integration_existence(PUBLIC_INGRESS_ROUTE_INTEGRATION_NAME)
 
 
 def container_connectivity(charm: CharmBase) -> bool:
@@ -92,11 +92,11 @@ def public_route_is_ready(charm: "KratosCharm") -> bool:
     """Checks whether public route URL is required or is ready.
 
     A public route URL is required when the external-idp-integrator
-    integration exists and it is ready when the public-route is ready.
+    integration exists and it is ready when the public-ingress-route is ready.
     """
     return (
         not external_idp_integrator_integration_exists(charm)
-        or PublicRouteData.load(charm.public_route).url
+        or PublicRouteData.load(charm.public_ingress_route).url
     )
 
 
@@ -108,7 +108,7 @@ def external_hostname_is_ready(charm: "KratosCharm") -> bool:
     """
     return not (
         kratos_info_integration_exists(charm) and external_idp_integrator_integration_exists(charm)
-    ) or public_route_integration_exists(charm)
+    ) or public_ingress_route_integration_exists(charm)
 
 
 def passwordless_config_is_valid(charm: "KratosCharm") -> bool:
