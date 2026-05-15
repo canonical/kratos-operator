@@ -11,8 +11,8 @@ from pytest_mock import MockerFixture
 from constants import (
     COOKIE_SECRET_CONTENT_KEY,
     COOKIE_SECRET_LABEL,
-    INTERNAL_ROUTE_INTEGRATION_NAME,
-    PUBLIC_ROUTE_INTEGRATION_NAME,
+    INTERNAL_INGRESS_ROUTE_INTEGRATION_NAME,
+    PUBLIC_INGRESS_ROUTE_INTEGRATION_NAME,
 )
 
 
@@ -139,22 +139,22 @@ def registration_webhook_integration() -> testing.Relation:
 
 
 @pytest.fixture
-def public_route_integration() -> testing.Relation:
+def public_ingress_route_integration() -> testing.Relation:
     return testing.Relation(
-        endpoint=PUBLIC_ROUTE_INTEGRATION_NAME,
-        interface="traefik-route",
-        remote_app_name="traefik-public",
-        remote_app_data={"external_host": "public.example.com", "scheme": "https"},
+        endpoint=PUBLIC_INGRESS_ROUTE_INTEGRATION_NAME,
+        interface="istio_ingress_route",
+        remote_app_name="istio-ingress-public",
+        remote_app_data={"external_host": "public.example.com", "tls_enabled": "True"},
     )
 
 
 @pytest.fixture
 def internal_ingress_integration() -> testing.Relation:
     return testing.Relation(
-        endpoint=INTERNAL_ROUTE_INTEGRATION_NAME,
-        interface="traefik-route",
-        remote_app_name="traefik-internal",
-        remote_app_data={"external_host": "example.com", "scheme": "https"},
+        endpoint=INTERNAL_INGRESS_ROUTE_INTEGRATION_NAME,
+        interface="istio_ingress_route",
+        remote_app_name="istio-ingress-internal",
+        remote_app_data={"external_host": "example.com", "tls_enabled": "True"},
     )
 
 
@@ -221,14 +221,4 @@ def tracing_integration() -> testing.Relation:
         endpoint="tracing",
         interface="tracing",
         remote_app_name="tempo-coordinator-k8s",
-    )
-
-
-@pytest.fixture
-def ingress_template() -> str:
-    return (
-        '{"model": "{{ model }}", '
-        '"app": "{{ app }}", '
-        '"public_port": {{ public_port }}, '
-        '"external_host": "{{ external_host }}"}'
     )
