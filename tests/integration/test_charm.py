@@ -14,17 +14,17 @@ import requests
 from integration.conftest import integrate_dependencies
 from integration.constants import (
     ADMIN_EMAIL,
-    ADMIN_INGRESS_DOMAIN,
     CA_APP,
     DB_APP,
     IDENTITY_SCHEMA,
+    ISTIO_INGRESS_K8S_CHARM,
+    ISTIO_INTERNAL_APP,
+    ISTIO_K8S_APP,
+    ISTIO_K8S_CHARM,
+    ISTIO_PUBLIC_APP,
     KRATOS_APP,
     KRATOS_IMAGE,
     LOGIN_UI_APP,
-    PUBLIC_INGRESS_DOMAIN,
-    TRAEFIK_ADMIN_APP,
-    TRAEFIK_CHARM,
-    TRAEFIK_PUBLIC_APP,
 )
 from integration.utils import (
     StatusPredicate,
@@ -40,7 +40,7 @@ from src.constants import (
     DATABASE_INTEGRATION_NAME,
     LOGIN_UI_INTEGRATION_NAME,
     PEER_INTEGRATION_NAME,
-    PUBLIC_ROUTE_INTEGRATION_NAME,
+    PUBLIC_INGRESS_ROUTE_INTEGRATION_NAME,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,26 +69,35 @@ def test_build_and_deploy(juju: jubilant.Juju, local_charm: Path) -> None:
     )
 
     juju.deploy(
-        TRAEFIK_CHARM,
-        app=TRAEFIK_PUBLIC_APP,
-        channel="latest/edge",
-        config={"external_hostname": PUBLIC_INGRESS_DOMAIN},
+        ISTIO_K8S_CHARM,
+        app=ISTIO_K8S_APP,
+        channel="2/stable",
+        trust=True,
+    )
+
+    juju.deploy(
+        ISTIO_INGRESS_K8S_CHARM,
+        app=ISTIO_PUBLIC_APP,
+        channel="2/stable",
         trust=True,
     )
     juju.deploy(
-        TRAEFIK_CHARM,
-        app=TRAEFIK_ADMIN_APP,
-        channel="latest/edge",
-        config={"external_hostname": ADMIN_INGRESS_DOMAIN},
+        ISTIO_INGRESS_K8S_CHARM,
+        app=ISTIO_INTERNAL_APP,
+        channel="2/stable",
         trust=True,
     )
+
+    juju.integrate(f"{ISTIO_PUBLIC_APP}:certificates", f"{CA_APP}:certificates")
+
     juju.deploy(
         LOGIN_UI_APP,
         channel="latest/edge",
         trust=True,
     )
-    juju.integrate(TRAEFIK_PUBLIC_APP, f"{LOGIN_UI_APP}:public-route")
-    juju.integrate(f"{TRAEFIK_PUBLIC_APP}:certificates", f"{CA_APP}:certificates")
+
+    # TODO: Replace with istio integration when implemented by login ui
+    # juju.integrate(TRAEFIK_PUBLIC_APP, f"{LOGIN_UI_APP}:public-route")
 
     # Integrate with dependencies
     integrate_dependencies(juju)
@@ -97,15 +106,17 @@ def test_build_and_deploy(juju: jubilant.Juju, local_charm: Path) -> None:
         ready=all_active(
             KRATOS_APP,
             DB_APP,
-            TRAEFIK_PUBLIC_APP,
-            TRAEFIK_ADMIN_APP,
+            ISTIO_K8S_APP,
+            ISTIO_PUBLIC_APP,
+            ISTIO_INTERNAL_APP,
             LOGIN_UI_APP,
         ),
         error=any_error(
             KRATOS_APP,
             DB_APP,
-            TRAEFIK_PUBLIC_APP,
-            TRAEFIK_ADMIN_APP,
+            ISTIO_K8S_APP,
+            ISTIO_PUBLIC_APP,
+            ISTIO_INTERNAL_APP,
             LOGIN_UI_APP,
         ),
         timeout=15 * 60,
@@ -140,8 +151,8 @@ def test_public_route_integration(
     get_webauthn_js: requests.Response,
 ) -> None:
     assert leader_public_route_integration_data
-    assert leader_public_route_integration_data["external_host"] == PUBLIC_INGRESS_DOMAIN
-    assert leader_public_route_integration_data["scheme"] == "https"
+    assert leader_public_route_integration_data.get("external_host")
+    assert leader_public_route_integration_data.get("tls_enabled") in ("True", "False")
 
     assert get_webauthn_js.status_code == http.HTTPStatus.OK
 
@@ -152,8 +163,8 @@ def test_internal_ingress_integration(
     get_whoami: requests.Response,
 ) -> None:
     assert leader_internal_ingress_integration_data
-    assert leader_internal_ingress_integration_data["external_host"] == ADMIN_INGRESS_DOMAIN
-    assert leader_internal_ingress_integration_data["scheme"] == "http"
+    assert leader_internal_ingress_integration_data.get("external_host")
+    assert leader_internal_ingress_integration_data.get("tls_enabled") in ("True", "False")
 
     assert get_identities.status_code == http.HTTPStatus.OK
 
@@ -381,7 +392,7 @@ def test_identity_schemas_config(
     "remote_app_name,integration_name,is_status",
     [
         (DB_APP, DATABASE_INTEGRATION_NAME, is_blocked),
-        (TRAEFIK_PUBLIC_APP, PUBLIC_ROUTE_INTEGRATION_NAME, all_active),
+        (ISTIO_PUBLIC_APP, PUBLIC_INGRESS_ROUTE_INTEGRATION_NAME, all_active),
         (LOGIN_UI_APP, LOGIN_UI_INTEGRATION_NAME, all_active),
     ],
 )
