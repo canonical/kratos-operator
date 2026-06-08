@@ -22,5 +22,5 @@ jobs:
     uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@59d4d2782bcb8fc2deea2aa08442e4c8603f2689 # v1.11.2
     with:
       container-name: "kratos"
-      use-charmcraftcache: true
+      use-charmcraftcache: false
       node-size: large
