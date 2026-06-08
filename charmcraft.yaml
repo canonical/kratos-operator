@@ -346,8 +346,8 @@ parts:
     plugin: dump
     source: .
     organize:
-      "claim_mappers/**": schemas/
-      "identity_schemas/**": schemas/
+      "claim_mappers/**": schemas/claim_mappers/
+      "identity_schemas/**": schemas/identity_schemas/
     prime:
       - schemas/
   charm:

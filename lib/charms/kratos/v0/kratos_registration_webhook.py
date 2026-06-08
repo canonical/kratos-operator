@@ -43,7 +43,7 @@ from pydantic import (
 
 LIBID = "37ddb4471fae41adb74299f091ee3a28"
 LIBAPI = 0
-LIBPATCH = 5
+LIBPATCH = 6
 
 PYDEPS = ["pydantic"]
 
@@ -197,6 +197,8 @@ class KratosRegistrationWebhookProvider(Object):
             relation.data[self._charm.app].update(data.model_dump(mode="json", exclude_none=True))
 
     def _delete_juju_secret(self, relation: Relation) -> None:
+        if not self._charm.unit.is_leader():
+            return
         try:
             secret = self.model.get_secret(
                 label=API_KEY_SECRET_LABEL_TEMPLATE.substitute(relation_id=relation.id)
