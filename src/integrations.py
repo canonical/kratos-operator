@@ -403,8 +403,8 @@ class InternalRouteData:
             )
         )
 
-        prefer_in_cluster_urls = requirer._charm.config.get("prefer_in_cluster_urls", True)
-        use_external_endpoint = bool(external_host and prefer_in_cluster_urls)
+        prefer_external_urls = requirer._charm.config.get("prefer_external_urls", True)
+        use_external_endpoint = bool(external_host and prefer_external_urls)
 
         public_endpoint = URL(
             external_endpoint

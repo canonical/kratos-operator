@@ -468,7 +468,7 @@ class TestInternalRouteData:
         mocked._charm = MagicMock()
         mocked._charm.model.name = "model"
         mocked._charm.app.name = "app"
-        mocked._charm.config = {"prefer_in_cluster_urls": True}
+        mocked._charm.config = {"prefer_external_urls": True}
         mocked.scheme = "http"
 
         relation = MagicMock()
@@ -509,11 +509,11 @@ class TestInternalRouteData:
             config=expected_ingress_config,
         )
 
-    def test_load_with_external_host_and_prefer_in_cluster_urls_false(
+    def test_load_with_external_host_and_prefer_external_urls_false(
         self, mocked_requirer: MagicMock, ingress_template: str
     ) -> None:
         mocked_requirer.external_host = "internal.example.com"
-        mocked_requirer._charm.config = {"prefer_in_cluster_urls": False}
+        mocked_requirer._charm.config = {"prefer_external_urls": False}
 
         with patch("builtins.open", mock_open(read_data=ingress_template)):
             actual = InternalRouteData.load(mocked_requirer)
