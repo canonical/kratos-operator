@@ -344,7 +344,8 @@ class PublicRouteData:
                 "SELFSERVICE_ALLOWED_RETURN_URLS": json.dumps(
                     [
                         str(
-                            self.url.with_path("")
+                            self.url
+                            .with_path("")
                             .without_query_params()
                             .with_fragment(None)
                             .with_path("/")
@@ -402,14 +403,17 @@ class InternalRouteData:
             )
         )
 
+        prefer_in_cluster_urls = requirer._charm.config.get("prefer_in_cluster_urls", True)
+        use_external = bool(external_host and prefer_in_cluster_urls)
+
         public_endpoint = URL(
             external_endpoint
-            if external_host
+            if use_external
             else f"{scheme}://{app}.{model}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
         )
         admin_endpoint = URL(
             external_endpoint
-            if external_host
+            if use_external
             else f"{scheme}://{app}.{model}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
         )
 
