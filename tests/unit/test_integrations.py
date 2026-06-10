@@ -531,6 +531,28 @@ class TestInternalRouteData:
             config=expected_ingress_config,
         )
 
+    def test_load_with_external_host_and_prefer_external_urls_missing(
+        self, mocked_requirer: MagicMock, ingress_template: str
+    ) -> None:
+        mocked_requirer.external_host = "internal.example.com"
+        mocked_requirer._charm.config = {}
+
+        with patch("builtins.open", mock_open(read_data=ingress_template)):
+            actual = InternalRouteData.load(mocked_requirer)
+
+        expected_ingress_config = {
+            "model": "model",
+            "app": "app",
+            "public_port": KRATOS_PUBLIC_PORT,
+            "admin_port": KRATOS_ADMIN_PORT,
+            "external_host": "internal.example.com",
+        }
+        assert actual == InternalRouteData(
+            public_endpoint=URL("http://internal.example.com"),
+            admin_endpoint=URL("http://internal.example.com"),
+            config=expected_ingress_config,
+        )
+
     def test_load_without_external_host(
         self, mocked_requirer: MagicMock, ingress_template: str
     ) -> None:
