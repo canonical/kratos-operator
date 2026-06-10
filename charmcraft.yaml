@@ -128,7 +128,7 @@ config:
       default: False
     prefer_in_cluster_urls:
       description: |
-        When true (default), other services will communicate with Kratos using the routed external endpoint. When false, they will use the in-cluster Kubernetes service address.
+        When true (default) and internal-route is integrated, other services will communicate with Kratos using the routed external endpoint. When false, they will use the in-cluster Kubernetes service address.
       type: boolean
       default: true
     enable_local_idp:

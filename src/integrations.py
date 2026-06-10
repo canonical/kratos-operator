@@ -404,16 +404,16 @@ class InternalRouteData:
         )
 
         prefer_in_cluster_urls = requirer._charm.config.get("prefer_in_cluster_urls", True)
-        should_use_external_endpoint = bool(external_host and prefer_in_cluster_urls)
+        use_external_endpoint = bool(external_host and prefer_in_cluster_urls)
 
         public_endpoint = URL(
             external_endpoint
-            if should_use_external_endpoint
+            if use_external_endpoint
             else f"{scheme}://{app}.{model}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
         )
         admin_endpoint = URL(
             external_endpoint
-            if should_use_external_endpoint
+            if use_external_endpoint
             else f"{scheme}://{app}.{model}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
         )
 
