@@ -56,15 +56,15 @@ requires:
     interface: smtp
     limit: 1
     optional: true
-  internal-route:
-    interface: traefik_route
+  internal-ingress-route:
+    interface: istio_ingress_route
     limit: 1
     optional: true
     description: |
       Ingress used for cross-cluster communication where network topology is more complex
       than just one k8s cluster
-  public-route:
-    interface: traefik_route
+  public-ingress-route:
+    interface: istio_ingress_route
     optional: true
     description: |
       Recommended way to expose the charm to the public internet

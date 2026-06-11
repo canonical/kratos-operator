@@ -31,7 +31,7 @@ INTEGRATION_CA_BUNDLE_PATH = Path("/usr/local/share/ca-certificates/ca-certifica
 
 # Integration constants
 PEER_INTEGRATION_NAME = "kratos-peers"
-INTERNAL_ROUTE_INTEGRATION_NAME = "internal-route"
+INTERNAL_INGRESS_ROUTE_INTEGRATION_NAME = "internal-ingress-route"
 CERTIFICATE_TRANSFER_INTEGRATION_NAME = "receive-ca-cert"
 DATABASE_INTEGRATION_NAME = "pg-database"
 HYDRA_ENDPOINT_INTEGRATION_NAME = "hydra-endpoint-info"
@@ -44,7 +44,7 @@ PROMETHEUS_SCRAPE_INTEGRATION_NAME = "metrics-endpoint"
 LOGGING_INTEGRATION_NAME = "logging"
 GRAFANA_DASHBOARD_INTEGRATION_NAME = "grafana-dashboard"
 TRACING_INTEGRATION_NAME = "tracing"
-PUBLIC_ROUTE_INTEGRATION_NAME = "public-route"
+PUBLIC_INGRESS_ROUTE_INTEGRATION_NAME = "public-ingress-route"
 
 # Action constants
 ALLOWED_MFA_CREDENTIAL_TYPES = ("totp", "lookup_secret", "webauthn")

@@ -16,11 +16,11 @@ import requests
 from integration.constants import (
     ADMIN_PASSWORD,
     DB_APP,
+    ISTIO_INTERNAL_APP,
+    ISTIO_PUBLIC_APP,
     KRATOS_APP,
     KRATOS_IMAGE,
     LOGIN_UI_APP,
-    TRAEFIK_ADMIN_APP,
-    TRAEFIK_PUBLIC_APP,
 )
 from integration.utils import (
     get_app_integration_data,
@@ -30,11 +30,11 @@ from integration.utils import (
 )
 
 from src.constants import (
-    INTERNAL_ROUTE_INTEGRATION_NAME,
+    INTERNAL_INGRESS_ROUTE_INTEGRATION_NAME,
     KRATOS_INFO_INTEGRATION_NAME,
     LOGIN_UI_INTEGRATION_NAME,
     PEER_INTEGRATION_NAME,
-    PUBLIC_ROUTE_INTEGRATION_NAME,
+    PUBLIC_INGRESS_ROUTE_INTEGRATION_NAME,
 )
 
 logger = logging.getLogger(__name__)
@@ -143,8 +143,8 @@ def integrate_dependencies(juju: jubilant.Juju) -> None:
     juju.integrate(
         f"{KRATOS_APP}:{LOGIN_UI_INTEGRATION_NAME}", f"{LOGIN_UI_APP}:{LOGIN_UI_INTEGRATION_NAME}"
     )
-    juju.integrate(f"{KRATOS_APP}:{INTERNAL_ROUTE_INTEGRATION_NAME}", TRAEFIK_ADMIN_APP)
-    juju.integrate(f"{KRATOS_APP}:{PUBLIC_ROUTE_INTEGRATION_NAME}", TRAEFIK_PUBLIC_APP)
+    juju.integrate(f"{KRATOS_APP}:{INTERNAL_INGRESS_ROUTE_INTEGRATION_NAME}", ISTIO_INTERNAL_APP)
+    juju.integrate(f"{KRATOS_APP}:{PUBLIC_INGRESS_ROUTE_INTEGRATION_NAME}", ISTIO_PUBLIC_APP)
     juju.integrate(
         f"{KRATOS_APP}:{KRATOS_INFO_INTEGRATION_NAME}",
         f"{LOGIN_UI_APP}:{KRATOS_INFO_INTEGRATION_NAME}",
@@ -173,14 +173,14 @@ def leader_login_ui_endpoint_integration_data(
 
 @pytest.fixture
 def leader_public_route_integration_data(app_integration_data: Callable) -> dict | None:
-    return app_integration_data(KRATOS_APP, PUBLIC_ROUTE_INTEGRATION_NAME)
+    return app_integration_data(KRATOS_APP, PUBLIC_INGRESS_ROUTE_INTEGRATION_NAME)
 
 
 @pytest.fixture
 def leader_internal_ingress_integration_data(
     app_integration_data: Callable,
 ) -> dict | None:
-    return app_integration_data(KRATOS_APP, INTERNAL_ROUTE_INTEGRATION_NAME)
+    return app_integration_data(KRATOS_APP, INTERNAL_INGRESS_ROUTE_INTEGRATION_NAME)
 
 
 @pytest.fixture
@@ -190,12 +190,12 @@ def leader_kratos_info_integration_data(app_integration_data: Callable) -> dict 
 
 @pytest.fixture
 def public_address(juju: jubilant.Juju) -> str:
-    return get_unit_address(juju, app_name=TRAEFIK_PUBLIC_APP)
+    return get_unit_address(juju, app_name=ISTIO_PUBLIC_APP)
 
 
 @pytest.fixture
 def admin_address(juju: jubilant.Juju) -> str:
-    return get_unit_address(juju, app_name=TRAEFIK_ADMIN_APP)
+    return get_unit_address(juju, app_name=ISTIO_INTERNAL_APP)
 
 
 @pytest.fixture

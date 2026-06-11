@@ -17,13 +17,26 @@ from charms.hydra.v0.hydra_endpoints import HydraEndpointsRequirer
 from charms.identity_platform_login_ui_operator.v0.login_ui_endpoints import (
     LoginUIEndpointsRequirer,
 )
+from charms.istio_ingress_k8s.v0.istio_ingress_route import (
+    BackendRef,
+    HTTPPathMatch,
+    HTTPPathMatchType,
+    HTTPRoute,
+    HTTPRouteMatch,
+    IstioIngressRouteConfig,
+    IstioIngressRouteRequirer,
+    Listener,
+    PathModifier,
+    PathModifierType,
+    ProtocolType,
+    URLRewriteFilter,
+    URLRewriteSpec,
+)
 from charms.kratos.v0.kratos_login_webhook import KratosLoginWebhookRequirer
 from charms.kratos.v0.kratos_registration_webhook import KratosRegistrationWebhookRequirer
 from charms.kratos_external_idp_integrator.v1.kratos_external_provider import ExternalIdpRequirer
 from charms.smtp_integrator.v0.smtp import SmtpRequires
 from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer
-from charms.traefik_k8s.v0.traefik_route import TraefikRouteRequirer
-from jinja2 import Template
 from ops import Model
 from typing_extensions import Self
 from yarl import URL
@@ -32,12 +45,10 @@ from configs import ServiceConfigs
 from constants import (
     CA_BUNDLE_PATH,
     INTEGRATION_CA_BUNDLE_PATH,
-    INTERNAL_ROUTE_INTEGRATION_NAME,
     KRATOS_ADMIN_PORT,
     KRATOS_PUBLIC_PORT,
     PEER_INTEGRATION_NAME,
     POSTGRESQL_DSN_TEMPLATE,
-    PUBLIC_ROUTE_INTEGRATION_NAME,
 )
 from env_vars import EnvVars
 
@@ -273,57 +284,183 @@ class SmtpData:
         )
 
 
+def _build_public_ingress_config(model: str, app: str) -> IstioIngressRouteConfig:
+    """Build an IstioIngressRouteConfig for the Kratos public API."""
+    listener = Listener(port=KRATOS_PUBLIC_PORT, protocol=ProtocolType.HTTP)
+    backend = BackendRef(service=app, port=KRATOS_PUBLIC_PORT)
+    return IstioIngressRouteConfig(
+        model=model,
+        listeners=[listener],
+        http_routes=[
+            HTTPRoute(
+                name="self-service",
+                listener=listener,
+                backends=[backend],
+                matches=[
+                    HTTPRouteMatch(
+                        path=HTTPPathMatch(
+                            type=HTTPPathMatchType.PathPrefix, value="/self-service"
+                        )
+                    )
+                ],
+            ),
+            HTTPRoute(
+                name="schemas",
+                listener=listener,
+                backends=[backend],
+                matches=[
+                    HTTPRouteMatch(
+                        path=HTTPPathMatch(type=HTTPPathMatchType.PathPrefix, value="/schemas")
+                    )
+                ],
+            ),
+            HTTPRoute(
+                name="oidc-callback",
+                listener=listener,
+                backends=[backend],
+                matches=[
+                    HTTPRouteMatch(
+                        path=HTTPPathMatch(
+                            type=HTTPPathMatchType.PathPrefix,
+                            value="/self-service/methods/oidc/callback",
+                        )
+                    )
+                ],
+            ),
+            HTTPRoute(
+                name="webauthn-js",
+                listener=listener,
+                backends=[backend],
+                matches=[
+                    HTTPRouteMatch(
+                        path=HTTPPathMatch(
+                            type=HTTPPathMatchType.Exact, value="/.well-known/webauthn.js"
+                        )
+                    )
+                ],
+                filters=[
+                    URLRewriteFilter(
+                        urlRewrite=URLRewriteSpec(
+                            path=PathModifier(
+                                type=PathModifierType.ReplaceFullPath,
+                                value="/.well-known/ory/webauthn.js",
+                            )
+                        )
+                    )
+                ],
+            ),
+        ],
+    )
+
+
+def _build_internal_ingress_config(model: str, app: str) -> IstioIngressRouteConfig:
+    """Build an IstioIngressRouteConfig for the Kratos internal (admin + public) APIs."""
+    public_listener = Listener(port=KRATOS_PUBLIC_PORT, protocol=ProtocolType.HTTP)
+    admin_listener = Listener(port=KRATOS_ADMIN_PORT, protocol=ProtocolType.HTTP)
+    public_backend = BackendRef(service=app, port=KRATOS_PUBLIC_PORT)
+    admin_backend = BackendRef(service=app, port=KRATOS_ADMIN_PORT)
+    return IstioIngressRouteConfig(
+        model=model,
+        listeners=[public_listener, admin_listener],
+        http_routes=[
+            HTTPRoute(
+                name="admin-identities",
+                listener=admin_listener,
+                backends=[admin_backend],
+                matches=[
+                    HTTPRouteMatch(
+                        path=HTTPPathMatch(
+                            type=HTTPPathMatchType.PathPrefix, value="/admin/identities"
+                        )
+                    )
+                ],
+            ),
+            HTTPRoute(
+                name="admin-recovery",
+                listener=admin_listener,
+                backends=[admin_backend],
+                matches=[
+                    HTTPRouteMatch(
+                        path=HTTPPathMatch(
+                            type=HTTPPathMatchType.PathPrefix, value="/admin/recovery"
+                        )
+                    )
+                ],
+            ),
+            HTTPRoute(
+                name="admin-sessions",
+                listener=admin_listener,
+                backends=[admin_backend],
+                matches=[
+                    HTTPRouteMatch(
+                        path=HTTPPathMatch(
+                            type=HTTPPathMatchType.PathPrefix, value="/admin/sessions"
+                        )
+                    )
+                ],
+            ),
+            HTTPRoute(
+                name="public-schemas",
+                listener=public_listener,
+                backends=[public_backend],
+                matches=[
+                    HTTPRouteMatch(
+                        path=HTTPPathMatch(type=HTTPPathMatchType.PathPrefix, value="/schemas")
+                    )
+                ],
+            ),
+            HTTPRoute(
+                name="public-self-service",
+                listener=public_listener,
+                backends=[public_backend],
+                matches=[
+                    HTTPRouteMatch(
+                        path=HTTPPathMatch(
+                            type=HTTPPathMatchType.PathPrefix, value="/self-service"
+                        )
+                    )
+                ],
+            ),
+            HTTPRoute(
+                name="public-sessions",
+                listener=public_listener,
+                backends=[public_backend],
+                matches=[
+                    HTTPRouteMatch(
+                        path=HTTPPathMatch(type=HTTPPathMatchType.PathPrefix, value="/sessions")
+                    )
+                ],
+            ),
+        ],
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class PublicRouteData:
-    """The data source from the public-route integration."""
+    """The data source from the public-ingress-route integration."""
 
     url: URL = URL()
-    config: dict = field(default_factory=dict)
+    config: IstioIngressRouteConfig | None = None
 
     @classmethod
-    def _external_host(cls, requirer: TraefikRouteRequirer) -> str:
-        if not (relation := requirer._charm.model.get_relation(PUBLIC_ROUTE_INTEGRATION_NAME)):
-            return
-        if not relation.app:
-            return
-        return relation.data[relation.app].get("external_host", "")
-
-    @classmethod
-    def _scheme(cls, requirer: TraefikRouteRequirer) -> str:
-        if not (relation := requirer._charm.model.get_relation(PUBLIC_ROUTE_INTEGRATION_NAME)):
-            return
-        if not relation.app:
-            return
-        return relation.data[relation.app].get("scheme", "")
-
-    @classmethod
-    def load(cls, requirer: TraefikRouteRequirer) -> "PublicRouteData":
+    def load(cls, requirer: IstioIngressRouteRequirer) -> "PublicRouteData":
         model, app = requirer._charm.model.name, requirer._charm.app.name
-        external_host = cls._external_host(requirer)
-        scheme = cls._scheme(requirer)
 
-        external_endpoint = f"{scheme}://{external_host}"
+        relation = requirer._charm.model.get_relation(requirer._relation_name)
+        if not relation or not relation.app:
+            return cls()
 
-        # template could have use PathPrefixRegexp but going for a simple one right now
-        with open("templates/public-route.j2", "r") as file:
-            template = Template(file.read())
-
-        ingress_config = json.loads(
-            template.render(
-                model=model,
-                app=app,
-                public_port=KRATOS_PUBLIC_PORT,
-                external_host=external_host,
-            )
-        )
-
+        external_host = relation.data[relation.app].get("external_host", "")
         if not external_host:
             logger.error("External hostname is not set on the ingress provider")
             return cls()
 
+        tls_enabled = relation.data[relation.app].get("tls_enabled", "False") == "True"
+        scheme = "https" if tls_enabled else "http"
+
         return cls(
-            url=URL(external_endpoint),
-            config=ingress_config,
+            url=URL(f"{scheme}://{external_host}"),
+            config=_build_public_ingress_config(model, app),
         )
 
     @property
@@ -344,7 +481,8 @@ class PublicRouteData:
                 "SELFSERVICE_ALLOWED_RETURN_URLS": json.dumps(
                     [
                         str(
-                            self.url.with_path("")
+                            self.url
+                            .with_path("")
                             .without_query_params()
                             .with_fragment(None)
                             .with_path("/")
@@ -359,64 +497,38 @@ class PublicRouteData:
 
 @dataclass(frozen=True, slots=True)
 class InternalRouteData:
-    """The data source from the internal-ingress integration."""
+    """The data source from the internal-ingress-route integration."""
 
     public_endpoint: URL
     admin_endpoint: URL
-    config: dict = field(default_factory=dict)
+    config: IstioIngressRouteConfig | None = None
 
     @classmethod
-    def _external_host(cls, requirer: TraefikRouteRequirer) -> str:
-        if not (relation := requirer._charm.model.get_relation(INTERNAL_ROUTE_INTEGRATION_NAME)):
-            return
-        if not relation.app:
-            return
-        return relation.data[relation.app].get("external_host", "")
-
-    @classmethod
-    def _scheme(cls, requirer: TraefikRouteRequirer) -> str:
-        if not (relation := requirer._charm.model.get_relation(INTERNAL_ROUTE_INTEGRATION_NAME)):
-            return
-        if not relation.app:
-            return
-        return relation.data[relation.app].get("scheme", "")
-
-    @classmethod
-    def load(cls, requirer: TraefikRouteRequirer) -> "InternalRouteData":
+    def load(cls, requirer: IstioIngressRouteRequirer) -> "InternalRouteData":
         model, app = requirer._charm.model.name, requirer._charm.app.name
-        external_host = cls._external_host(requirer)
-        scheme = cls._scheme(requirer) or "http"
 
-        external_endpoint = f"{scheme}://{external_host}"
+        external_host = ""
+        scheme = "http"
 
-        with open("templates/internal-route.j2", "r") as file:
-            template = Template(file.read())
+        relation = requirer._charm.model.get_relation(requirer._relation_name)
+        if relation and relation.app:
+            external_host = relation.data[relation.app].get("external_host", "")
+            tls_enabled = relation.data[relation.app].get("tls_enabled", "False") == "True"
+            scheme = "https" if tls_enabled else "http"
 
-        ingress_config = json.loads(
-            template.render(
-                model=model,
-                app=app,
-                public_port=KRATOS_PUBLIC_PORT,
-                admin_port=KRATOS_ADMIN_PORT,
-                external_host=external_host,
-            )
-        )
-
-        public_endpoint = URL(
-            external_endpoint
-            if external_host
-            else f"{scheme}://{app}.{model}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
-        )
-        admin_endpoint = URL(
-            external_endpoint
-            if external_host
-            else f"{scheme}://{app}.{model}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
-        )
+        if external_host:
+            public_endpoint = URL(f"{scheme}://{external_host}")
+            admin_endpoint = URL(f"{scheme}://{external_host}")
+            config = _build_internal_ingress_config(model, app)
+        else:
+            public_endpoint = URL(f"http://{app}.{model}.svc.cluster.local:{KRATOS_PUBLIC_PORT}")
+            admin_endpoint = URL(f"http://{app}.{model}.svc.cluster.local:{KRATOS_ADMIN_PORT}")
+            config = None
 
         return cls(
             public_endpoint=public_endpoint,
             admin_endpoint=admin_endpoint,
-            config=ingress_config,
+            config=config,
         )
 
 
