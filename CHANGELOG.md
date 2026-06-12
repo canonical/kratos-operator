@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.2](https://github.com/canonical/kratos-operator/compare/v2.2.1...v2.2.2) (2026-06-12)
+
+
+### Bug Fixes
+
+* add leader guard to secret_remove ([ce823c0](https://github.com/canonical/kratos-operator/commit/ce823c07d7696cb282ca6ce997e81081b034c9fb))
+
 ## [2.2.1](https://github.com/canonical/kratos-operator/compare/v2.2.0...v2.2.1) (2026-05-06)
 
 
