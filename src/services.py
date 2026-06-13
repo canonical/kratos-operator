@@ -41,7 +41,7 @@ PEBBLE_LAYER_DICT = {
             "summary": "kratos courier worker",
             "command": f"kratos courier watch --config {CONFIG_FILE_PATH}",
             "startup": "disabled",
-        }
+        },
     },
     "checks": {
         PEBBLE_READY_CHECK_NAME: {

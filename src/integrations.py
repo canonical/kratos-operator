@@ -338,23 +338,15 @@ class PublicRouteData:
         )
 
     def to_env_vars(self) -> EnvVars:
-        return (
-            {
-                "SERVE_PUBLIC_BASE_URL": str(self.url),
-                "SELFSERVICE_ALLOWED_RETURN_URLS": json.dumps(
-                    [
-                        str(
-                            self.url.with_path("")
-                            .without_query_params()
-                            .with_fragment(None)
-                            .with_path("/")
-                        )
-                    ],
-                ),
-            }
-            if self.url
-            else {}
+        if not self.url:
+            return {}
+        base_url = str(
+            self.url.with_path("").without_query_params().with_fragment(None).with_path("/")
         )
+        return {
+            "SERVE_PUBLIC_BASE_URL": str(self.url),
+            "SELFSERVICE_ALLOWED_RETURN_URLS": json.dumps([base_url]),
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -402,14 +394,17 @@ class InternalRouteData:
             )
         )
 
+        prefer_external_urls = requirer._charm.config.get("prefer_external_urls", True)
+        use_external_endpoint = bool(external_host and prefer_external_urls)
+
         public_endpoint = URL(
             external_endpoint
-            if external_host
+            if use_external_endpoint
             else f"{scheme}://{app}.{model}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
         )
         admin_endpoint = URL(
             external_endpoint
-            if external_host
+            if use_external_endpoint
             else f"{scheme}://{app}.{model}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
         )
 
