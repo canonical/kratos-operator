@@ -126,6 +126,11 @@ config:
       description: Run Kratos on dev mode, it is needed if HTTPS is not set up. This should only be used for development purposes.
       type: boolean
       default: False
+    use_ingress_for_relations:
+      description: |
+        Route relation endpoints through ingress. If set to false, in-cluster Kubernetes service addresses are preferred for related services even when internal-route is configured.
+      type: boolean
+      default: False
     enable_local_idp:
       description: Enable Kratos Identity Provider
       type: boolean
