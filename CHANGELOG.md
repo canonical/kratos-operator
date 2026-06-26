@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.3.0](https://github.com/canonical/kratos-operator/compare/v2.2.1...v2.3.0) (2026-06-26)
+
+
+### Features
+
+* add openspec archive and specs for istio integration ([57a1329](https://github.com/canonical/kratos-operator/commit/57a1329093bc6f169a654b337c29755e732d6cdf))
+* replace `traefik-route` relation with `istio-ingress-route` ([#660](https://github.com/canonical/kratos-operator/issues/660)) ([def836b](https://github.com/canonical/kratos-operator/commit/def836b2db4784c8ea3784c4af9ef48a537829c3))
+* replace traefik-route with istio-ingress-route ([c7f8967](https://github.com/canonical/kratos-operator/commit/c7f8967941c49bb6da8351093eb6c7afa1116e48))
+
+
+### Bug Fixes
+
+* add leader guard to secret_remove ([ce823c0](https://github.com/canonical/kratos-operator/commit/ce823c07d7696cb282ca6ce997e81081b034c9fb))
+
 ## [2.2.1](https://github.com/canonical/kratos-operator/compare/v2.2.0...v2.2.1) (2026-05-06)
 
 
