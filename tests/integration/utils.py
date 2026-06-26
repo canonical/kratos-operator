@@ -69,7 +69,10 @@ def get_unit_address(juju: jubilant.Juju, app_name: str, unit_num: int = 0) -> s
 
 @contextmanager
 def remove_integration(
-    juju: jubilant.Juju, remote_app_name: str, integration_name: str
+    juju: jubilant.Juju,
+    /,
+    remote_app_name: str,
+    integration_name: str,
 ) -> Iterator[None]:
     """Temporarily remove an integration from the application.
 

@@ -12,6 +12,7 @@ from os.path import join
 from secrets import token_hex
 from typing import Any, Optional
 
+from charmlibs.interfaces.istio_ingress_route import IstioIngressRouteRequirer
 from charms.certificate_transfer_interface.v1.certificate_transfer import (
     CertificatesAvailableEvent,
     CertificatesRemovedEvent,
@@ -62,7 +63,6 @@ from charms.observability_libs.v0.kubernetes_compute_resources_patch import (
 from charms.prometheus_k8s.v0.prometheus_scrape import MetricsEndpointProvider
 from charms.smtp_integrator.v0.smtp import SmtpDataAvailableEvent, SmtpRequires
 from charms.tempo_coordinator_k8s.v0.tracing import TracingEndpointRequirer
-from charms.traefik_k8s.v0.traefik_route import TraefikRouteRequirer
 from lightkube import Client
 from ops import (
     EventBase,
@@ -203,20 +203,16 @@ class KratosCharm(CharmBase):
 
         self.smtp_requirer = SmtpRequires(self)
 
-        # ingress via raw traefik routing configuration
-        self.internal_route = TraefikRouteRequirer(
+        # ingress via Istio routing configuration
+        self.internal_route = IstioIngressRouteRequirer(
             self,
-            self.model.get_relation(INTERNAL_ROUTE_INTEGRATION_NAME),
-            INTERNAL_ROUTE_INTEGRATION_NAME,
-            raw=True,
+            relation_name=INTERNAL_ROUTE_INTEGRATION_NAME,
         )
 
-        # public route via raw traefik routing configuration
-        self.public_route = TraefikRouteRequirer(
+        # public ingress via Istio routing configuration
+        self.public_route = IstioIngressRouteRequirer(
             self,
-            self.model.get_relation(PUBLIC_ROUTE_INTEGRATION_NAME),
-            PUBLIC_ROUTE_INTEGRATION_NAME,
-            raw=True,
+            relation_name=PUBLIC_ROUTE_INTEGRATION_NAME,
         )
 
         self.database_requirer = DatabaseRequires(
@@ -350,32 +346,16 @@ class KratosCharm(CharmBase):
             self.on[DATABASE_INTEGRATION_NAME].relation_broken, self._on_database_relation_broken
         )
 
-        # public route
+        # public ingress route
         self.framework.observe(
-            self.on[PUBLIC_ROUTE_INTEGRATION_NAME].relation_joined,
+            self.public_route.on.ready,
             self._on_public_route_changed,
-        )
-        self.framework.observe(
-            self.on[PUBLIC_ROUTE_INTEGRATION_NAME].relation_changed,
-            self._on_public_route_changed,
-        )
-        self.framework.observe(
-            self.on[PUBLIC_ROUTE_INTEGRATION_NAME].relation_broken,
-            self._on_public_route_broken,
         )
 
-        # internal route
+        # internal ingress route
         self.framework.observe(
-            self.on[INTERNAL_ROUTE_INTEGRATION_NAME].relation_joined,
+            self.internal_route.on.ready,
             self._on_internal_route_changed,
-        )
-        self.framework.observe(
-            self.on[INTERNAL_ROUTE_INTEGRATION_NAME].relation_changed,
-            self._on_internal_route_changed,
-        )
-        self.framework.observe(
-            self.on[INTERNAL_ROUTE_INTEGRATION_NAME].relation_broken,
-            self._on_internal_route_broken,
         )
 
         # kratos-external-idp
@@ -472,6 +452,16 @@ class KratosCharm(CharmBase):
             event.defer()
             return
 
+        if self.unit.is_leader() and self.public_route.is_ready():
+            public_route_config = PublicRouteData.load(self.public_route).config
+            if public_route_config is not None:
+                self.public_route.submit_config(public_route_config)
+
+        if self.unit.is_leader() and self.internal_route.is_ready():
+            internal_route_config = InternalRouteData.load(self.internal_route).config
+            if internal_route_config is not None:
+                self.internal_route.submit_config(internal_route_config)
+
         self._update_kratos_external_idp_configurations()
 
         self._workload_service.push_ca_certs(
@@ -501,7 +491,9 @@ class KratosCharm(CharmBase):
                 self._pebble_service.stop(COURIER_SERVICE)
             return
 
-        if self._pebble_service.config_changed or not self._workload_service.is_running(COURIER_SERVICE):
+        if self._pebble_service.config_changed or not self._workload_service.is_running(
+            COURIER_SERVICE
+        ):
             logger.info("Restarting kratos courier service")
             self._pebble_service.restart(COURIER_SERVICE)
 
@@ -558,7 +550,7 @@ class KratosCharm(CharmBase):
             event.add_status(
                 BlockedStatus(
                     "Cannot send integration data without an external hostname. Please "
-                    "provide a traefik-route relation."
+                    "provide a public-route relation."
                 )
             )
 
@@ -582,7 +574,11 @@ class KratosCharm(CharmBase):
                 )
             )
 
-        if can_connect and self.unit.is_leader() and self._workload_service.is_failing(COURIER_SERVICE):
+        if (
+            can_connect
+            and self.unit.is_leader()
+            and self._workload_service.is_failing(COURIER_SERVICE)
+        ):
             event.add_status(
                 BlockedStatus(
                     f"Failed to start the courier service, please check the '{COURIER_SERVICE}' logs on the workload container"
@@ -746,67 +742,12 @@ class KratosCharm(CharmBase):
 
     def _on_public_route_changed(self, event: RelationEvent) -> None:
         self.unit.status = MaintenanceStatus("Configuring resources")
-
-        # needed due to how traefik_route lib is handling the event
-        self.public_route._relation = event.relation
-
-        if not self.public_route.is_ready():
-            return
-        if event.relation.app is None:
-            # We need to defer the event as this is not handled in the holistic handler
-            # TODO(nsklikas): move this to the holistic handler and remove defer
-            # TODO2(nsklikas): Fix this in traefik_route lib, this is a bug and the lib should handle
-            # this in the `is_ready` method, like it does for the Provider side.
-            event.defer()
-            return
-
-        if self.unit.is_leader():
-            public_route_config = PublicRouteData.load(self.public_route).config
-            self.public_route.submit_to_traefik(public_route_config)
-
-        self._holistic_handler(event)
-        self._on_kratos_info_provider_ready(event)
-
-    def _on_public_route_broken(self, event: RelationBrokenEvent) -> None:
-        self.unit.status = MaintenanceStatus("Configuring resources")
-
-        if self.unit.is_leader():
-            logger.info("This app no longer has public-route")
-
-        # needed due to how traefik_route lib is handling the event
-        self.public_route._relation = event.relation
-
         self._holistic_handler(event)
         self._on_kratos_info_provider_ready(event)
 
     def _on_internal_route_changed(self, event: RelationEvent) -> None:
         self.unit.status = MaintenanceStatus("Configuring resources")
-
-        # needed due to how traefik_route lib is handling the event
-        self.internal_route._relation = event.relation
-
-        if not self.internal_route.is_ready():
-            return
-        if event.relation.app is None:
-            # We need to defer the event as this is not handled in the holistic handler
-            # TODO(nsklikas): move this to the holistic handler and remove defer
-            # TODO2(nsklikas): Fix this in traefik_route lib, this is a bug and the lib should handle
-            # this in the `is_ready` method, like it does for the Provider side.
-            event.defer()
-            return
-
-        if self.unit.is_leader():
-            internal_route_config = InternalRouteData.load(self.internal_route).config
-            self.internal_route.submit_to_traefik(internal_route_config)
-
-    def _on_internal_route_broken(self, event: RelationBrokenEvent) -> None:
-        self.unit.status = MaintenanceStatus("Configuring resources")
-
-        if self.unit.is_leader():
-            logger.info("This app no longer has internal-route")
-
-        # needed due to how traefik_route lib is handling the event
-        self.internal_route._relation = event.relation
+        self._holistic_handler(event)
 
     def _update_kratos_external_idp_configurations(self) -> None:
         if not (public_url := PublicRouteData.load(self.public_route).url):

@@ -203,3 +203,8 @@ terraform.rc
 # Optional: ignore plan files saved before destroying Terraform configuration
 # Uncomment the line below if you want to ignore planout files.
 # planout
+
+# openspec: track config, specs, active changes (for PR review) and archived design decisions and proposals
+# Ignore archived changes specs since they are redundant - their rationale is merged into openspec/specs/
+# on `openspec archive`, which is the single source of truth.
+openspec/changes/archive/*/specs/
