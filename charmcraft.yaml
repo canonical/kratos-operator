@@ -341,6 +341,7 @@ actions:
 ########################### build ###########################
 platforms:
   ubuntu@22.04:amd64:
+  ubuntu@22.04:arm64:
 parts:
   schemas:
     plugin: dump
