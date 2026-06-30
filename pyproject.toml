@@ -12,6 +12,21 @@ show_missing = true
 minversion = "6.0"
 log_cli_level = "INFO"
 pythonpath = ["src", "lib", "tests"]
+filterwarnings = [
+    "error",
+    # The kratos_registration_webhook charm-lib tests still use Harness.
+    # Harness is deprecated in favour of Scenario; this is the intentional
+    # signal, ignored narrowly until those tests are migrated.
+    "ignore:Harness is deprecated:PendingDeprecationWarning",
+    # The vendored data_platform_libs lib (lib/charms/data_platform_libs/v0/
+    # data_interfaces.py, LIBPATCH 58) calls the deprecated ops
+    # JujuVersion.from_environ(); the fix belongs upstream in canonical/data-platform-libs.
+    "ignore:JujuVersion.from_environ:DeprecationWarning",
+    # Integration tests hit the deployed charm over HTTPS with self-signed certs and
+    # `verify=False`; urllib3 emits InsecureRequestWarning by design. Verifying the cert
+    # would require plumbing the CA out of the test model, which is out of scope here.
+    "ignore::urllib3.exceptions.InsecureRequestWarning",
+]
 
 # Linting and formatting tools configuration
 [tool.codespell]
