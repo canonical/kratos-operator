@@ -18,7 +18,7 @@ resources:
   oci-image:
     type: oci-image
     description: Kratos oci-image
-    upstream-source: ghcr.io/canonical/kratos:25.4.0
+    upstream-source: ghcr.io/canonical/kratos:26.2.0
   verification-email-template:
     type: file
     filename: verification-email-template.gotmpl
@@ -341,6 +341,7 @@ actions:
 ########################### build ###########################
 platforms:
   ubuntu@22.04:amd64:
+  ubuntu@22.04:arm64:
 parts:
   schemas:
     plugin: dump

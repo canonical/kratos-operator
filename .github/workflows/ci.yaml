@@ -19,8 +19,10 @@ on:
 jobs:
   tests:
     name: CI
-    uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@5830f3e6723de07cb5b7ccb6c84031d8b2964c62 # v1.11.4
+    uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@add-multi-arch-parameter
     with:
       container-name: "kratos"
-      use-charmcraftcache: true
+      # TODO: Re-enable when arm64 build is complete in ccc-hub
+      use-charmcraftcache: false
       node-size: large
+      multi-arch: true
