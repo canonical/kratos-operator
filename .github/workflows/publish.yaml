@@ -24,6 +24,10 @@ on:
         required: true
         type: boolean
 
+permissions:
+  contents: write
+  issues: write
+
 jobs:
   publish:
     name: Publish Charm
