@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.4.0](https://github.com/canonical/kratos-operator/compare/v2.3.0...v2.4.0) (2026-07-02)
+
+
+### Features
+
+* add ci permissions ([#684](https://github.com/canonical/kratos-operator/issues/684)) ([6b5da6e](https://github.com/canonical/kratos-operator/commit/6b5da6ee7ad7e7490b80d627a05579a3ff96279f))
+* fix ci permissions ([dc9d78d](https://github.com/canonical/kratos-operator/commit/dc9d78da13602da92ebd91b186377cb00fe2baee))
+
 ## [2.3.0](https://github.com/canonical/kratos-operator/compare/v2.2.1...v2.3.0) (2026-07-02)
 
 
