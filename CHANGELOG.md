@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.3.0](https://github.com/canonical/kratos-operator/compare/v2.2.1...v2.3.0) (2026-07-02)
+
+
+### Features
+
+* support arm64 build ([21e91e4](https://github.com/canonical/kratos-operator/commit/21e91e4857c251e3c8214589bd7c1ff62112a65d))
+* support arm64 build and bump image to v26.2.0 ([#680](https://github.com/canonical/kratos-operator/issues/680)) ([bc03c12](https://github.com/canonical/kratos-operator/commit/bc03c127e3490e23c794cdc62e9a1992590ef3b0))
+
+
+### Bug Fixes
+
+* add leader guard to secret_remove ([ce823c0](https://github.com/canonical/kratos-operator/commit/ce823c07d7696cb282ca6ce997e81081b034c9fb))
+
 ## [2.2.1](https://github.com/canonical/kratos-operator/compare/v2.2.0...v2.2.1) (2026-05-06)
 
 
