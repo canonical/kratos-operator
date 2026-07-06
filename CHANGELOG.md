@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.4.1](https://github.com/canonical/kratos-operator/compare/v2.4.0...v2.4.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* trigger a release ([fda97c9](https://github.com/canonical/kratos-operator/commit/fda97c9215a15f48290a2ece5d65f1a9a3f34f81))
+* trigger release ([#653](https://github.com/canonical/kratos-operator/issues/653)) ([f31851f](https://github.com/canonical/kratos-operator/commit/f31851f266394a2de6da0e14118d8f8015b76f40))
+
 ## [2.4.0](https://github.com/canonical/kratos-operator/compare/v2.3.0...v2.4.0) (2026-07-02)
 
 
