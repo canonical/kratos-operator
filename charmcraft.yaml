@@ -23,6 +23,7 @@ resources:
     type: file
     filename: verification-email-template.gotmpl
     description: Custom email verification template to use with code method
+
 requires:
   pg-database:
     interface: postgresql_client
