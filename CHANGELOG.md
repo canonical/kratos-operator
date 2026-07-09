@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.4.2](https://github.com/canonical/kratos-operator/compare/v2.4.1...v2.4.2) (2026-07-09)
+
+
+### Bug Fixes
+
+* trigger release ([#692](https://github.com/canonical/kratos-operator/issues/692)) ([3e80328](https://github.com/canonical/kratos-operator/commit/3e80328ef384ccabef6c6266a151c0204b8dbcd9))
+* update oci-image to ghcr.io/canonical/kratos:26.2.0 ([bbf4f9c](https://github.com/canonical/kratos-operator/commit/bbf4f9c128cec7fe479d9a0f4c0723822b5c7893))
+
 ## [2.4.1](https://github.com/canonical/kratos-operator/compare/v2.4.0...v2.4.1) (2026-07-06)
 
 
