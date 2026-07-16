@@ -1,6 +1,65 @@
 # Copyright 2022 Canonical Ltd.
 # See LICENSE file for licensing details.
 
+[project]
+name = "kratos-operator"
+version = "0.0.0"
+description = "Charmed Ory Kratos operator"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.10"
+dependencies = [
+    "bcrypt==5.0.0",
+    "cosl==1.10.1",
+    "ops==3.8.0",
+    "dacite",
+    "Jinja2==3.1.6",
+    "jsonschema==4.26.0",
+    "lightkube==0.15.4",
+    "lightkube-models==1.35.0.8",
+    "pydantic[email]~=2.13.0",
+    "pyyaml==6.0.3",
+    "requests",
+    "yarl",
+]
+
+[dependency-groups]
+fmt = [
+    "isort",
+    "ruff",
+]
+lint = [
+    "codespell",
+    "isort",
+    "ruff",
+    "tomli",
+]
+unit = [
+    "coverage[toml]",
+    "ops[testing]",
+    "pytest",
+    "pytest-mock",
+]
+integration = [
+    "jubilant",
+    "pytest",
+    "requests",
+    "tenacity",
+]
+dev = [
+    "pre-commit",
+    "mypy",
+    "types-PyYAML",
+    "types-requests",
+    { include-group = "fmt" },
+    { include-group = "lint" },
+    { include-group = "unit" },
+    { include-group = "integration" },
+]
+
+[tool.uv]
+package = false
+
 # Testing tools configuration
 [tool.coverage.run]
 branch = true

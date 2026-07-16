@@ -346,16 +346,19 @@ parts:
   schemas:
     plugin: dump
     source: .
-    organize:
-      "claim_mappers/**": schemas/claim_mappers/
-      "identity_schemas/**": schemas/identity_schemas/
     prime:
-      - schemas/
+      - claim_mappers/
+      - identity_schemas/
+  templates:
+    plugin: dump
+    source: .
+    prime:
+      - templates/
   charm:
-    charm-binary-python-packages:
-      - jsonschema
-      - bcrypt
-      - "setuptools>=70.0.0"
+    plugin: uv
+    source: .
+    build-snaps:
+      - astral-uv
     build-packages:
       - "rustc-1.85"
       - "cargo-1.85"
