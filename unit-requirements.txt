@@ -1,5 +1,0 @@
--r requirements.txt
-coverage[toml]
-ops[testing]
-pytest
-pytest-mock
