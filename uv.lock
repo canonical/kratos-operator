@@ -487,17 +487,18 @@ wheels = [
 
 [[package]]
 name = "httpx"
-version = "0.28.1"
+version = "0.27.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
     { name = "certifi" },
     { name = "httpcore" },
     { name = "idna" },
+    { name = "sniffio" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b1/df/48c586a5fe32a0f01324ee087459e112ebb7224f646c0b5023f5e79e9956/httpx-0.28.1.tar.gz", hash = "sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc", size = 141406, upload-time = "2024-12-06T15:37:23.222Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/78/82/08f8c936781f67d9e6b9eeb8a0c8b4e406136ea4c3d1f89a5db71d42e0e6/httpx-0.27.2.tar.gz", hash = "sha256:f7c2be1d2f3c3c3160d441802406b206c2b76f5947b11115e6df10c6c65e66c2", size = 144189, upload-time = "2024-08-27T12:54:01.334Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad", size = 73517, upload-time = "2024-12-06T15:37:21.509Z" },
+    { url = "https://files.pythonhosted.org/packages/56/95/9377bcb415797e44274b51d46e3249eba641711cf3348050f76ee7b15ffc/httpx-0.27.2-py3-none-any.whl", hash = "sha256:7bb2708e112d8fdd7829cd4243970f0c223274051cb35ee80c03301ee29a3df0", size = 76395, upload-time = "2024-08-27T12:53:59.653Z" },
 ]
 
 [[package]]
@@ -655,7 +656,7 @@ requires-dist = [
     { name = "dacite" },
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "jsonschema", specifier = "==4.26.0" },
-    { name = "lightkube", specifier = "==0.15.4" },
+    { name = "lightkube", specifier = "==0.15.8" },
     { name = "lightkube-models", specifier = "==1.35.0.8" },
     { name = "ops", specifier = "==3.8.0" },
     { name = "pydantic", extras = ["email"], specifier = "~=2.13.0" },
@@ -794,16 +795,16 @@ wheels = [
 
 [[package]]
 name = "lightkube"
-version = "0.15.4"
+version = "0.15.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "lightkube-models" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8b/ab/0c0640f8cc862933763b40d2aa899b9862ee97dbb6dfd2dd1c57ab72e5f7/lightkube-0.15.4.tar.gz", hash = "sha256:fe7939f8da5b68d80809243c9abf601fca2e5425228bb02c2ad23ed3e56401a8", size = 44224, upload-time = "2024-08-25T10:09:10.705Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0f/76/4355071434d40c6038efada99f58520cbae690556e68ba1a40eeee12951c/lightkube-0.15.8.tar.gz", hash = "sha256:ac950d24ddbb59904708730f13ce254b05b6255a471dfab027cbe44c4123bfc6", size = 44487, upload-time = "2024-12-16T13:07:28.876Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ff/e9/374f895aa42c6b9b34755996764549daed424d30841469a1530bd0429a75/lightkube-0.15.4-py3-none-any.whl", hash = "sha256:7dde49694f2933b757ee6dfee0e028a56d7a13f47476bf54a21ec7cee343b09b", size = 38033, upload-time = "2024-08-25T10:09:13.15Z" },
+    { url = "https://files.pythonhosted.org/packages/88/9e/a43c21384c59a5210187faf972883cc0eada55510d982fc08f83ea375b4a/lightkube-0.15.8-py3-none-any.whl", hash = "sha256:236f6d11e9281764a8ae896ab2c28a4bc943dc0576822445064577eaa90677ba", size = 38208, upload-time = "2024-12-16T13:07:36.132Z" },
 ]
 
 [[package]]
@@ -1898,6 +1899,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/3a/3c/37d0ecb729a7cc2d393ea7dce316fc585680f35d93b8d62139d7d0a3700c/ruff-0.15.21-py3-none-win32.whl", hash = "sha256:01f8d5be84823c172b389e123174f781f9daf86d6c58719d603f941932195cdd", size = 10896555, upload-time = "2026-07-09T20:01:26.941Z" },
     { url = "https://files.pythonhosted.org/packages/c0/b8/e43466b2a6067ce91e669068f6e28d6c719a920f014b070d5c8731725de3/ruff-0.15.21-py3-none-win_amd64.whl", hash = "sha256:d4b8d9a2f0f12b816b50447f6eccb9f4bb01a6b82c86b50fb3b5354b458dc6d3", size = 12038772, upload-time = "2026-07-09T20:01:29.497Z" },
     { url = "https://files.pythonhosted.org/packages/dd/75/e90ab9aeece218a9fc5a5bc3ec97d0ee6bb3c4ff95869463c1de58e29a1c/ruff-0.15.21-py3-none-win_arm64.whl", hash = "sha256:6e83115d4b9377c1cbc13abf0e051f069fab0ef815ea0504a8a008cee24dd0a8", size = 11375265, upload-time = "2026-07-09T20:01:31.772Z" },
+]
+
+[[package]]
+name = "sniffio"
+version = "1.3.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a2/87/a6771e1546d97e7e041b6ae58d80074f81b7d5121207425c964ddf5cfdbd/sniffio-1.3.1.tar.gz", hash = "sha256:f4324edc670a0f49750a81b895f35c3adb843cca46f0530f79fc1babb23789dc", size = 20372, upload-time = "2024-02-25T23:20:04.057Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e9/44/75a9c9421471a6c4805dbf2356f7c181a29c1879239abab1ea2cc8f38b40/sniffio-1.3.1-py3-none-any.whl", hash = "sha256:2f6da418d1f1e0fddd844478f41680e794e6051915791a034ff65e5f100525a2", size = 10235, upload-time = "2024-02-25T23:20:01.196Z" },
 ]
 
 [[package]]
