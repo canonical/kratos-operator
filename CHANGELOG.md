@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.4.3](https://github.com/canonical/kratos-operator/compare/v2.4.2...v2.4.3) (2026-07-24)
+
+
+### Bug Fixes
+
+* **deps:** update dependency cosl to v1.10.2 ([0b6739a](https://github.com/canonical/kratos-operator/commit/0b6739aa9237212a99a40d4850c8b77dba197647))
+* **deps:** update dependency cosl to v1.10.2 ([#705](https://github.com/canonical/kratos-operator/issues/705)) ([9c58c9a](https://github.com/canonical/kratos-operator/commit/9c58c9a10fce004446edfe2e05e637248be6ec2e))
+* **deps:** update dependency lightkube to v0.15.8 ([b1316ae](https://github.com/canonical/kratos-operator/commit/b1316ae6e8ad54c4d92bd05cefa67d5f8a36f7f8))
+* **deps:** update dependency lightkube to v0.15.8 ([#706](https://github.com/canonical/kratos-operator/issues/706)) ([822e38a](https://github.com/canonical/kratos-operator/commit/822e38a77c849748af4a81b5c0b91ad55023da7d))
+* **deps:** update dependency lightkube to v0.22.0 ([c9131c7](https://github.com/canonical/kratos-operator/commit/c9131c76692cbb9b605e87b76b55d0b36915d11d))
+* **deps:** update dependency lightkube to v0.22.0 ([#708](https://github.com/canonical/kratos-operator/issues/708)) ([9827f68](https://github.com/canonical/kratos-operator/commit/9827f6851228084e581add15ffd1840e89eeb17f))
+
 ## [2.4.2](https://github.com/canonical/kratos-operator/compare/v2.4.1...v2.4.2) (2026-07-09)
 
 
