@@ -1,0 +1,21 @@
+name: release-pr-ci
+run-name: Release PR CI for ${{ github.sha }} on ${{ github.ref_name }}
+
+on:
+  pull_request:
+    branches:
+      - "main"
+    paths-ignore:
+      - "terraform/**"
+
+jobs:
+  tests:
+    name: CI
+    # if: github.head_ref == 'release-please--branches--main'
+    uses: canonical/identity-team/.github/workflows/charm-release-pull-request.yaml@IAM-2282-support-multiple-bases
+    with:
+      container-name: "kratos"
+      use-charmcraftcache: false
+      node-size: large
+      base: "26.04"
+      k8s-channel: "1.35-strict/stable"
