@@ -28,7 +28,7 @@ on:
 jobs:
   deploy:
     name: Deploy Charm to ${{ inputs.model }}
-    uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@83e6e76b28b0db96c133c16bbec121cba34a86db # v1.14.3
+    uses: canonical/identity-team/.github/workflows/charm-deploy.yaml@1bf335af1d939c8543e53d376dd49d79126c2cd3 # v1.15.0
     with:
       model: ${{ inputs.model }}
       revision: ${{ inputs.revision }}
