@@ -217,7 +217,7 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 47
+LIBPATCH = 50
 
 PYDEPS = ["cosl >= 0.0.50"]
 
@@ -585,9 +585,19 @@ class CharmedDashboard:
                     datasources[template_value["name"]] = template_value["query"].lower()
 
             # Put our own variables in the template
+            # We only want to inject our own dropdowns IFF they are NOT
+            # already in the template coming over relation data.
+            # We'll store all dropdowns in the template from the provider
+            # in a set. We'll add our own if they are not in this set.
+            existing_names = {
+                item.get("name")
+                for item in dict_content["templating"]["list"]
+            }
+
             for d in template_dropdowns:  # type: ignore
-                if d not in dict_content["templating"]["list"]:
+                if d.get("name") not in existing_names:
                     dict_content["templating"]["list"].insert(0, d)
+                    existing_names.add(d.get("name"))
 
         dict_content = cls._replace_template_fields(dict_content, datasources, existing_templates)
         return json.dumps(dict_content)
@@ -1003,7 +1013,7 @@ class CharmedDashboard:
 
         dashboard_templates = {}
 
-        for path in filter(_is_dashboard, Path(dashboards_path).glob("*")):
+        for path in filter(_is_dashboard, Path(dashboards_path).glob("**/*")):
             try:
                 dashboard_dict = json.loads(path.read_bytes())
             except json.JSONDecodeError as e:
@@ -1339,10 +1349,26 @@ class GrafanaDashboardProvider(Object):
 
     def _upset_dashboards_on_relation(self, relation: Relation) -> None:
         """Update the dashboards in the relation data bucket."""
+        new_templates = type_convert_stored(self._stored.dashboard_templates)  # pyright: ignore
+
+        # Check if the templates have actually changed before updating.
+        # This avoids generating a new UUID on every event, which would cause
+        # unnecessary relation-changed events on the consumer side.
+        # See: https://github.com/canonical/opentelemetry-collector-operator/issues/331
+        existing_data_str = relation.data[self._charm.app].get("dashboards", "{}")
+        try:
+            existing_data = json.loads(existing_data_str)
+            existing_templates = existing_data.get("templates", {})
+        except json.JSONDecodeError:
+            existing_templates = {}
+
+        if new_templates == existing_templates:
+            return  # No change in templates, don't update the databag
+
         # It's completely ridiculous to add a UUID, but if we don't have some
         # pseudo-random value, this never makes it across 'juju set-state'
         stored_data = {
-            "templates": type_convert_stored(self._stored.dashboard_templates),  # pyright: ignore
+            "templates": new_templates,
             "uuid": str(uuid.uuid4()),
         }
 
@@ -1821,14 +1847,28 @@ class GrafanaDashboardAggregator(Object):
 
     def _update_remote_grafana(self, _: Optional[RelationEvent] = None) -> None:
         """Push dashboards to the downstream Grafana relation."""
-        # It's still ridiculous to add a UUID here, but needed
-        stored_data = {
-            "templates": type_convert_stored(self._stored.dashboard_templates),  # pyright: ignore
-            "uuid": str(uuid.uuid4()),
-        }
+        new_templates = type_convert_stored(self._stored.dashboard_templates)  # pyright: ignore
 
         if self._charm.unit.is_leader():
             for grafana_relation in self.model.relations[self._grafana_relation]:
+                # Check if the templates have actually changed before updating.
+                # This avoids generating a new UUID on every event, which would cause
+                # unnecessary relation-changed events on the consumer side.
+                existing_data_str = grafana_relation.data[self._charm.app].get("dashboards", "{}")
+                try:
+                    existing_data = json.loads(existing_data_str)
+                    existing_templates = existing_data.get("templates", {})
+                except json.JSONDecodeError:
+                    existing_templates = {}
+
+                if new_templates == existing_templates:
+                    continue  # No change in templates, don't update the databag
+
+                # It's still ridiculous to add a UUID here, but needed
+                stored_data = {
+                    "templates": new_templates,
+                    "uuid": str(uuid.uuid4()),
+                }
                 grafana_relation.data[self._charm.app]["dashboards"] = json.dumps(stored_data)
 
     def remove_dashboards(self, event: RelationBrokenEvent) -> None:
