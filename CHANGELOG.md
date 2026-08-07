@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.5.0](https://github.com/canonical/kratos-operator/compare/v2.4.2...v2.5.0) (2026-08-07)
+
+
+### Features
+
+* support 26.04 base ([42a40ae](https://github.com/canonical/kratos-operator/commit/42a40aef06152ecc52bd3377b9b7183624e8daac))
+* support 26.04 base ([#719](https://github.com/canonical/kratos-operator/issues/719)) ([99da536](https://github.com/canonical/kratos-operator/commit/99da536c97633c0db95d289545fc9ea6256b9b9f))
+
+
+### Bug Fixes
+
+* **deps:** update dependency cosl to v1.10.2 ([0b6739a](https://github.com/canonical/kratos-operator/commit/0b6739aa9237212a99a40d4850c8b77dba197647))
+* **deps:** update dependency cosl to v1.10.2 ([#705](https://github.com/canonical/kratos-operator/issues/705)) ([9c58c9a](https://github.com/canonical/kratos-operator/commit/9c58c9a10fce004446edfe2e05e637248be6ec2e))
+* **deps:** update dependency lightkube to v0.15.8 ([b1316ae](https://github.com/canonical/kratos-operator/commit/b1316ae6e8ad54c4d92bd05cefa67d5f8a36f7f8))
+* **deps:** update dependency lightkube to v0.15.8 ([#706](https://github.com/canonical/kratos-operator/issues/706)) ([822e38a](https://github.com/canonical/kratos-operator/commit/822e38a77c849748af4a81b5c0b91ad55023da7d))
+* **deps:** update dependency lightkube to v0.22.0 ([c9131c7](https://github.com/canonical/kratos-operator/commit/c9131c76692cbb9b605e87b76b55d0b36915d11d))
+* **deps:** update dependency lightkube to v0.22.0 ([#708](https://github.com/canonical/kratos-operator/issues/708)) ([9827f68](https://github.com/canonical/kratos-operator/commit/9827f6851228084e581add15ffd1840e89eeb17f))
+* **deps:** update dependency lightkube-models to v1.36.3.8 ([39cdf61](https://github.com/canonical/kratos-operator/commit/39cdf61da6831dfb953333e2fcb7c386df65bf06))
+* **deps:** update dependency lightkube-models to v1.36.3.8 ([#713](https://github.com/canonical/kratos-operator/issues/713)) ([01a6cdd](https://github.com/canonical/kratos-operator/commit/01a6cdd9144aea5ca88be92c785324a0e1638c2f))
+* **deps:** update dependency ops to v3.8.1 ([24b8f3a](https://github.com/canonical/kratos-operator/commit/24b8f3a1acd5d65d514c0db0f12292ed746b7fd6))
+* **deps:** update dependency ops to v3.8.1 ([#715](https://github.com/canonical/kratos-operator/issues/715)) ([a845bfe](https://github.com/canonical/kratos-operator/commit/a845bfe72b7a055031a7fcd87479773f52404ea3))
+
 ## [2.4.2](https://github.com/canonical/kratos-operator/compare/v2.4.1...v2.4.2) (2026-07-09)
 
 
