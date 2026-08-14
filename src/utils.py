@@ -14,7 +14,7 @@ from constants import (
     PUBLIC_ROUTE_INTEGRATION_NAME,
     WORKLOAD_CONTAINER,
 )
-from integrations import PublicRouteData
+from integrations import LoginUIEndpointData, PublicRouteData
 
 if TYPE_CHECKING:
     from charm import KratosCharm
@@ -124,6 +124,31 @@ def passwordless_config_is_valid(charm: "KratosCharm") -> bool:
     )
 
 
+def missing_login_ui_endpoints(charm: "KratosCharm") -> tuple[str, ...]:
+    """Returns the login UI endpoints the rendered config needs but does not have.
+
+    Most `selfservice.flows` blocks in templates/kratos.yaml.j2 are guarded on their own
+    URL, so an absent endpoint simply omits its block. The verification block is not: it
+    is rendered whenever verification and the local IdP are enabled, and interpolates
+    `verification_ui_url` unconditionally. Rendering it while the ui-endpoint-info data is
+    absent or partial produces `ui_url:` with no value, which Kratos reads as null and
+    rejects ("expected string, but got null"), crash-looping the workload.
+
+    Only the endpoints the current configuration actually requires are reported, so a
+    provider that omits endpoints the template treats as optional does not block the charm.
+    """
+    if not (charm.charm_config["enable_verification"] and charm.charm_config["enable_local_idp"]):
+        return ()
+
+    endpoints = LoginUIEndpointData.load(charm.login_ui_requirer)
+    return () if endpoints.verification_url else ("verification",)
+
+
+def login_ui_endpoints_is_ready(charm: "KratosCharm") -> bool:
+    """Checks whether the login UI endpoints required by the current config are available."""
+    return not missing_login_ui_endpoints(charm)
+
+
 # Condition failure causes early return without doing anything
 NOOP_CONDITIONS: tuple[Condition, ...] = (
     peer_integration_exists,
@@ -133,6 +158,7 @@ NOOP_CONDITIONS: tuple[Condition, ...] = (
     migration_is_ready,
     external_hostname_is_ready,
     public_route_is_ready,
+    login_ui_endpoints_is_ready,
     passwordless_config_is_valid,
 )
 

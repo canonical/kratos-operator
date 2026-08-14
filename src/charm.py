@@ -169,6 +169,7 @@ from utils import (
     dict_to_action_output,
     external_hostname_is_ready,
     migration_is_ready,
+    missing_login_ui_endpoints,
     passwordless_config_is_valid,
     peer_integration_exists,
     public_route_is_ready,
@@ -501,7 +502,9 @@ class KratosCharm(CharmBase):
                 self._pebble_service.stop(COURIER_SERVICE)
             return
 
-        if self._pebble_service.config_changed or not self._workload_service.is_running(COURIER_SERVICE):
+        if self._pebble_service.config_changed or not self._workload_service.is_running(
+            COURIER_SERVICE
+        ):
             logger.info("Restarting kratos courier service")
             self._pebble_service.restart(COURIER_SERVICE)
 
@@ -565,6 +568,16 @@ class KratosCharm(CharmBase):
         if not public_route_is_ready(self):
             event.add_status(WaitingStatus("Waiting for public ingress"))
 
+        if missing_endpoints := missing_login_ui_endpoints(self):
+            event.add_status(
+                BlockedStatus(
+                    f"Missing login UI endpoint(s) required by the current configuration: "
+                    f"{', '.join(missing_endpoints)}. Rendering the config without them would "
+                    f"produce an invalid Kratos config, so it is not written. Please integrate "
+                    f"with login-ui over {LOGIN_UI_INTEGRATION_NAME}."
+                )
+            )
+
         if not passwordless_config_is_valid(self):
             event.add_status(
                 BlockedStatus(
@@ -582,7 +595,11 @@ class KratosCharm(CharmBase):
                 )
             )
 
-        if can_connect and self.unit.is_leader() and self._workload_service.is_failing(COURIER_SERVICE):
+        if (
+            can_connect
+            and self.unit.is_leader()
+            and self._workload_service.is_failing(COURIER_SERVICE)
+        ):
             event.add_status(
                 BlockedStatus(
                     f"Failed to start the courier service, please check the '{COURIER_SERVICE}' logs on the workload container"
