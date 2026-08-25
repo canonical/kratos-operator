@@ -6,14 +6,14 @@ on:
 jobs:
   update-charm-libs:
     name: Update Charm Libraries
-    uses: canonical/identity-team/.github/workflows/charm-libs-update.yaml@1bf335af1d939c8543e53d376dd49d79126c2cd3 # v1.15.0
+    uses: canonical/identity-team/.github/workflows/charm-libs-update.yaml@e017941885bd1d17774bf7be2cbbb1d1abe80d9e # v1.16.0
     secrets:
       CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
 
   tests:
     name: CI
-    uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@1bf335af1d939c8543e53d376dd49d79126c2cd3 # v1.15.0
+    uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@e017941885bd1d17774bf7be2cbbb1d1abe80d9e # v1.16.0
     with:
       container-name: "kratos"
       use-charmcraftcache: false
