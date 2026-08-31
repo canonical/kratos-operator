@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 dependencies = [
     "bcrypt==5.0.0",
     "cosl==1.10.3",
-    "ops==3.8.1",
+    "ops==3.8.2",
     "dacite",
     "Jinja2==3.1.6",
     "jsonschema==4.26.0",
