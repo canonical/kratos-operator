@@ -501,7 +501,9 @@ class KratosCharm(CharmBase):
                 self._pebble_service.stop(COURIER_SERVICE)
             return
 
-        if self._pebble_service.config_changed or not self._workload_service.is_running(COURIER_SERVICE):
+        if self._pebble_service.config_changed or not self._workload_service.is_running(
+            COURIER_SERVICE
+        ):
             logger.info("Restarting kratos courier service")
             self._pebble_service.restart(COURIER_SERVICE)
 
@@ -582,7 +584,11 @@ class KratosCharm(CharmBase):
                 )
             )
 
-        if can_connect and self.unit.is_leader() and self._workload_service.is_failing(COURIER_SERVICE):
+        if (
+            can_connect
+            and self.unit.is_leader()
+            and self._workload_service.is_failing(COURIER_SERVICE)
+        ):
             event.add_status(
                 BlockedStatus(
                     f"Failed to start the courier service, please check the '{COURIER_SERVICE}' logs on the workload container"
@@ -671,7 +677,9 @@ class KratosCharm(CharmBase):
         logger.error("Failed to patch resource constraints: %s", event.message)
 
     def _on_kratos_info_provider_ready(self, event: RelationEvent) -> None:
-        internal_endpoints = InternalRouteData.load(self.internal_route)
+        internal_endpoints = InternalRouteData.load(
+            self.internal_route, self.charm_config.use_ingress_for_relations
+        )
         providers_configmap_name = self.providers_configmap.name
         schemas_configmap_name = self.schemas_configmap.name
         configmaps_namespace = self.model.name
@@ -796,7 +804,9 @@ class KratosCharm(CharmBase):
             return
 
         if self.unit.is_leader():
-            internal_route_config = InternalRouteData.load(self.internal_route).config
+            internal_route_config = InternalRouteData.load(
+                self.internal_route, self.charm_config.use_ingress_for_relations
+            ).config
             self.internal_route.submit_to_traefik(internal_route_config)
 
     def _on_internal_route_broken(self, event: RelationBrokenEvent) -> None:

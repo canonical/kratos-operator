@@ -111,6 +111,20 @@ class TestCharmConfig:
             "enable_verification": False,
         }
 
+    def test_use_ingress_for_relations(self, mocked_config: dict) -> None:
+        mocked_config["use_ingress_for_relations"] = True
+        charm_config = CharmConfig(mocked_config)
+        assert charm_config.use_ingress_for_relations is True
+
+        mocked_config["use_ingress_for_relations"] = False
+        charm_config = CharmConfig(mocked_config)
+        assert charm_config.use_ingress_for_relations is False
+
+        if "use_ingress_for_relations" in mocked_config:
+            del mocked_config["use_ingress_for_relations"]
+        charm_config = CharmConfig(mocked_config)
+        assert charm_config.use_ingress_for_relations is False
+
 
 class TestClaimMappers:
     def test_to_service_configs(self) -> None:
