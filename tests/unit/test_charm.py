@@ -80,6 +80,35 @@ class TestConfigChangeEvent:
 
         mocked_charm_holistic_handler.assert_called_once()
 
+    @patch("charm.KratosInfoProvider.send_info_relation_data")
+    def test_when_config_changed_updates_kratos_endpoints(
+        self,
+        mocked_send_info_relation_data: MagicMock,
+        kratos_info_integration: testing.Relation,
+        public_route_integration: testing.Relation,
+        ingress_template: str,
+    ) -> None:
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(
+            containers={container},
+            relations=[kratos_info_integration, public_route_integration],
+            config={"use_ingress_for_relations": False},
+        )
+
+        with patch("builtins.open", mock_open(read_data=ingress_template)):
+            ctx.run(ctx.on.config_changed(), state_in)
+
+        mocked_send_info_relation_data.assert_called_once()
+        args, _ = mocked_send_info_relation_data.call_args
+        # Assert that the svc.cluster.local endpoints are sent when use_ingress_for_relations is False
+        from yarl import URL
+
+        admin_endpoint = URL(args[0])
+        public_endpoint = URL(args[1])
+        assert admin_endpoint.host.endswith(".svc.cluster.local")
+        assert public_endpoint.host.endswith(".svc.cluster.local")
+
 
 class TestPebbleReadyEvent:
     def test_when_container_not_connected(
