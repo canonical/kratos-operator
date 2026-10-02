@@ -701,6 +701,46 @@ class TestHydraEndpointInfoRelationChangedEvent:
         mocked_charm_holistic_handler.assert_called_once()
 
 
+class TestLoginUIEndpointInfoRelationChangedEvent:
+    def test_when_event_emitted(
+        self,
+        ingress_template: str,
+        login_ui_integration: testing.Relation,
+        mocked_charm_holistic_handler: MagicMock,
+    ) -> None:
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(
+            containers={container},
+            relations=[login_ui_integration],
+        )
+
+        with patch("builtins.open", mock_open(read_data=ingress_template)):
+            ctx.run(ctx.on.relation_changed(login_ui_integration), state_in)
+
+        mocked_charm_holistic_handler.assert_called_once()
+
+
+class TestLoginUIEndpointInfoRelationBrokenEvent:
+    def test_when_event_emitted(
+        self,
+        ingress_template: str,
+        login_ui_integration: testing.Relation,
+        mocked_charm_holistic_handler: MagicMock,
+    ) -> None:
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        state_in = testing.State(
+            containers={container},
+            relations=[login_ui_integration],
+        )
+
+        with patch("builtins.open", mock_open(read_data=ingress_template)):
+            ctx.run(ctx.on.relation_broken(login_ui_integration), state_in)
+
+        mocked_charm_holistic_handler.assert_called_once()
+
+
 class TestTracingEndpointChangedEvent:
     def test_when_event_emitted(
         self,
