@@ -216,6 +216,29 @@ def hydra_endpoint_info_integration() -> testing.Relation:
 
 
 @pytest.fixture
+def login_ui_integration() -> testing.Relation:
+    return testing.Relation(
+        endpoint="ui-endpoint-info",
+        interface="login_ui_endpoints",
+        remote_app_name="identity-platform-login-ui-operator",
+        remote_app_data={
+            "consent_url": "https://example.com/ui/consent",
+            "error_url": "https://example.com/ui/error",
+            "login_url": "https://example.com/ui/login",
+            "oidc_error_url": "https://example.com/ui/oidc_error",
+            "device_verification_url": "https://example.com/ui/device_code",
+            "post_device_done_url": "https://example.com/ui/device_complete",
+            "recovery_url": "https://example.com/ui/reset_email",
+            "registration_url": "https://example.com/ui/register",
+            "settings_url": "https://example.com/ui/manage_details",
+            "webauthn_settings_url": "https://example.com/ui/setup_passkey",
+            "account_linking_settings_url": "https://example.com/ui/manage_connected_accounts",
+            "verification_url": "https://example.com/ui/verification",
+        },
+    )
+
+
+@pytest.fixture
 def tracing_integration() -> testing.Relation:
     return testing.Relation(
         endpoint="tracing",

@@ -338,6 +338,9 @@ class KratosCharm(CharmBase):
         self.framework.observe(
             self.on[LOGIN_UI_INTEGRATION_NAME].relation_changed, self._on_config_changed
         )
+        self.framework.observe(
+            self.on[LOGIN_UI_INTEGRATION_NAME].relation_broken, self._on_config_changed
+        )
 
         # pg-database
         self.framework.observe(
