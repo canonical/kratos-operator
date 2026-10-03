@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -374,7 +374,7 @@ wheels = [
 
 [[package]]
 name = "cosl"
-version = "1.11.1"
+version = "1.11.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "diskcache" },
@@ -384,9 +384,9 @@ dependencies = [
     { name = "tenacity" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ef/86/e53a760e72842c1dbb815622908986fb1ece7f3c4807809965ed3b152b71/cosl-1.11.1.tar.gz", hash = "sha256:76486916bd62e4ddd3b3a3076bcac23278b275f9e0799d0fb35370ebac2011b7", size = 182897, upload-time = "2026-09-30T18:02:04.29Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/de/44/1a0bad7fb7ea585f6455553504356b5d2ae16dfb12fa7b710a5b93193edc/cosl-1.11.2.tar.gz", hash = "sha256:dc8144cbe0992bdd80567251f4a65ef5507a6245507e7129f3411f369ec69576", size = 183280, upload-time = "2026-10-02T22:39:13.491Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ff/47/a720b5b129a6df36c6ab10932705013d786b239ce926b205fbdedb39e097/cosl-1.11.1-py3-none-any.whl", hash = "sha256:4906f990cf823715b85523e6a49681a7596b03cb936c18ce38e381bfb8ab55be", size = 46037, upload-time = "2026-09-30T18:02:03.198Z" },
+    { url = "https://files.pythonhosted.org/packages/48/c3/1cf1207826ed00d1d755b983c7e667ee414a1aff65f5a035383c698a153f/cosl-1.11.2-py3-none-any.whl", hash = "sha256:e9d3418715e10d15690263efaca578506d142b2520bca21c01d973818e5b7ae2", size = 46139, upload-time = "2026-10-02T22:39:12.26Z" },
 ]
 
 [[package]]
@@ -869,7 +869,7 @@ unit = [
 [package.metadata]
 requires-dist = [
     { name = "bcrypt", specifier = "==5.0.0" },
-    { name = "cosl", specifier = "==1.11.1" },
+    { name = "cosl", specifier = "==1.11.2" },
     { name = "dacite" },
     { name = "jinja2", specifier = "==3.1.6" },
     { name = "jsonschema", specifier = "==4.26.0" },
