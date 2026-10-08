@@ -406,7 +406,7 @@ named `loki_alert_rules`.
 
 This directory must reside at the top level in the `src` folder of the
 consumer charm. Each file in this directory is assumed to be a single alert rule
-in YAML format. The file name must have the `.rule` extension.
+in YAML format. The file name must have one of the following extensions: `.yaml`, `.yml`, `.rule`, or `.rules`.
 The format of this alert rule conforms to the
 [Loki docs](https://grafana.com/docs/loki/latest/rules/#alerting-rules).
 
@@ -478,6 +478,24 @@ Loki Push API and alert rules.
 Units of consumer charm send their alert rules over app relation data using the `alert_rules`
 key.
 
+## Alert rules encoding
+
+The consumer publishes its alert rules to the `alert_rules` key of its application
+databag. Because large deployments can produce enough alert rules to exceed Juju's
+relation data size limit, the rules can be stored LZMA-compressed and base64-encoded
+instead of as plain JSON.
+
+Compression is negotiated over the relation: the provider advertises the encodings it
+is able to read in the `alert_rules_encodings` key of its own application databag, and
+the consumer picks the best encoding both sides support. A consumer related to a
+provider running an older version of this library (which advertises nothing) keeps
+writing plain JSON, so upgrades are safe in any order.
+
+An admin can decode compressed rules with:
+```bash
+<alert-rules-from-show-unit> | base64 -d | xz -d | jq
+```
+
 ## Charm logging
 The `charms.loki_k8s.v0.charm_logging` library can be used in conjunction with this one to configure python's
 logging module to forward all logs to Loki via the loki-push-api interface.
@@ -501,25 +519,25 @@ Do this, and all charm logs will be forwarded to Loki as soon as a relation is f
 import copy
 import json
 import logging
+import lzma
 import os
 import platform
 import re
 import socket
-import subprocess
-import tempfile
-import typing
 import warnings
 from copy import deepcopy
 from gzip import GzipFile
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Final, List, Mapping, Optional, Tuple, Union, cast
 from urllib import request
 from urllib.error import URLError
 
 import yaml
-from cosl import JujuTopology
+from cosl import CosTool, JujuTopology, LZMABase64
+from cosl.rules import AlertRules
+from cosl.types import OfficialRuleFileFormat
 from ops.charm import (
     CharmBase,
     HookEvent,
@@ -545,7 +563,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 22
+LIBPATCH = 34
 
 PYDEPS = ["cosl"]
 
@@ -593,6 +611,123 @@ WORKLOAD_SERVICE_NAME = "promtail"
 # Each new container adds 2 to the previous value.
 HTTP_LISTEN_PORT_START = 9080  # even start port
 GRPC_LISTEN_PORT_START = 9095  # odd start port
+
+ALERT_RULES_KEY: Final[str] = "alert_rules"
+"""Databag key holding the consumer's alert rules."""
+
+ALERT_RULES_ENCODINGS_KEY: Final[str] = "alert_rules_encodings"
+"""Databag key with which the provider advertises the encodings it can read."""
+
+JSON_ENCODING: Final[str] = "json"
+"""Plain JSON alert rules, as written by every version of this library."""
+
+LZMA_ENCODING: Final[str] = "lzma"
+"""LZMA-compressed, base64-encoded JSON alert rules."""
+
+SUPPORTED_ALERT_RULES_ENCODINGS: Final[Tuple[str, ...]] = (LZMA_ENCODING, JSON_ENCODING)
+"""Alert rules encodings this library can read and write, most preferred first.
+
+This is in preference order, not sorted: it is a constant, so the bytes written to the
+databag are stable across hooks, which is what matters for avoiding spurious
+relation-changed events.
+"""
+
+
+def _encode_alert_rules(rules: Mapping[str, Any], encoding: str = JSON_ENCODING) -> str:
+    """Serialize alert rules for storing them in a relation databag.
+
+    Args:
+        rules: alert rules in the official Loki rule file format.
+        encoding: one of `SUPPORTED_ALERT_RULES_ENCODINGS`. Anything else is treated
+            as `JSON_ENCODING`, because plain JSON is readable by every version of
+            this library.
+
+    Returns:
+        The serialized alert rules.
+    """
+    # Sort keys to prevent unnecessary relation-changed churn from key reordering.
+    serialized = json.dumps(rules, sort_keys=True)
+    if encoding == LZMA_ENCODING:
+        return LZMABase64.compress(serialized)
+    return serialized
+
+
+def _decode_alert_rules(raw: str) -> OfficialRuleFileFormat:
+    """Deserialize alert rules read from a relation databag.
+
+    Both plain JSON and LZMA-compressed, base64-encoded JSON are accepted, regardless
+    of the encodings this library advertises, so that a provider can always read the
+    rules of a consumer running any version of this library.
+
+    Args:
+        raw: the raw databag value.
+
+    Returns:
+        The alert rules in the official Loki rule file format.
+
+    Raises:
+        ValueError: if `raw` is neither valid JSON nor a valid compressed payload, or if it
+            decodes to something other than a JSON object.
+    """
+    if not raw:
+        return cast(OfficialRuleFileFormat, {})
+
+    try:
+        decoded = json.loads(raw)
+    except json.JSONDecodeError:
+        # Not JSON, so this must be a compressed payload.
+        decoded = raw
+
+    if isinstance(decoded, str):
+        # A compressed payload, either bare or (as pydantic based libraries write it)
+        # JSON-encoded.
+        try:
+            decoded = json.loads(LZMABase64.decompress(decoded))
+        except (ValueError, lzma.LZMAError) as e:
+            raise ValueError(f"Could not decompress alert rules: {e}") from e
+
+    if not isinstance(decoded, dict):
+        raise ValueError(f"Alert rules must be a JSON object, not {type(decoded).__name__}")
+
+    return cast(OfficialRuleFileFormat, decoded)
+
+
+def _best_alert_rules_encoding(remote_app_databag: Optional[Mapping[str, str]]) -> str:
+    """Return the best alert rules encoding the remote application is able to read.
+
+    Providers advertise the encodings they support in their application databag.
+    Providers running an older version of this library advertise nothing, in which
+    case plain JSON is used for backwards compatibility.
+
+    Args:
+        remote_app_databag: the remote application databag, or None if it is not
+            readable yet (e.g. the relation is still being set up).
+
+    Returns:
+        One of `SUPPORTED_ALERT_RULES_ENCODINGS`.
+    """
+    raw = remote_app_databag.get(ALERT_RULES_ENCODINGS_KEY, "[]") if remote_app_databag else "[]"
+
+    try:
+        advertised = json.loads(raw)
+        if not isinstance(advertised, list):
+            raise TypeError("expected a list, got {}".format(type(advertised).__name__))
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.warning(
+            "Ignoring malformed '%s' (%s); assuming the remote end is only able to read "
+            "uncompressed alert rules.",
+            ALERT_RULES_ENCODINGS_KEY,
+            e,
+        )
+        return JSON_ENCODING
+
+    for encoding in SUPPORTED_ALERT_RULES_ENCODINGS:
+        if encoding in advertised:
+            return encoding
+
+    # Either nothing was advertised (an older provider), or only encodings this library
+    # does not know about. Plain JSON is the encoding every version can read.
+    return JSON_ENCODING
 
 
 class LokiPushApiError(Exception):
@@ -717,273 +852,6 @@ class InvalidAlertRulePathError(Exception):
         self.message = message
 
         super().__init__(self.message)
-
-
-def _is_official_alert_rule_format(rules_dict: dict) -> bool:
-    """Are alert rules in the upstream format as supported by Loki.
-
-    Alert rules in dictionary format are in "official" form if they
-    contain a "groups" key, since this implies they contain a list of
-    alert rule groups.
-
-    Args:
-        rules_dict: a set of alert rules in Python dictionary format
-
-    Returns:
-        True if alert rules are in official Loki file format.
-    """
-    return "groups" in rules_dict
-
-
-def _is_single_alert_rule_format(rules_dict: dict) -> bool:
-    """Are alert rules in single rule format.
-
-    The Loki charm library supports reading of alert rules in a
-    custom format that consists of a single alert rule per file. This
-    does not conform to the official Loki alert rule file format
-    which requires that each alert rules file consists of a list of
-    alert rule groups and each group consists of a list of alert
-    rules.
-
-    Alert rules in dictionary form are considered to be in single rule
-    format if in the least it contains two keys corresponding to the
-    alert rule name and alert expression.
-
-    Returns:
-        True if alert rule is in single rule file format.
-    """
-    # one alert rule per file
-    return set(rules_dict) >= {"alert", "expr"}
-
-
-class AlertRules:
-    """Utility class for amalgamating Loki alert rule files and injecting juju topology.
-
-    An `AlertRules` object supports aggregating alert rules from files and directories in both
-    official and single rule file formats using the `add_path()` method. All the alert rules
-    read are annotated with Juju topology labels and amalgamated into a single data structure
-    in the form of a Python dictionary using the `as_dict()` method. Such a dictionary can be
-    easily dumped into JSON format and exchanged over relation data. The dictionary can also
-    be dumped into YAML format and written directly into an alert rules file that is read by
-    Loki. Note that multiple `AlertRules` objects must not be written into the same file,
-    since Loki allows only a single list of alert rule groups per alert rules file.
-
-    The official Loki format is a YAML file conforming to the Loki documentation
-    (https://grafana.com/docs/loki/latest/api/#list-rule-groups).
-    The custom single rule format is a subsection of the official YAML, having a single alert
-    rule, effectively "one alert per file".
-    """
-
-    # This class uses the following terminology for the various parts of a rule file:
-    # - alert rules file: the entire groups[] yaml, including the "groups:" key.
-    # - alert groups (plural): the list of groups[] (a list, i.e. no "groups:" key) - it is a list
-    #   of dictionaries that have the "name" and "rules" keys.
-    # - alert group (singular): a single dictionary that has the "name" and "rules" keys.
-    # - alert rules (plural): all the alerts in a given alert group - a list of dictionaries with
-    #   the "alert" and "expr" keys.
-    # - alert rule (singular): a single dictionary that has the "alert" and "expr" keys.
-
-    def __init__(self, topology: Optional[JujuTopology] = None):
-        """Build and alert rule object.
-
-        Args:
-            topology: a `JujuTopology` instance that is used to annotate all alert rules.
-        """
-        self.topology = topology
-        self.tool = CosTool(None)
-        self.alert_groups = []  # type: List[dict]
-
-    def _from_file(self, root_path: Path, file_path: Path) -> List[dict]:
-        """Read a rules file from path, injecting juju topology.
-
-        Args:
-            root_path: full path to the root rules folder (used only for generating group name)
-            file_path: full path to a *.rule file.
-
-        Returns:
-            A list of dictionaries representing the rules file, if file is valid (the structure is
-            formed by `yaml.safe_load` of the file); an empty list otherwise.
-        """
-        with file_path.open() as rf:
-            # Load a list of rules from file then add labels and filters
-            try:
-                rule_file = yaml.safe_load(rf) or {}
-
-            except Exception as e:
-                logger.error("Failed to read alert rules from %s: %s", file_path.name, e)
-                return []
-
-            if _is_official_alert_rule_format(rule_file):
-                alert_groups = rule_file["groups"]
-            elif _is_single_alert_rule_format(rule_file):
-                # convert to list of alert groups
-                # group name is made up from the file name
-                alert_groups = [{"name": file_path.stem, "rules": [rule_file]}]
-            else:
-                # invalid/unsupported
-                reason = "file is empty" if not rule_file else "unexpected file structure"
-                logger.error("Invalid rules file (%s): %s", reason, file_path.name)
-                return []
-
-            # update rules with additional metadata
-            for alert_group in alert_groups:
-                # update group name with topology and sub-path
-                alert_group["name"] = self._group_name(
-                    str(root_path),
-                    str(file_path),
-                    alert_group["name"],
-                )
-
-                # add "juju_" topology labels
-                for alert_rule in alert_group["rules"]:
-                    if "labels" not in alert_rule:
-                        alert_rule["labels"] = {}
-
-                    if self.topology:
-                        # only insert labels that do not already exist
-                        for label, val in self.topology.label_matcher_dict.items():
-                            if label not in alert_rule["labels"]:
-                                alert_rule["labels"][label] = val
-
-                        # insert juju topology filters into a prometheus alert rule
-                        # logql doesn't like empty matchers, so add a job matcher which hits
-                        # any string as a "wildcard" which the topology labels will
-                        # filter down
-                        alert_rule["expr"] = self.tool.inject_label_matchers(
-                            re.sub(r"%%juju_topology%%", r'job=~".+"', alert_rule["expr"]),
-                            self.topology.label_matcher_dict,
-                        )
-
-            return alert_groups
-
-    def _group_name(
-        self,
-        root_path: typing.Union[Path, str],
-        file_path: typing.Union[Path, str],
-        group_name: str,
-    ) -> str:
-        """Generate group name from path and topology.
-
-        The group name is made up of the relative path between the root dir_path, the file path,
-        and topology identifier.
-
-        Args:
-            root_path: path to the root rules dir.
-            file_path: path to rule file.
-            group_name: original group name to keep as part of the new augmented group name
-
-        Returns:
-            New group name, augmented by juju topology and relative path.
-        """
-        file_path = Path(file_path) if not isinstance(file_path, Path) else file_path
-        root_path = Path(root_path) if not isinstance(root_path, Path) else root_path
-        rel_path = file_path.parent.relative_to(root_path.as_posix())
-
-        # We should account for both absolute paths and Windows paths. Convert it to a POSIX
-        # string, strip off any leading /, then join it
-
-        path_str = ""
-        if not rel_path == Path("."):
-            # Get rid of leading / and optionally drive letters so they don't muck up
-            # the template later, since Path.parts returns them. The 'if relpath.is_absolute ...'
-            # isn't even needed since re.sub doesn't throw exceptions if it doesn't match, so it's
-            # optional, but it makes it clear what we're doing.
-
-            # Note that Path doesn't actually care whether the path is valid just to instantiate
-            # the object, so we can happily strip that stuff out to make templating nicer
-            rel_path = Path(
-                re.sub(r"^([A-Za-z]+:)?/", "", rel_path.as_posix())
-                if rel_path.is_absolute()
-                else str(rel_path)
-            )
-
-            # Get rid of relative path characters in the middle which both os.path and pathlib
-            # leave hanging around. We could use path.resolve(), but that would lead to very
-            # long template strings when rules come from pods and/or other deeply nested charm
-            # paths
-            path_str = "_".join(filter(lambda x: x not in ["..", "/"], rel_path.parts))
-
-        # Generate group name:
-        #  - name, from juju topology
-        #  - suffix, from the relative path of the rule file;
-        group_name_parts = [self.topology.identifier] if self.topology else []
-        group_name_parts.extend([path_str, group_name, "alerts"])
-        # filter to remove empty strings
-        return "_".join(filter(lambda x: x, group_name_parts))
-
-    @classmethod
-    def _multi_suffix_glob(
-        cls, dir_path: Path, suffixes: List[str], recursive: bool = True
-    ) -> list:
-        """Helper function for getting all files in a directory that have a matching suffix.
-
-        Args:
-            dir_path: path to the directory to glob from.
-            suffixes: list of suffixes to include in the glob (items should begin with a period).
-            recursive: a flag indicating whether a glob is recursive (nested) or not.
-
-        Returns:
-            List of files in `dir_path` that have one of the suffixes specified in `suffixes`.
-        """
-        all_files_in_dir = dir_path.glob("**/*" if recursive else "*")
-        return list(filter(lambda f: f.is_file() and f.suffix in suffixes, all_files_in_dir))
-
-    def _from_dir(self, dir_path: Path, recursive: bool) -> List[dict]:
-        """Read all rule files in a directory.
-
-        All rules from files for the same directory are loaded into a single
-        group. The generated name of this group includes juju topology.
-        By default, only the top directory is scanned; for nested scanning, pass `recursive=True`.
-
-        Args:
-            dir_path: directory containing *.rule files (alert rules without groups).
-            recursive: flag indicating whether to scan for rule files recursively.
-
-        Returns:
-            a list of dictionaries representing prometheus alert rule groups, each dictionary
-            representing an alert group (structure determined by `yaml.safe_load`).
-        """
-        alert_groups = []  # type: List[dict]
-
-        # Gather all alerts into a list of groups
-        for file_path in self._multi_suffix_glob(dir_path, [".rule", ".rules"], recursive):
-            alert_groups_from_file = self._from_file(dir_path, file_path)
-            if alert_groups_from_file:
-                logger.debug("Reading alert rule from %s", file_path)
-                alert_groups.extend(alert_groups_from_file)
-
-        return alert_groups
-
-    def add_path(self, path_str: str, *, recursive: bool = False):
-        """Add rules from a dir path.
-
-        All rules from files are aggregated into a data structure representing a single rule file.
-        All group names are augmented with juju topology.
-
-        Args:
-            path_str: either a rules file or a dir of rules files.
-            recursive: whether to read files recursively or not (no impact if `path` is a file).
-
-        Raises:
-            InvalidAlertRulePathError: if the provided path is invalid.
-        """
-        path = Path(path_str)  # type: Path
-        if path.is_dir():
-            self.alert_groups.extend(self._from_dir(path, recursive))
-        elif path.is_file():
-            self.alert_groups.extend(self._from_file(path.parent, path))
-        else:
-            logger.debug("The alerts file does not exist: %s", path)
-
-    def as_dict(self) -> dict:
-        """Return standard alert rules file in dict representation.
-
-        Returns:
-            a dictionary containing a single list of alert rule groups.
-            The list of alert rule groups is provided as value of the
-            "groups" dictionary key.
-        """
-        return {"groups": self.alert_groups} if self.alert_groups else {}
 
 
 def _resolve_dir_against_charm_path(charm: CharmBase, *path_elements: str) -> str:
@@ -1196,7 +1064,7 @@ class LokiPushApiProvider(Object):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
-        self._tool = CosTool(self)
+        self._tool = CosTool("logql")
         self.port = int(port)
         self.scheme = scheme
         self.path = path
@@ -1208,6 +1076,10 @@ class LokiPushApiProvider(Object):
         self.framework.observe(events.relation_changed, self._on_logging_relation_changed)
         self.framework.observe(events.relation_departed, self._on_logging_relation_departed)
         self.framework.observe(events.relation_broken, self._on_logging_relation_broken)
+        self.framework.observe(
+            self._charm.on.leader_elected,
+            self._publish_encodings_to_all_relation_databags,
+        )
 
     def _on_lifecycle_event(self, _):
         # Upgrade event or other charm-level event
@@ -1236,6 +1108,7 @@ class LokiPushApiProvider(Object):
         if self._charm.unit.is_leader():
             event.relation.data[self._charm.app].update(self._promtail_binary_url)
             logger.debug("Saved promtail binary url: %s", self._promtail_binary_url)
+        self._publish_alert_rules_encodings(event.relation)
 
     def _on_logging_relation_changed(self, event: HookEvent):
         """Handle changes in related consumers.
@@ -1314,7 +1187,38 @@ class LokiPushApiProvider(Object):
         """
         relation.data[self._charm.unit]["public_address"] = socket.getfqdn() or ""
         self.update_endpoint(relation=relation)
+        self._publish_alert_rules_encodings(relation)
+
+        # Ensure promtail binary URL is set in app data. This is normally done on
+        # relation_joined, but charms using the reconcile pattern may miss that event
+        # if the workload container is not yet ready when the relation is first established.
+        if self._charm.unit.is_leader():
+            if not relation.data[self._charm.app].get("promtail_binary_zip_url"):
+                relation.data[self._charm.app].update(self._promtail_binary_url)
+
         return self._should_update_alert_rules(relation)
+
+    def _publish_encodings_to_all_relation_databags(self, _: Optional[HookEvent]) -> None:
+        for relation in self._charm.model.relations[self._relation_name]:
+            self._publish_alert_rules_encodings(relation)
+
+    def _publish_alert_rules_encodings(self, relation: Relation) -> None:
+        """Advertise the alert rules encodings this library is able to read.
+
+        Consumers use this to decide whether they may compress their alert rules: a
+        consumer related to a provider that does not advertise anything keeps writing
+        plain JSON, which every version of this library can read.
+
+        Args:
+            relation: The relation whose data to update.
+        """
+        if not self._charm.unit.is_leader():
+            # Only the leader unit can write to app data.
+            return
+
+        relation.data[self._charm.app][ALERT_RULES_ENCODINGS_KEY] = json.dumps(
+            list(SUPPORTED_ALERT_RULES_ENCODINGS)
+        )
 
     @property
     def _promtail_binary_url(self) -> dict:
@@ -1363,6 +1267,7 @@ class LokiPushApiProvider(Object):
 
         for relation in relations_list:
             relation.data[self._charm.unit].update({"endpoint": json.dumps(endpoint)})
+            self._publish_alert_rules_encodings(relation)
 
         logger.debug("Saved endpoint in unit relation data")
 
@@ -1419,22 +1324,29 @@ class LokiPushApiProvider(Object):
             metadata indexed by relation ID.
         """
         alerts = {}  # type: Dict[str, dict] # mapping b/w juju identifiers and alert rule files
+        unreadable: Dict[int, str] = {}
         for relation in self._charm.model.relations[self._relation_name]:
             if not relation.units or not relation.app:
                 continue
 
-            alert_rules = json.loads(relation.data[relation.app].get("alert_rules", "{}"))
+            try:
+                alert_rules = _decode_alert_rules(
+                    relation.data[relation.app].get(ALERT_RULES_KEY, "{}")
+                )
+            except Exception as e:
+                unreadable[relation.id] = str(e)
+                continue
+
             if not alert_rules:
                 continue
 
-            alert_rules = self._inject_alert_expr_labels(alert_rules)
+            alert_rules = self._inject_alert_expr_labels(cast(Dict[str, Any], alert_rules))
 
             identifier, topology = self._get_identifier_by_alert_rules(alert_rules)
             if not topology:
                 try:
                     metadata = json.loads(relation.data[relation.app]["metadata"])
                     identifier = JujuTopology.from_dict(metadata).identifier
-                    alerts[identifier] = self._tool.apply_label_matchers(alert_rules)  # type: ignore
 
                 except KeyError as e:
                     logger.debug(
@@ -1449,14 +1361,69 @@ class LokiPushApiProvider(Object):
                 )
                 continue
 
-            _, errmsg = self._tool.validate_alert_rules(alert_rules)
+            # Topology labels are already injected by _inject_alert_expr_labels using
+            # alert_expression_dict, which intentionally excludes juju_charm and juju_unit.
+            # Don't call apply_label_matchers here as it would re-inject juju_charm.
+            alerts[identifier] = alert_rules
+
+            _, errmsg = self._tool.validate_alert_rules(cast(OfficialRuleFileFormat, alert_rules))
             if errmsg:
-                relation.data[self._charm.app]["event"] = json.dumps({"errors": errmsg})
+                logger.error(f"Invalid alert rule file: {errmsg}")
+                if alerts[identifier]:
+                    del alerts[identifier]
+                if self._charm.unit.is_leader():
+                    relation.data[self._charm.app]["event"] = json.dumps({"errors": errmsg})
                 continue
+            if self._charm.unit.is_leader():
+                event_data = json.loads(relation.data[self._charm.app].get("event", "{}"))
+                event_data.pop("errors", None)
+                relation.data[self._charm.app]["event"] = json.dumps(event_data)
 
             alerts[identifier] = alert_rules
 
+        if unreadable:
+            logger.error(
+                "Could not read the alert rules published over relation(s): %s",
+                "; ".join("{} ({})".format(rel_id, err) for rel_id, err in unreadable.items()),
+            )
+
         return alerts
+
+    def has_invalid_alert_rules(self) -> bool:
+        """Check whether any relation reported invalid alert rules.
+
+        Validation errors, written to relation app data by the :attr:`alerts`
+        property, are read back to determine whether the relation currently
+        carries invalid alert rules. Non-leader units never write the app data
+        that holds these errors, so they always report no errors.
+
+        Returns:
+            True if any related consumer reported alert rule validation
+            errors, False otherwise.
+        """
+        if not self._charm.unit.is_leader():
+            return False
+
+        for relation in self._charm.model.relations.get(self._relation_name, []):
+            app_data = relation.data.get(self._charm.app)
+            if not app_data:
+                continue
+
+            event_raw = app_data.get("event", "{}")
+            try:
+                event_data = json.loads(event_raw)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            if error_msg := event_data.get("errors"):
+                logger.error(
+                    "Alert rule validation error on relation %s: %s",
+                    relation.id,
+                    error_msg,
+                )
+                return True
+
+        return False
 
     def _get_identifier_by_alert_rules(
         self, rules: dict
@@ -1534,10 +1501,13 @@ class LokiPushApiProvider(Object):
                             charm_name=labels.get("juju_charm", ""),
                         )
 
-                        # Inject topology and put it back in the list
+                        # Inject topology and put it back in the list.
+                        # Use alert_expression_dict (excludes juju_charm) instead of
+                        # label_matcher_dict because subordinate charms (e.g. otelcol)
+                        # label logs with their own charm name, not the principal's.
                         rule["expr"] = self._tool.inject_label_matchers(
                             re.sub(r"%%juju_topology%%,?", "", rule["expr"]),
-                            topology.label_matcher_dict,
+                            topology.alert_expression_dict,
                         )
                     except KeyError:
                         # Some required JujuTopology key is missing. Just move on.
@@ -1599,7 +1569,9 @@ class ConsumerBase(Object):
             return
 
         alert_rules = (
-            AlertRules(None) if self._skip_alert_topology_labeling else AlertRules(self.topology)
+            AlertRules(query_type="logql")
+            if self._skip_alert_topology_labeling
+            else AlertRules(query_type="logql", topology=self.topology)
         )
         if self._forward_alert_rules:
             alert_rules.add_path(self._alert_rules_path, recursive=self._recursive)
@@ -1611,9 +1583,9 @@ class ConsumerBase(Object):
             )
 
         relation.data[self._charm.app]["metadata"] = json.dumps(self.topology.as_dict())
-        relation.data[self._charm.app]["alert_rules"] = json.dumps(
-            alert_rules_as_dict,
-            sort_keys=True,  # sort, to prevent unnecessary relation_changed events
+        remote_app_databag = relation.data.get(relation.app) if relation.app else None
+        relation.data[self._charm.app][ALERT_RULES_KEY] = _encode_alert_rules(
+            alert_rules_as_dict, _best_alert_rules_encoding(remote_app_databag)
         )
 
     @property
@@ -1631,7 +1603,9 @@ class ConsumerBase(Object):
         seen_urls = set()
 
         for relation in self._charm.model.relations[self._relation_name]:
-            for unit in relation.units:
+            # Sort the units so the endpoints list order is stable across runs,
+            # otherwise the generated promtail config flaps.
+            for unit in sorted(relation.units, key=lambda u: u.name):
                 if unit.app == self._charm.app:
                     continue
 
@@ -1658,7 +1632,6 @@ class ConsumerBase(Object):
                 endpoints.append(deserialized_endpoint)
 
         return endpoints
-
 
 
 class LokiPushApiConsumer(ConsumerBase):
@@ -1797,6 +1770,11 @@ class LokiPushApiConsumer(ConsumerBase):
             loki_push_api_alert_rules_error: This event is emitted when an invalid alert rules
                 file is encountered or if `alert_rules_path` is empty.
         """
+        # The provider advertises the alert rules encodings it supports over relation data,
+        # which may only become known after relation_joined; (re)send alert rules here so the
+        # negotiated encoding is picked up.
+        self._handle_alert_rules(event.relation)  # pyright: ignore
+
         if self._charm.unit.is_leader():
             ev = json.loads(event.relation.data[event.app].get("event", "{}"))
 
@@ -1953,7 +1931,7 @@ class LogProxyConsumer(ConsumerBase):
         self._promtails_ports = self._generate_promtails_ports(logs_scheme)
 
         # architecture used for promtail binary
-        arch = platform.processor()
+        arch = platform.machine()
         if arch in ["x86_64", "amd64"]:
             self._arch = "amd64"
         elif arch in ["aarch64", "arm64", "armv8b", "armv8l"]:
@@ -1995,22 +1973,13 @@ class LogProxyConsumer(ConsumerBase):
         self._handle_alert_rules(event.relation)
 
         if self._charm.unit.is_leader():
-            ev = json.loads(event.relation.data[event.app].get("event", "{}"))
-
-            if ev:
-                valid = bool(ev.get("valid", True))
-                errors = ev.get("errors", "")
-
-                if valid and not errors:
-                    self.on.alert_rule_status_changed.emit(valid=valid)
-                else:
-                    self.on.alert_rule_status_changed.emit(valid=valid, errors=errors)
+            self._handle_alert_rule_status_changed(event)
 
         for container in self._containers.values():
             if not container.can_connect():
                 continue
             if self.model.relations[self._relation_name]:
-                if "promtail" not in container.get_plan().services:
+                if not self._is_promtail_set_up(container):
                     self._setup_promtail(container)
                     continue
 
@@ -2023,10 +1992,23 @@ class LogProxyConsumer(ConsumerBase):
                 # Loki may send endpoints late. Don't necessarily start, there may be
                 # no clients
                 if new_config["clients"]:
-                    container.restart(WORKLOAD_SERVICE_NAME)
-                    self.on.log_proxy_endpoint_joined.emit()
+                    if self._restart_promtail(container):
+                        self.on.log_proxy_endpoint_joined.emit()
                 else:
                     self.on.promtail_digest_error.emit("No promtail client endpoints available!")
+
+    def _handle_alert_rule_status_changed(self, event: RelationEvent) -> None:
+        """Relay the alert rule validation status reported by the Loki provider."""
+        ev = json.loads(event.relation.data[event.app].get("event", "{}"))
+
+        if ev:
+            valid = bool(ev.get("valid", True))
+            errors = ev.get("errors", "")
+
+            if valid and not errors:
+                self.on.alert_rule_status_changed.emit(valid=valid)
+            else:
+                self.on.alert_rule_status_changed.emit(valid=valid, errors=errors)
 
     def _on_relation_departed(self, _: RelationEvent) -> None:
         """Event handler for `relation_departed`.
@@ -2046,10 +2028,27 @@ class LogProxyConsumer(ConsumerBase):
                 container.push(WORKLOAD_CONFIG_PATH, yaml.safe_dump(new_config), make_dirs=True)
 
             if new_config["clients"]:
-                container.restart(WORKLOAD_SERVICE_NAME)
+                self._restart_promtail(container)
             else:
                 container.stop(WORKLOAD_SERVICE_NAME)
             self.on.log_proxy_endpoint_departed.emit()
+
+    def _restart_promtail(self, container: Container) -> bool:
+        """Restart promtail, surfacing a Pebble failure as a digest error.
+
+        Args:
+            container: the workload container running the promtail service.
+
+        Returns:
+            True on success, False if the restart failed.
+        """
+        try:
+            container.restart(WORKLOAD_SERVICE_NAME)
+        except ChangeError as e:
+            logger.warning("Failed to restart promtail: %s", e)
+            self.on.promtail_digest_error.emit(str(e))
+            return False
+        return True
 
     def _add_pebble_layer(self, workload_binary_path: str, container: Container) -> None:
         """Adds Pebble layer that manages Promtail service in Workload container.
@@ -2410,6 +2409,35 @@ class LogProxyConsumer(ConsumerBase):
 
         return static_configs
 
+    def _promtail_binary_spec(self) -> dict:
+        """The promtail binary metadata advertised on the log-proxy relation."""
+        relations = self._charm.model.relations[self._relation_name]
+        if not relations:
+            return {}
+        relation = relations[0]
+        return json.loads(relation.data[relation.app].get("promtail_binary_zip_url", "{}"))
+
+    def _is_promtail_set_up(self, container: Container) -> bool:
+        """Whether promtail is fully usable in this container.
+
+        Unlike ``_is_promtail_installed`` (binary only), this also requires the
+        pebble service to be registered.
+
+        The pebble plan alone is not proof: if the workload container lost its
+        ephemeral filesystem (e.g. after pod churn) the layer may still be in
+        the plan while the runtime-pushed binary is gone. Trusting the plan and
+        restarting unconditionally wedges the unit
+        (https://github.com/canonical/loki-k8s-operator/issues/659).
+        """
+        if "promtail" not in container.get_plan().services:
+            return False
+        promtail_info = self._promtail_binary_spec().get(self._arch)
+        if not promtail_info:
+            # No promtail binary advertised for this architecture (or nothing
+            # published on the relation yet), so promtail cannot be running here.
+            return False
+        return self._is_promtail_installed(promtail_info, container)
+
     def _setup_promtail(self, container: Container) -> None:
         # Use the first
         relations = self._charm.model.relations[self._relation_name]
@@ -2424,10 +2452,22 @@ class LogProxyConsumer(ConsumerBase):
             relation.data[relation.app].get("promtail_binary_zip_url", "{}")
         )
         if not promtail_binaries:
+            # The Loki charm hasn't published the binary metadata yet; a later
+            # relation-changed will bring us back here.
+            return
+
+        if self._arch not in promtail_binaries:
+            msg = f"No promtail binary available for architecture {self._arch}"
+            logger.warning(msg)
+            self.on.promtail_digest_error.emit(msg)
             return
 
         self._create_directories(container)
-        self._ensure_promtail_binary(promtail_binaries, container)
+        if not self._ensure_promtail_binary(promtail_binaries, container):
+            # Do not add the pebble layer: a service whose command points to a
+            # missing binary would wedge the unit on every restart attempt
+            # (https://github.com/canonical/loki-k8s-operator/issues/659).
+            return
 
         container.push(
             WORKLOAD_CONFIG_PATH,
@@ -2450,9 +2490,18 @@ class LogProxyConsumer(ConsumerBase):
         else:
             self.on.promtail_digest_error.emit("No promtail client endpoints available!")
 
-    def _ensure_promtail_binary(self, promtail_binaries: dict, container: Container):
+    def _ensure_promtail_binary(self, promtail_binaries: dict, container: Container) -> bool:
+        """Ensure the promtail binary is present in the workload container.
+
+        Args:
+            promtail_binaries: dictionary of promtail binaries per architecture.
+            container: container in which promtail must be installed.
+
+        Returns:
+            True if the binary is available, False if it could not be obtained.
+        """
         if self._is_promtail_installed(promtail_binaries[self._arch], container):
-            return
+            return True
 
         try:
             self._obtain_promtail(promtail_binaries[self._arch], container)
@@ -2460,6 +2509,8 @@ class LogProxyConsumer(ConsumerBase):
             msg = f"Promtail binary couldn't be downloaded - {str(e)}"
             logger.warning(msg)
             self.on.promtail_digest_error.emit(msg)
+            return False
+        return True
 
     def _is_promtail_installed(self, promtail_info: dict, container: Container) -> bool:
         """Determine if promtail has already been installed to the container.
@@ -2547,6 +2598,7 @@ class _PebbleLogClient:
                         "juju_model_uuid": topology._model_uuid,
                         "juju_application": topology._application,
                         "juju_unit": topology._unit,
+                        "job": f"juju_{topology.identifier}",
                     },
                 }
             )
@@ -2751,123 +2803,6 @@ class LogForwarder(ConsumerBase):
         endpoints = self._extract_urls(relation)
 
         return endpoints
-
-
-class CosTool:
-    """Uses cos-tool to inject label matchers into alert rule expressions and validate rules."""
-
-    _path = None
-    _disabled = False
-
-    def __init__(self, charm):
-        self._charm = charm
-
-    @property
-    def path(self):
-        """Lazy lookup of the path of cos-tool."""
-        if self._disabled:
-            return None
-        if not self._path:
-            self._path = self._get_tool_path()
-            if not self._path:
-                logger.debug("Skipping injection of juju topology as label matchers")
-                self._disabled = True
-        return self._path
-
-    def apply_label_matchers(self, rules) -> dict:
-        """Will apply label matchers to the expression of all alerts in all supplied groups."""
-        if not self.path:
-            return rules
-        for group in rules["groups"]:
-            rules_in_group = group.get("rules", [])
-            for rule in rules_in_group:
-                topology = {}
-                # if the user for some reason has provided juju_unit, we'll need to honor it
-                # in most cases, however, this will be empty
-                for label in [
-                    "juju_model",
-                    "juju_model_uuid",
-                    "juju_application",
-                    "juju_charm",
-                    "juju_unit",
-                ]:
-                    if label in rule["labels"]:
-                        topology[label] = rule["labels"][label]
-
-                rule["expr"] = self.inject_label_matchers(rule["expr"], topology)
-        return rules
-
-    def validate_alert_rules(self, rules: dict) -> Tuple[bool, str]:
-        """Will validate correctness of alert rules, returning a boolean and any errors."""
-        if not self.path:
-            logger.debug("`cos-tool` unavailable. Not validating alert correctness.")
-            return True, ""
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            rule_path = Path(tmpdir + "/validate_rule.yaml")
-
-            # Smash "our" rules format into what upstream actually uses, which is more like:
-            #
-            # groups:
-            #   - name: foo
-            #     rules:
-            #       - alert: SomeAlert
-            #         expr: up
-            #       - alert: OtherAlert
-            #         expr: up
-            transformed_rules = {"groups": []}  # type: ignore
-            for rule in rules["groups"]:
-                transformed_rules["groups"].append(rule)
-
-            rule_path.write_text(yaml.dump(transformed_rules))
-            args = [str(self.path), "--format", "logql", "validate", str(rule_path)]
-            # noinspection PyBroadException
-            try:
-                self._exec(args)
-                return True, ""
-            except subprocess.CalledProcessError as e:
-                logger.debug("Validating the rules failed: %s", e.output)
-                return False, ", ".join([line for line in e.output if "error validating" in line])
-
-    def inject_label_matchers(self, expression, topology) -> str:
-        """Add label matchers to an expression."""
-        if not topology:
-            return expression
-        if not self.path:
-            logger.debug("`cos-tool` unavailable. Leaving expression unchanged: %s", expression)
-            return expression
-        args = [str(self.path), "--format", "logql", "transform"]
-        args.extend(
-            ["--label-matcher={}={}".format(key, value) for key, value in topology.items()]
-        )
-
-        args.extend(["{}".format(expression)])
-        # noinspection PyBroadException
-        try:
-            return self._exec(args)
-        except subprocess.CalledProcessError as e:
-            logger.debug('Applying the expression failed: "%s", falling back to the original', e)
-            print('Applying the expression failed: "{}", falling back to the original'.format(e))
-            return expression
-
-    def _get_tool_path(self) -> Optional[Path]:
-        arch = platform.processor()
-        arch = "amd64" if arch == "x86_64" else arch
-        res = "cos-tool-{}".format(arch)
-        try:
-            path = Path(res).resolve()
-            path.chmod(0o777)
-            return path
-        except NotImplementedError:
-            logger.debug("System lacks support for chmod")
-        except FileNotFoundError:
-            logger.debug('Could not locate cos-tool at: "{}"'.format(res))
-        return None
-
-    def _exec(self, cmd) -> str:
-        result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE)
-        output = result.stdout.decode("utf-8").strip()
-        return output
 
 
 def charm_logging_config(
