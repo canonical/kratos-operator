@@ -10,7 +10,7 @@ license = {file = "LICENSE"}
 requires-python = ">=3.10"
 dependencies = [
     "bcrypt==5.0.0",
-    "cosl==1.11.2",
+    "cosl==1.11.3",
     "ops==3.9.0",
     "dacite",
     "Jinja2==3.1.6",
