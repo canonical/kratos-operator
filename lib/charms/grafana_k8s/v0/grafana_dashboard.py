@@ -180,16 +180,12 @@ import json
 import logging
 import lzma
 import os
-import platform
 import re
-import subprocess
-import tempfile
-import uuid
+
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
-import yaml
-from cosl import DashboardPath40UID, LZMABase64
-from cosl.types import type_convert_stored
+from typing import Any, Callable, Dict, List, Optional
+from cosl import CosTool, DashboardPath40UID, LZMABase64
+from cosl.types import QueryType, type_convert_stored
 from ops.charm import (
     CharmBase,
     HookEvent,
@@ -217,7 +213,7 @@ LIBAPI = 0
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
 
-LIBPATCH = 47
+LIBPATCH = 53
 
 PYDEPS = ["cosl >= 0.0.50"]
 
@@ -390,6 +386,13 @@ REACTIVE_CONVERTER = {  # type: ignore
     "type": "query",
     "useTags": False,
 }
+
+
+def _data_hash(data: Any) -> str:
+    """Deterministic hash of a template dict for use as a stable relation data key."""
+    return hashlib.shake_128(
+        json.dumps(data, sort_keys=True).encode()
+    ).digest(8).hex()
 
 
 class RelationNotFoundError(Exception):
@@ -585,9 +588,19 @@ class CharmedDashboard:
                     datasources[template_value["name"]] = template_value["query"].lower()
 
             # Put our own variables in the template
+            # We only want to inject our own dropdowns IFF they are NOT
+            # already in the template coming over relation data.
+            # We'll store all dropdowns in the template from the provider
+            # in a set. We'll add our own if they are not in this set.
+            existing_names = {
+                item.get("name")
+                for item in dict_content["templating"]["list"]
+            }
+
             for d in template_dropdowns:  # type: ignore
-                if d not in dict_content["templating"]["list"]:
+                if d.get("name") not in existing_names:
                     dict_content["templating"]["list"].insert(0, d)
+                    existing_names.add(d.get("name"))
 
         dict_content = cls._replace_template_fields(dict_content, datasources, existing_templates)
         return json.dumps(dict_content)
@@ -813,7 +826,10 @@ class CharmedDashboard:
         # Do the same for any offsets
         offset_re = re.compile(r"offset\s+(?P<value>-?\s*[$\w]+)")
 
-        known_datasources = {"${prometheusds}": "promql", "${lokids}": "logql"}
+        known_datasources: Dict[str, QueryType] = {
+            "${prometheusds}": "promql",
+            "${lokids}": "logql",
+        }
 
         targets = panel["targets"]
 
@@ -855,7 +871,9 @@ class CharmedDashboard:
             # actual type is without re-implementing a complete dashboard parser, but no
             # harm will some from passing invalid promql -- we'll just get the original back.
             #
-            replacement = transformer.inject_label_matchers(expr, topology, querytype)
+            replacement = transformer.inject_label_matchers(
+                expr, {k: k for k in topology}, querytype, dashboard_variable=True
+            )
 
             if replacement == target["expr"]:
                 # promql-transform caught an error. Move on
@@ -1003,7 +1021,7 @@ class CharmedDashboard:
 
         dashboard_templates = {}
 
-        for path in filter(_is_dashboard, Path(dashboards_path).glob("*")):
+        for path in filter(_is_dashboard, Path(dashboards_path).glob("**/*")):
             try:
                 dashboard_dict = json.loads(path.read_bytes())
             except json.JSONDecodeError as e:
@@ -1339,11 +1357,29 @@ class GrafanaDashboardProvider(Object):
 
     def _upset_dashboards_on_relation(self, relation: Relation) -> None:
         """Update the dashboards in the relation data bucket."""
+        new_templates = type_convert_stored(self._stored.dashboard_templates)  # pyright: ignore
+
+        # Check if the templates have actually changed before updating.
+        # This avoids generating a new UUID on every event, which would cause
+        # unnecessary relation-changed events on the consumer side.
+        # See: https://github.com/canonical/opentelemetry-collector-operator/issues/331
+        existing_data_str = relation.data[self._charm.app].get("dashboards", "{}")
+        try:
+            existing_data = json.loads(existing_data_str)
+            existing_templates = existing_data.get("templates", {})
+        except json.JSONDecodeError:
+            existing_templates = {}
+
+        if new_templates == existing_templates:
+            return  # No change in templates, don't update the databag
+
         # It's completely ridiculous to add a UUID, but if we don't have some
-        # pseudo-random value, this never makes it across 'juju set-state'
+        # pseudo-random value, this never makes it across 'juju set-state'.
+        # Use a deterministic hash of the templates so the value is stable when
+        # templates haven't changed, avoiding spurious relation-changed events.
         stored_data = {
-            "templates": type_convert_stored(self._stored.dashboard_templates),  # pyright: ignore
-            "uuid": str(uuid.uuid4()),
+            "templates": new_templates,
+            "uuid": _data_hash(new_templates),
         }
 
         relation.data[self._charm.app]["dashboards"] = json.dumps(stored_data)
@@ -1412,7 +1448,11 @@ class GrafanaDashboardConsumer(Object):
         super().__init__(charm, relation_name)
         self._charm = charm
         self._relation_name = relation_name
-        self._transformer = CosTool(self._charm)
+        # A default query type is required here: cosl's `CosTool` only accepts the query
+        # type via the per-method `query_type` kwarg, but `_modify_panel` passes it
+        # positionally (per-panel, promql or logql), which the `ensure_querytype` guard
+        # does not see. "promql" is just a placeholder to satisfy that guard.
+        self._transformer = CosTool("promql")
 
         self._stored.set_default(dashboards={})  # type: ignore
 
@@ -1484,6 +1524,41 @@ class GrafanaDashboardConsumer(Object):
 
             for relation in relations:
                 self._render_dashboards_and_signal_changed(relation)
+
+    def has_invalid_dashboards(self) -> bool:
+        """Check whether any relation reported invalid dashboards.
+
+        Validation errors written to relation app data by this consumer (see
+        :meth:`_render_dashboards_and_signal_changed`) are read back to determine
+        whether the relationship currently carries an invalid dashboard.
+
+        Returns:
+            True if any related dashboard provider reported dashboard validation
+            errors, False otherwise.
+        """
+        if not self._charm.unit.is_leader():
+            return False
+
+        for relation in self._charm.model.relations.get(self._relation_name, []):
+            app_data = relation.data.get(self._charm.app)
+            if not app_data:
+                continue
+
+            event_raw = app_data.get("event", "{}")
+            try:
+                event_data = json.loads(event_raw)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            if event_data.get("errors"):
+                logger.error(
+                    "Invalid dashboards on relation %s: %s",
+                    relation.id,
+                    event_data["errors"],
+                )
+                return True
+
+        return False
 
     def _on_grafana_dashboard_relation_broken(self, event: RelationBrokenEvent) -> None:
         """Update job config when providers depart.
@@ -1557,7 +1632,11 @@ class GrafanaDashboardConsumer(Object):
             except json.JSONDecodeError as e:
                 error = str(e.msg)
                 logger.warning("Invalid JSON in Grafana dashboard '{}': {}".format(fname, error))
-                continue
+                relation_has_invalid_dashboards = True
+            except (KeyError, TypeError, AttributeError) as e:
+                error = str(e)
+                logger.warning("Invalid Grafana dashboard '{}': {}".format(fname, error))
+                relation_has_invalid_dashboards = True
 
             # Prepend the relation name and ID to the dashboard ID to avoid clashes with
             # multiple relations with apps from the same charm, or having dashboards with
@@ -1604,6 +1683,12 @@ class GrafanaDashboardConsumer(Object):
 
             # Dropping dashboards for a relation needs to be signalled
             return True
+
+        # Clear any stale validation errors so the charm returns to Active once fixed
+        event_data = json.loads(relation.data[self._charm.app].get("event", "{}"))
+        if event_data.get("errors"):
+            event_data.pop("errors")
+            relation.data[self._charm.app]["event"] = json.dumps(event_data)
 
         stored_data = rendered_dashboards
         currently_stored_data = self._get_stored_dashboards(relation.id)
@@ -1707,7 +1792,7 @@ class GrafanaDashboardConsumer(Object):
         if not peers or not peers.data:
             logger.info("set_peer_data: no peer relation. Is the charm being installed/removed?")
             return
-        peers.data[self._charm.app][key] = json.dumps(data)  # type: ignore[attr-defined]
+        peers.data[self._charm.app][key] = json.dumps(data, sort_keys=True)  # type: ignore[attr-defined]
 
     def get_peer_data(self, key: str) -> Any:
         """Retrieve information from the peer data bucket instead of `StoredState`."""
@@ -1821,14 +1906,30 @@ class GrafanaDashboardAggregator(Object):
 
     def _update_remote_grafana(self, _: Optional[RelationEvent] = None) -> None:
         """Push dashboards to the downstream Grafana relation."""
-        # It's still ridiculous to add a UUID here, but needed
-        stored_data = {
-            "templates": type_convert_stored(self._stored.dashboard_templates),  # pyright: ignore
-            "uuid": str(uuid.uuid4()),
-        }
+        new_templates = type_convert_stored(self._stored.dashboard_templates)  # pyright: ignore
 
         if self._charm.unit.is_leader():
             for grafana_relation in self.model.relations[self._grafana_relation]:
+                # Check if the templates have actually changed before updating.
+                # This avoids generating a new UUID on every event, which would cause
+                # unnecessary relation-changed events on the consumer side.
+                existing_data_str = grafana_relation.data[self._charm.app].get("dashboards", "{}")
+                try:
+                    existing_data = json.loads(existing_data_str)
+                    existing_templates = existing_data.get("templates", {})
+                except json.JSONDecodeError:
+                    existing_templates = {}
+
+                if new_templates == existing_templates:
+                    continue  # No change in templates, don't update the databag
+
+                # It's still ridiculous to add a UUID here, but needed.
+                # Use a deterministic hash of the templates so the value is stable when
+                # templates haven't changed, avoiding spurious relation-changed events.
+                stored_data = {
+                    "templates": new_templates,
+                    "uuid": _data_hash(new_templates),
+                }
                 grafana_relation.data[self._charm.app]["dashboards"] = json.dumps(stored_data)
 
     def remove_dashboards(self, event: RelationBrokenEvent) -> None:
@@ -1843,9 +1944,10 @@ class GrafanaDashboardAggregator(Object):
         for id in app_ids:
             del self._stored.dashboard_templates[id]  # type: ignore
 
+        remaining_templates = type_convert_stored(self._stored.dashboard_templates)  # pyright: ignore
         stored_data = {
-            "templates": type_convert_stored(self._stored.dashboard_templates),  # pyright: ignore
-            "uuid": str(uuid.uuid4()),
+            "templates": remaining_templates,
+            "uuid": _data_hash(remaining_templates),
         }
 
         if self._charm.unit.is_leader():
@@ -2025,125 +2127,3 @@ class GrafanaDashboardAggregator(Object):
             "application": event.app.name,  # type: ignore
             "unit": event.unit.name,  # type: ignore
         }
-
-
-class CosTool:
-    """Uses cos-tool to inject label matchers into alert rule expressions and validate rules."""
-
-    _path = None
-    _disabled = False
-
-    def __init__(self, charm):
-        self._charm = charm
-
-    @property
-    def path(self):
-        """Lazy lookup of the path of cos-tool."""
-        if self._disabled:
-            return None
-        if not self._path:
-            self._path = self._get_tool_path()
-            if not self._path:
-                logger.debug("Skipping injection of juju topology as label matchers")
-                self._disabled = True
-        return self._path
-
-    def apply_label_matchers(self, rules: dict, type: str) -> dict:
-        """Will apply label matchers to the expression of all alerts in all supplied groups."""
-        if not self.path:
-            return rules
-        for group in rules["groups"]:
-            rules_in_group = group.get("rules", [])
-            for rule in rules_in_group:
-                topology = {}
-                # if the user for some reason has provided juju_unit, we'll need to honor it
-                # in most cases, however, this will be empty
-                for label in [
-                    "juju_model",
-                    "juju_model_uuid",
-                    "juju_application",
-                    "juju_charm",
-                    "juju_unit",
-                ]:
-                    if label in rule["labels"]:
-                        topology[label] = rule["labels"][label]
-
-                rule["expr"] = self.inject_label_matchers(rule["expr"], topology, type)
-        return rules
-
-    def validate_alert_rules(self, rules: dict) -> Tuple[bool, str]:
-        """Will validate correctness of alert rules, returning a boolean and any errors."""
-        if not self.path:
-            logger.debug("`cos-tool` unavailable. Not validating alert correctness.")
-            return True, ""
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            rule_path = Path(tmpdir + "/validate_rule.yaml")
-
-            # Smash "our" rules format into what upstream actually uses, which is more like:
-            #
-            # groups:
-            #   - name: foo
-            #     rules:
-            #       - alert: SomeAlert
-            #         expr: up
-            #       - alert: OtherAlert
-            #         expr: up
-            transformed_rules = {"groups": []}  # type: ignore
-            for rule in rules["groups"]:
-                transformed = {"name": str(uuid.uuid4()), "rules": [rule]}
-                transformed_rules["groups"].append(transformed)
-
-            rule_path.write_text(yaml.dump(transformed_rules))
-
-            args = [str(self.path), "validate", str(rule_path)]
-            # noinspection PyBroadException
-            try:
-                self._exec(args)
-                return True, ""
-            except subprocess.CalledProcessError as e:
-                logger.debug("Validating the rules failed: %s", e.output)
-                return False, ", ".join([line for line in e.output if "error validating" in line])
-
-    def inject_label_matchers(self, expression: str, topology: dict, type: str) -> str:
-        """Add label matchers to an expression."""
-        if not topology:
-            return expression
-        if not self.path:
-            logger.debug("`cos-tool` unavailable. Leaving expression unchanged: %s", expression)
-            return expression
-        args = [str(self.path), "--format", type, "transform"]
-
-        variable_topology = {k: "${}".format(k) for k in topology.keys()}
-        args.extend(
-            [
-                "--label-matcher={}={}".format(key, value)
-                for key, value in variable_topology.items()
-            ]
-        )
-
-        # Pass a leading "--" so expressions with a negation or subtraction aren't interpreted as
-        # flags
-        args.extend(["--", "{}".format(expression)])
-        # noinspection PyBroadException
-        try:
-            return re.sub(r'="\$juju', r'=~"$juju', self._exec(args))
-        except subprocess.CalledProcessError as e:
-            logger.debug('Applying the expression failed: "%s", falling back to the original', e)
-            return expression
-
-    def _get_tool_path(self) -> Optional[Path]:
-        arch = platform.machine()
-        arch = "amd64" if arch == "x86_64" else arch
-        res = "cos-tool-{}".format(arch)
-        try:
-            path = Path(res).resolve(strict=True)
-            return path
-        except (FileNotFoundError, OSError):
-            logger.debug('Could not locate cos-tool at: "{}"'.format(res))
-        return None
-
-    def _exec(self, cmd) -> str:
-        result = subprocess.run(cmd, check=True, stdout=subprocess.PIPE)
-        output = result.stdout.decode("utf-8").strip()
-        return output
