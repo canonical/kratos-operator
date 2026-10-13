@@ -179,12 +179,23 @@ class LoginUIEndpointData:
     account_linking_settings_url: str = ""
     registration_url: str = ""
     consent_url: str = ""
+    byosso_enabled: str = ""
+
+    @property
+    def multitenancy(self) -> bool:
+        """Whether the login UI runs multitenancy and decides itself when MFA is required."""
+        return self.byosso_enabled == "true"
 
     def is_ready(self) -> bool:
-        return all(v for _, v in self.to_service_configs().items())
+        return all(v for k, v in self.to_service_configs().items() if k != "multitenancy")
+
+    def to_env_vars(self) -> EnvVars:
+        # Sessions that have not completed a second factor have to reach whoami.
+        return {"SESSION_WHOAMI_REQUIRED_AAL": "aal1"} if self.multitenancy else {}
 
     def to_service_configs(self) -> ServiceConfigs:
         return {
+            "multitenancy": self.multitenancy,
             "default_browser_return_url": self.settings_url,
             "login_ui_url": self.login_url,
             "error_ui_url": self.error_url,
