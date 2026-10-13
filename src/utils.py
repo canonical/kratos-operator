@@ -14,7 +14,7 @@ from constants import (
     PUBLIC_ROUTE_INTEGRATION_NAME,
     WORKLOAD_CONTAINER,
 )
-from integrations import PublicRouteData
+from integrations import LoginUIEndpointData, PublicRouteData
 
 if TYPE_CHECKING:
     from charm import KratosCharm
@@ -124,6 +124,21 @@ def passwordless_config_is_valid(charm: "KratosCharm") -> bool:
     )
 
 
+def multitenancy_config_is_valid(charm: "KratosCharm") -> bool:
+    """Checks the config against the login UI's multitenancy, when it runs it.
+
+    The login UI then decides when MFA is required, which OIDC-WebAuthn sequencing would
+    decide too, and relies on Kratos's verification of the addresses an external identity
+    provider did not confirm.
+    """
+    if not LoginUIEndpointData.load(charm.login_ui_requirer).multitenancy:
+        return True
+
+    return bool(charm.charm_config["enable_verification"]) and not bool(
+        charm.charm_config["enable_oidc_webauthn_sequencing"]
+    )
+
+
 # Condition failure causes early return without doing anything
 NOOP_CONDITIONS: tuple[Condition, ...] = (
     peer_integration_exists,
@@ -134,6 +149,7 @@ NOOP_CONDITIONS: tuple[Condition, ...] = (
     external_hostname_is_ready,
     public_route_is_ready,
     passwordless_config_is_valid,
+    multitenancy_config_is_valid,
 )
 
 # Condition failure causes early return with corresponding event deferred

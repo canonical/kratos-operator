@@ -54,7 +54,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 5
+LIBPATCH = 6
 
 RELATION_NAME = "ui-endpoint-info"
 INTERFACE_NAME = "login_ui_endpoints"
@@ -74,6 +74,8 @@ class LoginUIProviderData(BaseModel):
     webauthn_settings_url: Optional[str] = None
     account_linking_settings_url: Optional[str] = None
     verification_url: Optional[str] = None
+    # "true" when the login UI runs "Bring Your Own SSO" and decides itself when MFA is required.
+    byosso_enabled: Optional[str] = None
 
 
 class LoginUIEndpointsRelationReadyEvent(EventBase):
