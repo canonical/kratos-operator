@@ -51,6 +51,9 @@ PUBLIC_ROUTE_INTEGRATION_NAME = "public-route"
 # Action constants
 ALLOWED_MFA_CREDENTIAL_TYPES = ("totp", "lookup_secret", "webauthn")
 
+# Kratos's own default, set explicitly so that kratos-info can publish it
+PRIVILEGED_SESSION_MAX_AGE = "1h"
+
 # Secret constants
 COOKIE_SECRET_LABEL = "cookie_secret"
 COOKIE_SECRET_CONTENT_KEY = "cookiesecret"

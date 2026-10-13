@@ -109,6 +109,7 @@ class TestCharmConfig:
             "enable_passwordless_login_method": True,
             "enable_oidc_webauthn_sequencing": False,
             "enable_verification": False,
+            "privileged_session_max_age": "1h",
         }
 
 
@@ -688,3 +689,48 @@ class TestConfigFile:
         oidc_hooks = [h for h in reg["after"]["oidc"]["hooks"] if h["hook"] == "web_hook"]
         urls = [h["config"]["url"] for h in oidc_hooks]
         assert urls == ["http://example.com/low", "http://example.com/high"]
+
+    def _multitenancy_sources(self, multitenancy: bool) -> tuple:
+        charm_config = CharmConfig({
+            "enable_local_idp": True,
+            "enforce_mfa": False,
+            "enable_passwordless_login_method": False,
+            "enable_oidc_webauthn_sequencing": False,
+            "enable_verification": True,
+        })
+        login_ui = MagicMock()
+        login_ui.to_service_configs.return_value = {
+            "login_ui_url": "http://example.com/login",
+            "settings_ui_url": "http://example.com/settings",
+            "multitenancy": multitenancy,
+        }
+        hooks = RegistrationWebhookData(configs=[self._make_reg_hook_config("after")])
+        return self._identity_source(), charm_config, login_ui, hooks
+
+    def test_multitenancy(self) -> None:
+        cfg = ConfigFile.from_sources(*self._multitenancy_sources(True))
+
+        selfservice = cfg.yaml_content["selfservice"]
+        assert selfservice["methods"]["totp"]["enabled"] is True
+        assert selfservice["methods"]["lookup_secret"]["enabled"] is True
+        registration = selfservice["flows"]["registration"]
+        assert registration["login_hints"] is True
+        oidc_hooks = [h["hook"] for h in registration["after"]["oidc"]["hooks"]]
+        assert oidc_hooks == ["web_hook", "show_verification_ui", "session"]
+
+    def test_without_multitenancy(self) -> None:
+        cfg = ConfigFile.from_sources(*self._multitenancy_sources(False))
+
+        selfservice = cfg.yaml_content["selfservice"]
+        assert "totp" not in selfservice["methods"]
+        assert "lookup_secret" not in selfservice["methods"]
+        registration = selfservice["flows"]["registration"]
+        assert "login_hints" not in registration
+        oidc_hooks = [h["hook"] for h in registration["after"]["oidc"]["hooks"]]
+        assert oidc_hooks == ["web_hook", "session"]
+
+    def test_privileged_session_max_age(self) -> None:
+        cfg = ConfigFile.from_sources(*self._multitenancy_sources(False))
+
+        settings = cfg.yaml_content["selfservice"]["flows"]["settings"]
+        assert settings["privileged_session_max_age"] == "1h"

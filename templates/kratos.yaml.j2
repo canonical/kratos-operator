@@ -59,6 +59,9 @@ selfservice:
     {%- set _empty_flow = {"before": {"hooks": []}, "after": {"hooks": []}} %}
     {%- set registration_flow = registration_flow | d(_empty_flow) %}
     {%- set login_flow = login_flow | d(_empty_flow) %}
+    {#- With multitenancy the login UI decides when MFA is required, so TOTP and
+        recovery codes stay available whatever enforce_mfa and enable_local_idp say. -#}
+    {%- set _multitenancy = multitenancy | d(False) %}
     {%- if error_ui_url or login_ui_url or oidc_providers or _has_reg_hooks or _has_login_hooks %}
     flows:
         {%- if error_ui_url %}
@@ -87,8 +90,8 @@ selfservice:
             {%- set _need_login_oidc = oidc_providers and (_login_all or _login_after.oidc | d([])) %}
             {%- set _need_login_code = enable_local_idp and (_login_all or _login_after.code | d([])) %}
             {%- set _need_login_webauthn = (enable_passwordless_login_method or enable_oidc_webauthn_sequencing) and (_login_all or _login_after.webauthn | d([])) %}
-            {%- set _need_login_totp = (enforce_mfa and enable_local_idp) and (_login_all or _login_after.totp | d([])) %}
-            {%- set _need_login_lookup = (enable_oidc_webauthn_sequencing or (enforce_mfa and enable_local_idp)) and (_login_all or _login_after.lookup_secret | d([])) %}
+            {%- set _need_login_totp = (enforce_mfa and enable_local_idp or _multitenancy) and (_login_all or _login_after.totp | d([])) %}
+            {%- set _need_login_lookup = (enable_oidc_webauthn_sequencing or (enforce_mfa and enable_local_idp) or _multitenancy) and (_login_all or _login_after.lookup_secret | d([])) %}
             {%- if _need_login_password or _need_login_oidc or _need_login_code or _need_login_webauthn or _need_login_totp or _need_login_lookup %}
             after:
                 {%- if _need_login_password %}
@@ -133,6 +136,7 @@ selfservice:
         settings:
             ui_url: {{ settings_ui_url }}
             required_aal: highest_available
+            privileged_session_max_age: {{ privileged_session_max_age }}
             after:
                 oidc:
                     default_browser_return_url: {{ account_linking_settings_url }}
@@ -165,6 +169,9 @@ selfservice:
             enabled: True
             ui_url: {{ registration_ui_url }}
             {%- endif %}
+            {%- if _multitenancy %}
+            login_hints: True
+            {%- endif %}
             {%- if _has_reg_hooks and registration_flow.before.hooks %}
             before:
                 hooks:
@@ -194,6 +201,9 @@ selfservice:
                     hooks:
                         {{- render_web_hooks(registration_flow.after.hooks | d([]), "                        ") }}
                         {{- render_web_hooks(registration_flow.after.oidc | d([]), "                        ") }}
+                        {%- if enable_verification and _multitenancy %}
+                        - hook: show_verification_ui
+                        {%- endif %}
                         - hook: session
                 {%- endif %}
                 {%- if _need_reg_webauthn %}
@@ -216,7 +226,7 @@ selfservice:
             {%- endif %}
         {%- endif %}
     {%- endif %}
-    {%- if oidc_providers or recovery_ui_url or enable_local_idp and login_ui_url %}
+    {%- if oidc_providers or recovery_ui_url or enable_local_idp and login_ui_url or _multitenancy %}
     methods:
         {%- if enable_local_idp %}
         profile:
@@ -243,14 +253,14 @@ selfservice:
             enabled: True
             config:
                 haveibeenpwned_enabled: False
-        {%- if enforce_mfa %}
+        {%- endif %}
+        {%- if enforce_mfa and enable_local_idp and login_ui_url or _multitenancy %}
         totp:
             enabled: True
             config:
                 issuer: Identity Platform
         {%- endif %}
-        {%- endif %}
-        {%- if enable_oidc_webauthn_sequencing or (enforce_mfa and enable_local_idp) %}
+        {%- if enable_oidc_webauthn_sequencing or (enforce_mfa and enable_local_idp) or _multitenancy %}
         lookup_secret:
             enabled: True
         {%- endif %}
