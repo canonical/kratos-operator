@@ -1,5 +1,0 @@
--r requirements.txt
-jubilant
-pytest
-requests
-tenacity

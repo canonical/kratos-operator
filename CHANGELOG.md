@@ -1,5 +1,42 @@
 # Changelog
 
+## [2.4.2](https://github.com/canonical/kratos-operator/compare/v2.4.1...v2.4.2) (2026-07-09)
+
+
+### Bug Fixes
+
+* trigger release ([#692](https://github.com/canonical/kratos-operator/issues/692)) ([3e80328](https://github.com/canonical/kratos-operator/commit/3e80328ef384ccabef6c6266a151c0204b8dbcd9))
+* update oci-image to ghcr.io/canonical/kratos:26.2.0 ([bbf4f9c](https://github.com/canonical/kratos-operator/commit/bbf4f9c128cec7fe479d9a0f4c0723822b5c7893))
+
+## [2.4.1](https://github.com/canonical/kratos-operator/compare/v2.4.0...v2.4.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* trigger a release ([fda97c9](https://github.com/canonical/kratos-operator/commit/fda97c9215a15f48290a2ece5d65f1a9a3f34f81))
+* trigger release ([#653](https://github.com/canonical/kratos-operator/issues/653)) ([f31851f](https://github.com/canonical/kratos-operator/commit/f31851f266394a2de6da0e14118d8f8015b76f40))
+
+## [2.4.0](https://github.com/canonical/kratos-operator/compare/v2.3.0...v2.4.0) (2026-07-02)
+
+
+### Features
+
+* add ci permissions ([#684](https://github.com/canonical/kratos-operator/issues/684)) ([6b5da6e](https://github.com/canonical/kratos-operator/commit/6b5da6ee7ad7e7490b80d627a05579a3ff96279f))
+* fix ci permissions ([dc9d78d](https://github.com/canonical/kratos-operator/commit/dc9d78da13602da92ebd91b186377cb00fe2baee))
+
+## [2.3.0](https://github.com/canonical/kratos-operator/compare/v2.2.1...v2.3.0) (2026-07-02)
+
+
+### Features
+
+* support arm64 build ([21e91e4](https://github.com/canonical/kratos-operator/commit/21e91e4857c251e3c8214589bd7c1ff62112a65d))
+* support arm64 build and bump image to v26.2.0 ([#680](https://github.com/canonical/kratos-operator/issues/680)) ([bc03c12](https://github.com/canonical/kratos-operator/commit/bc03c127e3490e23c794cdc62e9a1992590ef3b0))
+
+
+### Bug Fixes
+
+* add leader guard to secret_remove ([ce823c0](https://github.com/canonical/kratos-operator/commit/ce823c07d7696cb282ca6ce997e81081b034c9fb))
+
 ## [2.2.1](https://github.com/canonical/kratos-operator/compare/v2.2.0...v2.2.1) (2026-05-06)
 
 
