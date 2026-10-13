@@ -25,22 +25,25 @@
     },
     {
       "groupName": "operator pip deps",
-      "matchManagers": ["pip_requirements"],
+      "matchManagers": ["pep621"],
+      "matchDepTypes": ["dependencies"],
       "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
       "schedule": ["at any time"],
       "prPriority": 5,
       "additionalBranchPrefix": "auto-"
     },
     {
-      "groupName": "operator pip deps",
-      "matchManagers": ["pip_requirements"],
+      "groupName": "operator pip deps (major)",
+      "matchManagers": ["pep621"],
+      "matchDepTypes": ["dependencies"],
       "matchUpdateTypes": ["major"],
       "schedule": ["at any time"],
       "prPriority": 5
     },
     {
       "groupName": "testing pip deps",
-      "matchManagers": ["pip_requirements"],
+      "matchManagers": ["pep621"],
+      "matchDepTypes": ["fmt", "lint", "unit", "integration", "dev"],
       "matchUpdateTypes": ["major", "minor", "patch", "pin", "digest"],
       "automerge": true,
       "schedule": ["at any time"],
@@ -63,5 +66,11 @@
       "schedule": ["at any time"],
       "additionalBranchPrefix": "auto-"
     }
-  ]
+  ],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true,
+    "schedule": ["on monday"]
+  }
 }
+

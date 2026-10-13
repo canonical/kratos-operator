@@ -18,7 +18,7 @@ resources:
   oci-image:
     type: oci-image
     description: Kratos oci-image
-    upstream-source: ghcr.io/canonical/kratos:25.4.0
+    upstream-source: ghcr.io/canonical/kratos:26.2.0
   verification-email-template:
     type: file
     filename: verification-email-template.gotmpl
@@ -36,6 +36,7 @@ requires:
     optional: true
   ui-endpoint-info:
     interface: login_ui_endpoints
+    limit: 1
     optional: true
   kratos-registration-webhook:
     interface: kratos_registration_webhook
@@ -341,20 +342,23 @@ actions:
 ########################### build ###########################
 platforms:
   ubuntu@22.04:amd64:
+  ubuntu@22.04:arm64:
+  ubuntu@26.04:amd64:
+  ubuntu@26.04:arm64:
 parts:
   schemas:
     plugin: dump
     source: .
-    organize:
-      "claim_mappers/**": schemas/claim_mappers/
-      "identity_schemas/**": schemas/identity_schemas/
     prime:
-      - schemas/
+      - claim_mappers/
+      - identity_schemas/
+  templates:
+    plugin: dump
+    source: .
+    prime:
+      - templates/
   charm:
-    charm-binary-python-packages:
-      - jsonschema
-      - bcrypt
-      - "setuptools>=70.0.0"
-    build-packages:
-      - "rustc-1.85"
-      - "cargo-1.85"
+    plugin: uv
+    source: .
+    build-snaps:
+      - astral-uv
