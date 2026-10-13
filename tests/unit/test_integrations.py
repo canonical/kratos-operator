@@ -257,6 +257,7 @@ class TestLoginUIEndpointData:
 
     def test_to_service_configs(self, endpoint_data: LoginUIEndpointData) -> None:
         expected = {
+            "multitenancy": False,
             "default_browser_return_url": "settings_url",
             "login_ui_url": "login_url",
             "error_ui_url": "error_url",
@@ -294,6 +295,28 @@ class TestLoginUIEndpointData:
 
         actual = LoginUIEndpointData.load(mocked_requirer)
         assert actual == LoginUIEndpointData()
+
+    @pytest.mark.parametrize(
+        "byosso_enabled, expected_env_vars",
+        [
+            ("true", {"SESSION_WHOAMI_REQUIRED_AAL": "aal1"}),
+            ("false", {}),
+            ("", {}),
+        ],
+    )
+    def test_multitenancy(
+        self, mocked_requirer: MagicMock, byosso_enabled: str, expected_env_vars: dict
+    ) -> None:
+        mocked_requirer.get_login_ui_endpoints.return_value = {
+            "login_url": "login_url",
+            "byosso_enabled": byosso_enabled,
+        }
+
+        actual = LoginUIEndpointData.load(mocked_requirer)
+
+        assert actual.multitenancy is (byosso_enabled == "true")
+        assert actual.to_service_configs()["multitenancy"] is (byosso_enabled == "true")
+        assert actual.to_env_vars() == expected_env_vars
 
 
 class TestHydraEndpointData:

@@ -1,7 +1,11 @@
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-from utils import dict_to_action_output
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from utils import dict_to_action_output, multitenancy_config_is_valid
 
 
 def test_dict_to_action_output() -> None:
@@ -34,3 +38,27 @@ def test_dict_to_action_output_with_empty_dict() -> None:
     actual = dict_to_action_output({})
 
     assert actual == {}
+
+
+@pytest.mark.parametrize(
+    "multitenancy, enable_verification, sequencing, expected",
+    [
+        (False, False, True, True),
+        (True, True, False, True),
+        (True, False, False, False),
+        (True, True, True, False),
+    ],
+)
+def test_multitenancy_config_is_valid(
+    multitenancy: bool, enable_verification: bool, sequencing: bool, expected: bool
+) -> None:
+    charm = MagicMock()
+    charm.charm_config = {
+        "enable_verification": enable_verification,
+        "enable_oidc_webauthn_sequencing": sequencing,
+    }
+
+    with patch("utils.LoginUIEndpointData.load") as mocked_load:
+        mocked_load.return_value.multitenancy = multitenancy
+
+        assert multitenancy_config_is_valid(charm) is expected

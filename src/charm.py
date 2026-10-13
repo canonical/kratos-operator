@@ -127,6 +127,7 @@ from constants import (
     LOGIN_WEBHOOK_INTEGRATION_NAME,
     PEBBLE_READY_CHECK_NAME,
     PEER_INTEGRATION_NAME,
+    PRIVILEGED_SESSION_MAX_AGE,
     PROMETHEUS_SCRAPE_INTEGRATION_NAME,
     PUBLIC_ROUTE_INTEGRATION_NAME,
     REGISTRATION_WEBHOOK_INTEGRATION_NAME,
@@ -169,6 +170,7 @@ from utils import (
     dict_to_action_output,
     external_hostname_is_ready,
     migration_is_ready,
+    multitenancy_config_is_valid,
     passwordless_config_is_valid,
     peer_integration_exists,
     public_route_is_ready,
@@ -422,6 +424,7 @@ class KratosCharm(CharmBase):
     @property
     def _pebble_layer(self) -> Layer:
         return self._pebble_service.render_pebble_layer(
+            LoginUIEndpointData.load(self.login_ui_requirer),
             self.charm_config,
             self.secrets,
             DatabaseConfig.load(self.database_requirer),
@@ -568,6 +571,14 @@ class KratosCharm(CharmBase):
                 )
             )
 
+        if not multitenancy_config_is_valid(self):
+            event.add_status(
+                BlockedStatus(
+                    "Multitenancy requires `enable_verification=True` and "
+                    "`enable_oidc_webauthn_sequencing=False`"
+                )
+            )
+
         event.add_status(self.resources_patch.get_status())
 
         if can_connect and self._workload_service.is_failing():
@@ -670,6 +681,10 @@ class KratosCharm(CharmBase):
         logger.error("Failed to patch resource constraints: %s", event.message)
 
     def _on_kratos_info_provider_ready(self, event: RelationEvent) -> None:
+        # Blocked on this, the charm plans nothing and Kratos runs what was published before.
+        if not multitenancy_config_is_valid(self):
+            return
+
         internal_endpoints = InternalRouteData.load(self.internal_route)
         providers_configmap_name = self.providers_configmap.name
         schemas_configmap_name = self.schemas_configmap.name
@@ -693,6 +708,7 @@ class KratosCharm(CharmBase):
             oidc_webauthn_sequencing_enabled,
             verification_enabled,
             active_flags,
+            privileged_session_max_age=PRIVILEGED_SESSION_MAX_AGE,
         )
 
     def _on_database_created(self, event: DatabaseCreatedEvent) -> None:
