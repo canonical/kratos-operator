@@ -19,7 +19,7 @@ on:
 jobs:
   tests:
     name: CI
-    uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@fc85af7448538c473be450dc2c8ec5d158ea0d15 # v1.17.0
+    uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@6e3d618fb7650a26b7a2254a15fef1d28373bd9d # v1.17.1
     with:
       container-name: "kratos"
       use-charmcraftcache: false
