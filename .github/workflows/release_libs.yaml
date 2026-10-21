@@ -43,7 +43,7 @@ jobs:
     name: Release any bumped library
     needs: filter
     if: needs.filter.outputs.run-release == 'true'
-    uses: canonical/identity-team/.github/workflows/charm-libs-release.yaml@6e3d618fb7650a26b7a2254a15fef1d28373bd9d # v1.17.1
+    uses: canonical/identity-team/.github/workflows/charm-libs-release.yaml@9bbee2e8d44fe72c7e6733d132ea63e844943133 # v1.17.2
     secrets:
       CHARMCRAFT_CREDENTIALS: ${{ secrets.CHARMCRAFT_CREDENTIALS }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
