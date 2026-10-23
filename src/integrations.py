@@ -273,6 +273,24 @@ class SmtpData:
         )
 
 
+def get_external_host_and_scheme(
+    requirer: TraefikRouteRequirer, relation_name: str
+) -> tuple[str, str]:
+    """Extract external_host and scheme from a Traefik route relation.
+
+    If the relation or the remote application data is not available,
+    returns empty strings as default values.
+    """
+    if not (relation := requirer._charm.model.get_relation(relation_name)):
+        logger.debug("Relation %s is not available", relation_name)
+        return "", ""
+    if not relation.app:
+        logger.debug("Remote application for relation %s is not available", relation_name)
+        return "", ""
+    data = relation.data[relation.app]
+    return data.get("external_host", ""), data.get("scheme", "")
+
+
 @dataclass(frozen=True, slots=True)
 class PublicRouteData:
     """The data source from the public-route integration."""
@@ -281,26 +299,11 @@ class PublicRouteData:
     config: dict = field(default_factory=dict)
 
     @classmethod
-    def _external_host(cls, requirer: TraefikRouteRequirer) -> str:
-        if not (relation := requirer._charm.model.get_relation(PUBLIC_ROUTE_INTEGRATION_NAME)):
-            return
-        if not relation.app:
-            return
-        return relation.data[relation.app].get("external_host", "")
-
-    @classmethod
-    def _scheme(cls, requirer: TraefikRouteRequirer) -> str:
-        if not (relation := requirer._charm.model.get_relation(PUBLIC_ROUTE_INTEGRATION_NAME)):
-            return
-        if not relation.app:
-            return
-        return relation.data[relation.app].get("scheme", "")
-
-    @classmethod
     def load(cls, requirer: TraefikRouteRequirer) -> "PublicRouteData":
         model, app = requirer._charm.model.name, requirer._charm.app.name
-        external_host = cls._external_host(requirer)
-        scheme = cls._scheme(requirer)
+        external_host, scheme = get_external_host_and_scheme(
+            requirer, PUBLIC_ROUTE_INTEGRATION_NAME
+        )
 
         external_endpoint = f"{scheme}://{external_host}"
 
@@ -338,23 +341,15 @@ class PublicRouteData:
         )
 
     def to_env_vars(self) -> EnvVars:
-        return (
-            {
-                "SERVE_PUBLIC_BASE_URL": str(self.url),
-                "SELFSERVICE_ALLOWED_RETURN_URLS": json.dumps(
-                    [
-                        str(
-                            self.url.with_path("")
-                            .without_query_params()
-                            .with_fragment(None)
-                            .with_path("/")
-                        )
-                    ],
-                ),
-            }
-            if self.url
-            else {}
+        if not self.url:
+            return {}
+        base_url = str(
+            self.url.with_path("").without_query_params().with_fragment(None).with_path("/")
         )
+        return {
+            "SERVE_PUBLIC_BASE_URL": str(self.url),
+            "SELFSERVICE_ALLOWED_RETURN_URLS": json.dumps([base_url]),
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -366,26 +361,14 @@ class InternalRouteData:
     config: dict = field(default_factory=dict)
 
     @classmethod
-    def _external_host(cls, requirer: TraefikRouteRequirer) -> str:
-        if not (relation := requirer._charm.model.get_relation(INTERNAL_ROUTE_INTEGRATION_NAME)):
-            return
-        if not relation.app:
-            return
-        return relation.data[relation.app].get("external_host", "")
-
-    @classmethod
-    def _scheme(cls, requirer: TraefikRouteRequirer) -> str:
-        if not (relation := requirer._charm.model.get_relation(INTERNAL_ROUTE_INTEGRATION_NAME)):
-            return
-        if not relation.app:
-            return
-        return relation.data[relation.app].get("scheme", "")
-
-    @classmethod
-    def load(cls, requirer: TraefikRouteRequirer) -> "InternalRouteData":
+    def load(
+        cls, requirer: TraefikRouteRequirer, use_ingress_for_relations: bool = False
+    ) -> "InternalRouteData":
         model, app = requirer._charm.model.name, requirer._charm.app.name
-        external_host = cls._external_host(requirer)
-        scheme = cls._scheme(requirer) or "http"
+        external_host, scheme = get_external_host_and_scheme(
+            requirer, INTERNAL_ROUTE_INTEGRATION_NAME
+        )
+        scheme = scheme or "http"
 
         external_endpoint = f"{scheme}://{external_host}"
 
@@ -402,15 +385,17 @@ class InternalRouteData:
             )
         )
 
+        use_external_endpoint = bool(external_host and use_ingress_for_relations)
+
         public_endpoint = URL(
             external_endpoint
-            if external_host
-            else f"{scheme}://{app}.{model}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
+            if use_external_endpoint
+            else f"http://{app}.{model}.svc.cluster.local:{KRATOS_PUBLIC_PORT}"
         )
         admin_endpoint = URL(
             external_endpoint
-            if external_host
-            else f"{scheme}://{app}.{model}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
+            if use_external_endpoint
+            else f"http://{app}.{model}.svc.cluster.local:{KRATOS_ADMIN_PORT}"
         )
 
         return cls(

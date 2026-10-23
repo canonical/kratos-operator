@@ -99,6 +99,11 @@ class CharmConfig:
     def __init__(self, config: ConfigData) -> None:
         self._config = config
 
+    @property
+    def use_ingress_for_relations(self) -> bool:
+        """Check whether relation endpoints should route through ingress."""
+        return bool(self._config.get("use_ingress_for_relations", False))
+
     def __getitem__(self, key: str) -> Any:
         return self._config.get(key)
 
