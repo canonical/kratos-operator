@@ -29,6 +29,7 @@ from constants import (
     EMAIL_TEMPLATE_FILE_PATH,
     IDENTITY_SCHEMAS_LOCAL_DIR_PATH,
     MAPPERS_LOCAL_DIR_PATH,
+    PRIVILEGED_SESSION_MAX_AGE,
     PROVIDERS_CONFIGMAP_FILE_NAME,
     VERIFICATION_EMAIL_TEMPLATE_RESOURCE_NAME,
 )
@@ -134,6 +135,7 @@ class CharmConfig:
             "enable_passwordless_login_method": self._config["enable_passwordless_login_method"],
             "enable_oidc_webauthn_sequencing": self._config["enable_oidc_webauthn_sequencing"],
             "enable_verification": self._config["enable_verification"],
+            "privileged_session_max_age": PRIVILEGED_SESSION_MAX_AGE,
         }
 
 

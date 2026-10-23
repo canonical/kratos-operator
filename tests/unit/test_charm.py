@@ -15,6 +15,7 @@ from constants import (
     KRATOS_PUBLIC_PORT,
     PEER_INTEGRATION_NAME,
     WORKLOAD_CONTAINER,
+    WORKLOAD_SERVICE,
 )
 
 
@@ -144,6 +145,64 @@ class TestUpdateStatusEvent:
         ctx.run(ctx.on.update_status(), state_in)
 
         mocked_charm_holistic_handler.assert_called_once()
+
+
+class TestMultitenancy:
+    @pytest.mark.parametrize(
+        "enable_verification, status, whoami_required_aal",
+        [
+            pytest.param(
+                True,
+                testing.ActiveStatus(),
+                {WORKLOAD_SERVICE: "aal1", COURIER_SERVICE: "aal1"},
+                id="the login UI's AAL is planned, not the one enforce_mfa sets",
+            ),
+            pytest.param(
+                False,
+                testing.BlockedStatus(
+                    "Multitenancy requires `enable_verification=True` and "
+                    "`enable_oidc_webauthn_sequencing=False`"
+                ),
+                {},
+                id="an invalid config blocks and plans nothing",
+            ),
+        ],
+    )
+    @patch("charm.KratosCharm._push_verification_email_template")
+    def test_plan(
+        self,
+        mocked_push_verification_email_template: MagicMock,
+        enable_verification: bool,
+        status: testing.ActiveStatus | testing.BlockedStatus,
+        whoami_required_aal: dict[str, str],
+        charm_secret: testing.Secret,
+        database_integration: testing.Relation,
+        peer_integration: testing.PeerRelation,
+        mocked_migration_needed: MagicMock,
+    ) -> None:
+        mocked_migration_needed.return_value = False
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        login_ui_integration = testing.Relation(
+            "ui-endpoint-info",
+            interface="login_ui_endpoints",
+            remote_app_data={"byosso_enabled": "true"},
+        )
+        state_in = testing.State(
+            containers={container},
+            secrets=[charm_secret],
+            relations=[database_integration, peer_integration, login_ui_integration],
+            config={"enable_verification": enable_verification},
+        )
+
+        state_out = ctx.run(ctx.on.update_status(), state_in)
+
+        assert state_out.unit_status == status
+        services = state_out.get_container(WORKLOAD_CONTAINER).plan.services
+        assert {
+            name: service.environment["SESSION_WHOAMI_REQUIRED_AAL"]
+            for name, service in services.items()
+        } == whoami_required_aal
 
 
 class TestDatabaseCreatedEvent:
@@ -600,6 +659,56 @@ class TestKratosInfoReadyEvent:
         )
 
         ctx.run(ctx.on.relation_created(kratos_info_integration), state_in)
+
+        mocked_send_info_relation_data.assert_called_once()
+        kwargs = mocked_send_info_relation_data.call_args.kwargs
+        assert kwargs["privileged_session_max_age"] == "1h"
+
+    @patch("charm.KratosInfoProvider.send_info_relation_data")
+    def test_when_multitenancy_config_invalid(
+        self,
+        mocked_send_info_relation_data: MagicMock,
+        kratos_info_integration: testing.Relation,
+        public_route_integration: testing.Relation,
+    ) -> None:
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        login_ui_integration = testing.Relation(
+            "ui-endpoint-info",
+            interface="login_ui_endpoints",
+            remote_app_data={"byosso_enabled": "true"},
+        )
+        state_in = testing.State(
+            containers={container},
+            relations=[kratos_info_integration, public_route_integration, login_ui_integration],
+            config={"enable_verification": False},
+        )
+
+        ctx.run(ctx.on.config_changed(), state_in)
+
+        mocked_send_info_relation_data.assert_not_called()
+
+    @patch("charm.KratosInfoProvider.send_info_relation_data")
+    def test_when_blocking_login_ui_integration_removed(
+        self,
+        mocked_send_info_relation_data: MagicMock,
+        kratos_info_integration: testing.Relation,
+        public_route_integration: testing.Relation,
+    ) -> None:
+        ctx = testing.Context(KratosCharm)
+        container = testing.Container(WORKLOAD_CONTAINER, can_connect=True)
+        login_ui_integration = testing.Relation(
+            "ui-endpoint-info",
+            interface="login_ui_endpoints",
+            remote_app_data={"byosso_enabled": "true"},
+        )
+        state_in = testing.State(
+            containers={container},
+            relations=[kratos_info_integration, public_route_integration, login_ui_integration],
+            config={"enable_verification": False},
+        )
+
+        ctx.run(ctx.on.relation_broken(login_ui_integration), state_in)
 
         mocked_send_info_relation_data.assert_called_once()
 

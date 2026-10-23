@@ -135,6 +135,7 @@ config:
       description: |
         Enforce users to set up and use multi factor authentication.
         Disabling this option will allow users to log in with password or webauthn without completing 2fa.
+        This option is ignored when multitenancy is enabled in the login UI (`byosso_enabled`).
       type: boolean
       default: True
     enable_verification:
@@ -142,6 +143,7 @@ config:
         Enable and enforce users to verify their accounts.
         Enabling this option will make users verify their accounts after registration or on the next login.
         This option requires an SMTP server integration.
+        This option must be enabled when multitenancy is enabled in the login UI (`byosso_enabled`).
       type: boolean
       default: False
     sender_email:
@@ -163,6 +165,7 @@ config:
       description: |
         Enforce setting up a WebAuthn key (e.g. with YubiKey or Google Password Manager on Android)
         after signing in with an external identity provider. Requires `enable_passwordless_login_method=False`.
+        This option must be disabled when multitenancy is enabled in the login UI (`byosso_enabled`).
         WARNING: Do not enable this option unless you are sure that this feature applies to your deployment.
       type: boolean
       default: False
