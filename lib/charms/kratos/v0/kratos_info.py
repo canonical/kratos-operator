@@ -54,7 +54,7 @@ LIBAPI = 0
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 6
+LIBPATCH = 7
 
 RELATION_NAME = "kratos-info"
 INTERFACE_NAME = "kratos_info"
@@ -100,6 +100,7 @@ class KratosInfoProvider(Object):
         oidc_webauthn_sequencing_enabled: bool,
         verification_enabled: bool,
         feature_flags: Optional[list[str]] = None,
+        privileged_session_max_age: Optional[str] = None,
     ) -> None:
         """Updates relation with endpoints, config and configmaps info."""
         if not self._charm.unit.is_leader():
@@ -123,6 +124,8 @@ class KratosInfoProvider(Object):
 
         if feature_flags:
             info_databag["feature_flags"] = ",".join(feature_flags)
+        if privileged_session_max_age:
+            info_databag["privileged_session_max_age"] = privileged_session_max_age
 
         for relation in relations:
             relation.data[self._charm.app].update(info_databag)
