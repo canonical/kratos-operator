@@ -58,7 +58,27 @@ def get_app_integration_data(
 ) -> dict | None:
     """Get the application data for a given integration."""
     data = get_integration_data(juju, app_name, integration_name, unit_num)
-    return data["application-data"] if data else None
+    if not data:
+        return None
+    version = juju.cli("version", include_model=False).strip()
+    if version.startswith("4."):
+        related_units = data.get("related-units", {})
+        remote_unit = next(
+            (u for u in related_units if not u.startswith(f"{app_name}/")),
+            None,
+        )
+        if remote_unit:
+            remote_data = get_unit_data(juju, remote_unit)
+            rel = next(
+                (
+                    r
+                    for r in remote_data.get("relation-info", [])
+                    if r["relation-id"] == data["relation-id"]
+                ),
+                None,
+            )
+            return rel["application-data"] if rel else None
+    return data["application-data"]
 
 
 def get_unit_address(juju: jubilant.Juju, app_name: str, unit_num: int = 0) -> str:
