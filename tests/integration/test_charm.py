@@ -59,6 +59,7 @@ def test_build_and_deploy(juju: jubilant.Juju, local_charm: Path) -> None:
         DB_APP,
         channel="14/stable",
         trust=True,
+        force=True,
         config={"plugin_pg_trgm_enable": "True", "plugin_btree_gin_enable": "True"},
     )
 
