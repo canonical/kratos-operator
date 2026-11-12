@@ -532,6 +532,26 @@ class TestConfigFile:
         }
         return src
 
+    def test_login_is_identifier_first_with_local_idp(self) -> None:
+        cfg = ConfigFile.from_sources(self._identity_source(), self._local_idp_source())
+
+        login = cfg.yaml_content["selfservice"]["flows"]["login"]
+        assert login["style"] == "identifier_first"
+
+    def test_login_is_not_identifier_first_without_local_idp(self) -> None:
+        """Without local accounts, the login page shows the external providers alone."""
+        src = MagicMock()
+        src.to_service_configs.return_value = {
+            "enable_local_idp": False,
+            "login_ui_url": "http://example.com/login",
+        }
+
+        cfg = ConfigFile.from_sources(self._identity_source(), src)
+
+        login = cfg.yaml_content["selfservice"]["flows"]["login"]
+        assert login["ui_url"] == "http://example.com/login"
+        assert "style" not in login
+
     def test_no_registration_hooks_renders_no_registration_block(self) -> None:
         cfg = ConfigFile.from_sources(self._identity_source(), RegistrationWebhookData())
 
