@@ -193,7 +193,7 @@ def test_create_admin_account_action(
             "username": "admin",
             "email": ADMIN_EMAIL,
             "name": "Admin Admin",
-            "phone_number": "6912345678",
+            "phone-number": "6912345678",
             "password-secret-id": admin_password_secret,
         },
     )
