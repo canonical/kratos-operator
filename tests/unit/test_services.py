@@ -221,11 +221,15 @@ class TestPebbleService:
         assert "Pebble failed to restart the workload service" in str(exc_info.value)
         assert "plan_error" in str(exc_info.value)
 
-    def test_restart_success(self, mocked_container: MagicMock, pebble_service: PebbleService) -> None:
+    def test_restart_success(
+        self, mocked_container: MagicMock, pebble_service: PebbleService
+    ) -> None:
         pebble_service.restart(COURIER_SERVICE)
         mocked_container.restart.assert_called_once_with(COURIER_SERVICE)
 
-    def test_restart_failure(self, mocked_container: MagicMock, pebble_service: PebbleService) -> None:
+    def test_restart_failure(
+        self, mocked_container: MagicMock, pebble_service: PebbleService
+    ) -> None:
         mocked_container.restart.side_effect = Exception("restart_error")
 
         with pytest.raises(PebbleServiceError) as exc_info:
@@ -233,11 +237,15 @@ class TestPebbleService:
 
         assert f"Pebble failed to restart the {COURIER_SERVICE} service" in str(exc_info.value)
 
-    def test_stop_success(self, mocked_container: MagicMock, pebble_service: PebbleService) -> None:
+    def test_stop_success(
+        self, mocked_container: MagicMock, pebble_service: PebbleService
+    ) -> None:
         pebble_service.stop(COURIER_SERVICE)
         mocked_container.stop.assert_called_once_with(COURIER_SERVICE)
 
-    def test_stop_failure(self, mocked_container: MagicMock, pebble_service: PebbleService) -> None:
+    def test_stop_failure(
+        self, mocked_container: MagicMock, pebble_service: PebbleService
+    ) -> None:
         mocked_container.stop.side_effect = Exception("stop_error")
 
         with pytest.raises(PebbleServiceError) as exc_info:
