@@ -18,7 +18,7 @@ dependencies = [
     "lightkube==0.22.0",
     "lightkube-models==1.37.0.8",
     "pydantic[email]~=2.14.0",
-    "pyyaml==6.0.3",
+    "pyyaml==6.0.4",
     "requests",
     "yarl",
 ]
