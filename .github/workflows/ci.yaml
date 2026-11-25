@@ -19,8 +19,10 @@ on:
 jobs:
   tests:
     name: CI
-    uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@00995831ff788db43992012900820edf7967305f # v1.19.2
+    uses: canonical/identity-team/.github/workflows/charm-pull-request.yaml@IAM-1424-canonical-k8s  # WIP
     with:
       container-name: "kratos"
       use-charmcraftcache: false
       node-size: large
+      k8s-distribution: "k8s"
+      juju-channels: '["3.6/stable", "4.0/stable"]'
