@@ -69,7 +69,12 @@ selfservice:
         login:
             {%- if login_ui_url %}
             ui_url: {{ login_ui_url }}
+            {#- The identifier-first step asks for an email before the methods of a local account.
+                Without local accounts there is nothing to ask it for, so the login page shows the
+                external providers alone. #}
+            {%- if enable_local_idp %}
             style: identifier_first
+            {%- endif %}
             {%- endif %}
             {%- if _has_login_hooks and login_flow.before.hooks %}
             before:
